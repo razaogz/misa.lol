@@ -1,0 +1,4 @@
+misa.lol, www.misa.lol {
+    encode gzip
+    reverse_proxy frontend:3000
+}

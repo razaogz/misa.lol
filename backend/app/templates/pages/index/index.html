@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>misa.lol — make the internet actually yours.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <style>
+        /* ═══ FLOATING ROUNDED NAVBAR ═══ */
+        .navbar{
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 1240px;
+            border-radius: 999px;
+            background: rgba(10,10,10,0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+            z-index: 1000;
+        }
+        .navbar__inner{
+            padding: 10px 22px;
+        }
+        body{
+            padding-top: 0;
+        }
+        .hero{
+            padding-top: 110px;
+        }
+
+        @media (max-width: 860px){
+            .navbar{
+                top: 12px;
+                width: calc(100% - 24px);
+                border-radius: 26px;
+            }
+        }
+
+        /* ═══ ROUND NAV BUTTONS ═══ */
+        .navbar__link{
+            border-radius: 999px;
+            padding: 8px 18px;
+            background: #ffffff;
+            color: #0a0a0a;
+            font-weight: 600;
+            display: inline-block;
+            transition: opacity .2s ease;
+        }
+        .navbar__link:hover{
+            opacity: 0.85;
+        }
+        .navbar__cta{
+            border-radius: 999px !important;
+        }
+
+        /* ═══ FOOTER SOCIAL ICONS ═══ */
+        .footer__social{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+        }
+        .footer__social img{
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        /* ═══ EXAMPLES SECTION (replaces themes section) ═══ */
+        .examples-section{
+            position: relative;
+            padding: 60px 0 120px;
+        }
+        .examples-section .label-text{
+            color: var(--accent, #FF0048);
+        }
+        .examples-grid{
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: 14px;
+            row-gap: 12px;
+        }
+        .examples-grid .card{
+            position: relative;
+            aspect-ratio: 16 / 10;
+            border-radius: 11px;
+            overflow: hidden;
+            background: #0a0a0a;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+            transition: transform .35s ease;
+        }
+        .examples-grid .card video,
+        .examples-grid .card img{
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .examples-grid .card:hover{
+            transform: rotate(0deg) scale(1.015) !important;
+            z-index: 5;
+        }
+        .examples-grid .card:nth-child(1){ transform: rotate(-1.4deg); }
+        .examples-grid .card:nth-child(2){ transform: rotate(1.3deg); }
+        .examples-grid .card:nth-child(3){ transform: rotate(0.8deg); }
+        .examples-grid .card:nth-child(4){ transform: rotate(-0.7deg); }
+        .examples-grid .card:nth-child(5){ transform: rotate(-0.5deg); }
+        .examples-grid .card:nth-child(6){ transform: rotate(0.5deg); }
+
+        @media (max-width: 860px){
+            .examples-grid{
+                grid-template-columns: 1fr;
+                row-gap: 14px;
+            }
+            .examples-grid .card:nth-child(1){ transform: rotate(-1deg); }
+            .examples-grid .card:nth-child(2){ transform: rotate(0.9deg); }
+            .examples-grid .card:nth-child(3){ transform: rotate(0.6deg); }
+            .examples-grid .card:nth-child(4){ transform: rotate(-0.6deg); }
+            .examples-grid .card:nth-child(5){ transform: rotate(-0.5deg); }
+            .examples-grid .card:nth-child(6){ transform: rotate(0.5deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ NAVBAR ═══ -->
+    <nav class="navbar">
+        <div class="navbar__inner">
+            <div class="navbar__left">
+                <a href="/" class="navbar__logo">
+                    <span class="navbar__logo-icon">†</span>
+                    <span>misa.lol</span>
+                </a>
+            </div>
+            <div class="navbar__center">
+                <a href="/login" class="navbar__link">Login</a>
+                <a href="/pricing" class="navbar__link" style="background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.16);">Pricing</a>
+            </div>
+            <div class="navbar__right">
+                <span class="navbar__right-text">YOUR CORNER<br>OF THE INTERNET.</span>
+                <a href="/signup" class="navbar__cta" data-claim-username>CLAIM USERNAME →</a>
+            </div>
+            <div class="navbar__hamburger">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile menu -->
+    <div class="navbar__mobile-menu">
+        <a href="/login">Login</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/signup" class="btn btn--primary btn--lg btn--uppercase" data-claim-username>Claim Username</a>
+    </div>
+
+    <!-- ═══ HERO SECTION ═══ -->
+    <section class="hero" style="position:relative; overflow:hidden; background:none;">
+        <video class="hero-video" autoplay muted loop playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; z-index:0; pointer-events:none;">
+            <source src="images/mainbg.mp4" type="video/mp4">
+        </video>
+        <div aria-hidden="true" style="position:absolute; inset:0; z-index:1; background:linear-gradient(135deg, rgba(5,6,6,.32), rgba(5,6,6,.62)); pointer-events:none;"></div>
+        <div class="hero__container" style="position:relative; z-index:2;">
+            <div class="hero__left">
+                <span class="hero__label">THE INTERNET IS BORING</span>
+                <h1 class="hero__title">
+                    make the internet<br>
+                    <span class="hero__title-italic">actually yours.</span>
+                </h1>
+                <p class="hero__desc">
+                    <strong style="color: var(--text-primary);">misa.lol</strong> gives you a page for your identity, music, socials, links and whatever else you want.
+                </p>
+
+                <div class="claim-input">
+                    <span class="claim-input__prefix">misa.lol/</span>
+                    <input type="text" class="claim-input__field" placeholder="yourname">
+                    <button type="button" class="claim-input__btn" data-claim-username>CLAIM</button>
+                </div>
+
+                <div class="availability">
+                    <span class="availability__dot"></span>
+                    <span class="availability__text">available</span>
+                    <span class="availability__separator">free forever · setup in under a minute</span>
+                </div>
+
+                <div class="hero__stats">
+                    <div class="hero__stat">
+                        <div class="hero__stat-value">200K+</div>
+                        <div class="hero__stat-label">PROFILES</div>
+                    </div>
+                    <div class="hero__stat">
+                        <div class="hero__stat-value">40M+</div>
+                        <div class="hero__stat-label">TOTAL VIEWS</div>
+                    </div>
+                    <div class="hero__stat">
+                        <div class="hero__stat-value">100+</div>
+                        <div class="hero__stat-label">CUSTOMIZATION OPTIONS</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ EXAMPLES SECTION ═══ -->
+    <section class="examples-section container">
+        <span class="label-text">EXAMPLES</span>
+        <h2 class="heading-section" style="margin-top:12px;">Examples of what<br><span class="italic-accent" style="font-size:inherit;">you can build.</span></h2>
+        <p class="body-text" style="margin-top:8px; max-width:520px;">Make yours look like these, or nothing like them. You can go in any direction you want.</p>
+
+        <!--
+          HOW TO ADD YOUR VIDEOS:
+          Replace each src="REPLACE_WITH_VIDEO_LINK_X.mp4" below with your own direct video link.
+          Order = card 1 (top-left), card 2 (top-right), card 3 (mid-left), card 4 (mid-right),
+          card 5 (bottom-left), card 6 (bottom-right).
+        -->
+        <div class="examples-grid">
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+            <div class="card">
+                <video autoplay muted loop playsinline>
+                    <source src="https://v1.pinimg.com/videos/iht/expMp4/cf/b6/64/cfb664c6bc9096db707d7c75bcd886d7_720w.mp4" type="video/mp4">
+                </video>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="footer">
+        <div class="footer__inner">
+            <div class="footer__left">
+                <div class="footer__logo">
+                    <span class="footer__logo-icon">†</span> misa.lol
+                </div>
+                <span class="footer__tagline">be weird online again.</span>
+            </div>
+            <div class="footer__center">
+                <a href="/login" class="footer__link">Login</a>
+                <a href="/signup" class="footer__link">Sign up</a>
+            </div>
+            <div class="footer__right">
+                <div class="footer__socials">
+                    <a href="#" class="footer__social"><img src="icons/discord.webp" alt="Discord"></a>
+                    <a href="#" class="footer__social"><img src="icons/telegram.webp" alt="Telegram"></a>
+                    <a href="#" class="footer__social"><img src="icons/google.webp" alt="Google"></a>
+                </div>
+                <div class="footer__copyright">© 2025 misa.lol<br>made for the internet people ♡</div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+name: misa-lol
+
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MISA_BACKEND_URL: http://api:8000
+      MISA_TURNSTILE_SITE_KEY: "${MISA_TURNSTILE_SITE_KEY:-}"
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      MISA_INSTANCE_NAME: api
+      MISA_APP_NAME: misa
+      MISA_APP_VERSION: 0.1.0
+      MISA_ENVIRONMENT: "${MISA_ENVIRONMENT:-production}"
+      MISA_DEBUG: "false"
+      MISA_DOMAIN: "${MISA_DOMAIN:-misa.lol}"
+      MISA_PUBLIC_BASE_URL: "${MISA_PUBLIC_BASE_URL:-https://misa.lol}"
+      MISA_CORS_ORIGINS: "${MISA_CORS_ORIGINS:-https://misa.lol,https://www.misa.lol}"
+      DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
+      MISA_ADMIN_USER_IDS: "${MISA_ADMIN_USER_IDS:-}"
+      SUPER_ADMIN_EMAIL: "${SUPER_ADMIN_EMAIL:?Set SUPER_ADMIN_EMAIL in .env}"
+      MISA_ADMIN_TOKEN_SECRET: "${MISA_ADMIN_TOKEN_SECRET:?Set MISA_ADMIN_TOKEN_SECRET in .env}"
+      MISA_EMAIL_API_URL: "${MISA_EMAIL_API_URL:-}"
+      MISA_EMAIL_API_KEY: "${MISA_EMAIL_API_KEY:-}"
+      MISA_EMAIL_FROM: "${MISA_EMAIL_FROM:-Misa.lol <no-reply@misa.lol>}"
+      WEB_CONCURRENCY: "${WEB_CONCURRENCY:-2}"
+      DATA_API_URL: http://data-api:8080
+      DATA_API_KEY: "${DATA_API_KEY:?Set DATA_API_KEY in .env}"
+      DRAGONFLY_URL: redis://dragonfly:6379/0
+      MISA_GOOGLE_CLIENT_ID: "${MISA_GOOGLE_CLIENT_ID:-}"
+      MISA_GOOGLE_CLIENT_SECRET: "${MISA_GOOGLE_CLIENT_SECRET:-}"
+      MISA_DISCORD_CLIENT_ID: "${MISA_DISCORD_CLIENT_ID:-}"
+      MISA_DISCORD_CLIENT_SECRET: "${MISA_DISCORD_CLIENT_SECRET:-}"
+      MISA_TELEGRAM_BOT_TOKEN: "${MISA_TELEGRAM_BOT_TOKEN:-}"
+      MISA_TELEGRAM_BOT_USERNAME: "${MISA_TELEGRAM_BOT_USERNAME:-}"
+      MISA_TURNSTILE_SITE_KEY: "${MISA_TURNSTILE_SITE_KEY:-}"
+      MISA_TURNSTILE_SECRET_KEY: "${MISA_TURNSTILE_SECRET_KEY:-}"
+      MISA_SUPABASE_URL: "${MISA_SUPABASE_URL:-}"
+      MISA_SUPABASE_SERVICE_ROLE_KEY: "${MISA_SUPABASE_SERVICE_ROLE_KEY:-}"
+      MISA_STORAGE_BUCKET: "${MISA_STORAGE_BUCKET:-misa-assets}"
+    depends_on:
+      data-api:
+        condition: service_healthy
+      dragonfly:
+        condition: service_started
+    expose:
+      - "8000"
+    networks:
+      - app
+      - data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  data-api:
+    build:
+      context: ./backend/data-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
+      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-10}"
+      DATA_API_KEY: "${DATA_API_KEY:?Set DATA_API_KEY in .env}"
+      LISTEN_ADDR: 0.0.0.0:8080
+      RUST_LOG: "${RUST_LOG:-info}"
+    expose:
+      - "8080"
+    networks:
+      - data
+      - egress
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    restart: unless-stopped
+    command: ["--cache_mode=true"]
+    volumes:
+      - dragonfly_data:/data
+    networks:
+      - data
+
+networks:
+  app:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+  egress:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  dragonfly_data:
