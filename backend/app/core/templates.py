@@ -43,6 +43,7 @@ def snapshot_template_config(profile: dict[str, Any]) -> dict[str, Any]:
     snapped["tracks"] = [track for track in assets.get("tracks") or [] if isinstance(track, dict)]
     snapped["audioTitle"] = str(assets.get("audioTitle") or "")[:80]
     snapped["audioEnabled"] = bool(assets.get("audioEnabled")) if "audioEnabled" in assets else True
+    snapped["audioSource"] = str(assets.get("audioSource") or "")[:16]
     snapped["volume"] = assets.get("volume", 65)
     return {"settings": settings, "assets": snapped}
 
@@ -112,6 +113,9 @@ def public_template_card(row: dict[str, Any]) -> dict[str, Any]:
         "creator_username": row.get("creator_username") or None,
         "created_at": _iso(row.get("created_at")),
         "updated_at": _iso(row.get("updated_at")),
+        "favorite_count": int(row.get("favorite_count") or 0),
+        "week_favorite_count": int(row.get("week_favorite_count") or 0),
+        "month_favorite_count": int(row.get("month_favorite_count") or 0),
     }
 
 
@@ -141,6 +145,7 @@ def official_seed_looks() -> list[dict[str, Any]]:
         "audioTitle": "",
         "tracks": [],
         "audioEnabled": True,
+        "audioSource": "video",
         "volume": 65,
     }
     dummy = {

@@ -1,10 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Type, Upload, UsersRound, Video, Volume2, WandSparkles, type LucideIcon } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Type, Upload, UsersRound, Video, Volume2, WandSparkles, Music, type LucideIcon } from "lucide-react";
 import { PortfolioPanel } from "@/components/customization/PortfolioPanel";
 import { WidgetsPanel } from "@/components/customization/WidgetsPanel";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ImageCropModal } from "@/components/customization/ImageCropModal";
 import { AudioCropModal } from "@/components/customization/AudioCropModal";
 import { PlaylistEditor } from "@/components/customization/PlaylistEditor";
@@ -20,7 +20,7 @@ import type { AudioTrack, BannerShape, ButtonStyle, PageEnter, ProfileAsset, Pro
 import { useT } from "@/lib/i18n";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { useFeatureFlags } from "@/lib/feature-flags";
-import { FONT_ACCEPT, PAGE_ENTERS, USERNAME_EFFECTS } from "@/lib/typography";
+import { FONT_ACCEPT, PAGE_ENTERS, USERNAME_EFFECTS, usernameEffectClass } from "@/lib/typography";
 
 const tabRows = [
   [
@@ -63,7 +63,7 @@ export function CustomizationWorkspace() {
   const setAsset = (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => updateConfig((current) => ({ ...current, assets: { ...current.assets, [key]: asset } }));
   const openManualMove = () => { setManualMove(true); setFullPreview(true); };
   const uploadAsset = async (key: keyof typeof config.assets, file: File) => {
-    const maxBytes = key === "clickSound" ? 400_000 : key === "customFont" ? 2_000_000 : key === "audio" || key === "backgroundVideo" ? 8_000_000 : 3_000_000;
+    const maxBytes = key === "backgroundVideo" ? 20_000_000 : key === "audio" ? 8_000_000 : key === "clickSound" ? 400_000 : key === "customFont" ? 2_000_000 : 3_000_000;
     if (file.size > maxBytes) { window.alert(t("customize.fileTooLarge", { mb: Math.round(maxBytes / 1_000_000) })); return; }
     const uploaded = await assetFromFile(file);
     const next = key === "cursor" ? await prepareCursorAsset(uploaded) : uploaded;
@@ -72,7 +72,7 @@ export function CustomizationWorkspace() {
       assets: {
         ...current.assets,
         [key]: next,
-        ...(key === "audio" ? syncPlaylist([{ id: "track-1", title: file.name.replace(/\.[^.]+$/, ""), audio: next, artwork: current.assets.audioArtwork || { url: null } }]) : {}),
+        ...(key === "audio" ? { audioSource: "standalone", tracks: [] } : {}),
       },
     }));
     if ((key === "avatar" || key === "background" || key === "banner" || key === "ogImage" || key === "favicon") && canCropAsset(next)) setCrop({ key, asset: next });
@@ -80,7 +80,7 @@ export function CustomizationWorkspace() {
   useEffect(() => { if (saveError) window.alert(saveError); }, [saveError]);
   const tabLabel: Record<Tab, string> = { assets: t("customize.tabAssets"), layout: t("customize.tabLayout"), widgets: t("customize.tabWidgets"), portfolio: t("customize.tabPortfolio"), general: t("customize.tabGeneral"), colors: t("customize.tabColors"), effects: t("customize.tabEffects"), sharing: t("customize.sharingTitle") };
   const visibleTabRows = tabRows.map((row) => row.filter(({ id }) => enabled(id === "assets" ? "customize.assets" : id === "layout" ? "customize.layout" : id === "widgets" ? "customize.widgets" : id === "portfolio" ? "customize.portfolio" : id === "effects" ? "customize.effects" : id === "sharing" ? "customize.sharing" : "customize.general"))).filter((row) => row.length);
-  return <PreviewPlayerProvider><main className="mx-auto min-h-screen max-w-[1500px] px-5 py-8 sm:px-8 sm:py-10 xl:px-10"><PageHeader eyebrow={t("customize.eyebrow")} title={t("customize.title")} description={t("customize.description")} action={<div className="flex gap-2"><Button variant="ghost" onClick={resetConfig}><RotateCcw size={15} />{t("common.reset")}</Button><Button variant="accent" onClick={() => void saveProfile()} disabled={saveState === "saving"}>{saveState === "saving" ? t("common.saving") : saveState === "saved" ? <><Check size={15} />{t("common.savedCheck")}</> : <><Check size={15} />{t("common.save")}</>}</Button></div>} /><div className="grid gap-6 xl:grid-cols-[minmax(390px,.82fr)_minmax(460px,1.18fr)]"><section className="min-w-0 rounded-2xl border border-white/[.07] bg-[#0d0d12] p-4 sm:p-5"><div className="mb-6 space-y-1 rounded-2xl bg-white/[.035] p-1.5">{visibleTabRows.map((row, index) => <div key={index} className={`grid gap-1 ${index === 0 ? "grid-cols-4" : "grid-cols-4"}`}>{row.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition ${tab === id ? "bg-white/[.12] text-white shadow-sm" : "text-zinc-500 hover:bg-white/[.04] hover:text-zinc-200"}`}><Icon size={14} className="shrink-0" /><span className="truncate">{tabLabel[id]}</span></button>)}</div>)}</div><motion.div key={tab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .2 }}>{tab === "assets" && <AssetsPanel config={config} setAsset={setAsset} onUpload={uploadAsset} onCrop={setCrop} onAudioCrop={setAudioCrop} onTracks={(tracks) => updateConfig((current) => ({ ...current, assets: { ...current.assets, ...syncPlaylist(tracks) } }))} />}{tab === "layout" && <LayoutsPanel config={config} setSettings={setSettings} onManualMove={openManualMove} />}{tab === "widgets" && <WidgetsPanel />}{tab === "portfolio" && <PortfolioPanel />}{tab === "general" && <GeneralPanel config={config} setSettings={setSettings} setProfile={setProfile} />}{tab === "sharing" && <SharingAppearance config={config} setSettings={setSettings} setAsset={(key, asset) => setAsset(key, asset)} onUpload={uploadAsset} onCrop={setCrop} />}{tab === "colors" && <ColorsPanel config={config} setSettings={setSettings} />}{tab === "effects" && <EffectsPanel config={config} setSettings={setSettings} setAsset={setAsset} onUpload={uploadAsset} />}</motion.div></section><section className="min-w-0"><div className="sticky top-4"><div className="mb-3 flex items-center justify-between gap-3 px-1"><div className="flex items-center gap-2 text-sm font-medium"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#e11d48]/10 text-[#fecdd3]"><Laptop size={14} /></span>{t("customize.preview")}</div><div className="flex items-center gap-2"><span className="hidden items-center gap-2 text-[11px] text-zinc-600 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("customize.instant")}</span><Button variant="ghost" className="h-8 min-h-0 px-2 text-[11px]" onClick={() => setFullPreview(true)}><Maximize2 size={13} />{t("customize.fullView", undefined, "Full view")}</Button></div></div><div className="overflow-hidden rounded-2xl border border-white/[.1] bg-[#08080d] shadow-2xl shadow-black/30"><div className="flex h-9 items-center gap-1.5 border-b border-white/[.06] bg-white/[.025] px-3"><span className="h-2.5 w-2.5 rounded-full bg-[#ff6f70]/70" /><span className="h-2.5 w-2.5 rounded-full bg-[#ffcb70]/70" /><span className="h-2.5 w-2.5 rounded-full bg-[#70d69a]/70" /><div className="mx-auto flex h-5 max-w-[260px] flex-1 items-center justify-center gap-1.5 rounded-md bg-black/20 px-2 text-[9px] text-zinc-600">{tabIcon ? <img src={tabIcon} alt="" className="h-3 w-3 rounded-[3px] object-cover" /> : null}<span className="truncate">{shareCopy.title}</span></div></div><div className="h-[580px] sm:h-[650px]" dir="ltr"><ProfileRenderer config={config} preview manualPositioning={manualMove} onFramePositionChange={setSettings} /></div></div></div></section></div>{saveState === "saved" && <div role="status" className="fixed bottom-6 end-6 z-40 rounded-xl border border-emerald-400/20 bg-[#12191a] px-4 py-3 text-sm text-emerald-300 shadow-xl">{t("customize.savedToast")}</div>}
+  return <PreviewPlayerProvider><main className="mx-auto min-h-screen max-w-[1500px] px-5 py-8 sm:px-8 sm:py-10 xl:px-10"><PageHeader eyebrow={t("customize.eyebrow")} title={t("customize.title")} description={t("customize.description")} action={<div className="flex gap-2"><Button variant="ghost" onClick={resetConfig}><RotateCcw size={15} />{t("common.reset")}</Button><Button variant="accent" onClick={() => void saveProfile()} disabled={saveState === "saving"}>{saveState === "saving" ? t("common.saving") : saveState === "saved" ? <><Check size={15} />{t("common.savedCheck")}</> : <><Check size={15} />{t("common.save")}</>}</Button></div>} /><div className="grid gap-6 xl:grid-cols-[minmax(390px,.82fr)_minmax(460px,1.18fr)]"><section className="min-w-0 rounded-2xl border border-white/[.07] bg-[#0d0d12] p-4 sm:p-5"><div className="mb-6 space-y-1 rounded-2xl bg-white/[.035] p-1.5">{visibleTabRows.map((row, index) => <div key={index} className={`grid gap-1 ${index === 0 ? "grid-cols-4" : "grid-cols-4"}`}>{row.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition ${tab === id ? "bg-white/[.12] text-white shadow-sm" : "text-zinc-500 hover:bg-white/[.04] hover:text-zinc-200"}`}><Icon size={14} className="shrink-0" /><span className="truncate">{tabLabel[id]}</span></button>)}</div>)}</div><motion.div key={tab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .2 }}>{tab === "assets" && <AssetsPanel config={config} setAsset={setAsset} onUpload={uploadAsset} onCrop={setCrop} onAudioCrop={setAudioCrop} onTracks={(tracks) => updateConfig((current) => ({ ...current, assets: { ...current.assets, ...syncPlaylist(tracks), audioSource: tracks.length ? "tracks" : current.assets.audio?.url ? "standalone" : "video", audioEnabled: tracks.length ? false : current.assets.audioEnabled } }))} />}{tab === "layout" && <LayoutsPanel config={config} setSettings={setSettings} onManualMove={openManualMove} />}{tab === "widgets" && <WidgetsPanel />}{tab === "portfolio" && <PortfolioPanel />}{tab === "general" && <GeneralPanel config={config} setSettings={setSettings} setProfile={setProfile} />}{tab === "sharing" && <SharingAppearance config={config} setSettings={setSettings} setAsset={(key, asset) => setAsset(key, asset)} onUpload={uploadAsset} onCrop={setCrop} />}{tab === "colors" && <ColorsPanel config={config} setSettings={setSettings} />}{tab === "effects" && <EffectsPanel config={config} setSettings={setSettings} setAsset={setAsset} onUpload={uploadAsset} />}</motion.div></section><section className="min-w-0"><div className="sticky top-4"><div className="mb-3 flex items-center justify-between gap-3 px-1"><div className="flex items-center gap-2 text-sm font-medium"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#e11d48]/10 text-[#fecdd3]"><Laptop size={14} /></span>{t("customize.preview")}</div><div className="flex items-center gap-2"><span className="hidden items-center gap-2 text-[11px] text-zinc-600 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("customize.instant")}</span><Button variant="ghost" className="h-8 min-h-0 px-2 text-[11px]" onClick={() => setFullPreview(true)}><Maximize2 size={13} />{t("customize.fullView", undefined, "Full view")}</Button></div></div><div className="overflow-hidden rounded-2xl border border-white/[.1] bg-[#08080d] shadow-2xl shadow-black/30"><div className="flex h-9 items-center gap-1.5 border-b border-white/[.06] bg-white/[.025] px-3"><span className="h-2.5 w-2.5 rounded-full bg-[#ff6f70]/70" /><span className="h-2.5 w-2.5 rounded-full bg-[#ffcb70]/70" /><span className="h-2.5 w-2.5 rounded-full bg-[#70d69a]/70" /><div className="mx-auto flex h-5 max-w-[260px] flex-1 items-center justify-center gap-1.5 rounded-md bg-black/20 px-2 text-[9px] text-zinc-600">{tabIcon ? <img src={tabIcon} alt="" className="h-3 w-3 rounded-[3px] object-cover" /> : null}<span className="truncate">{shareCopy.title}</span></div></div><div className="h-[580px] sm:h-[650px]" dir="ltr"><ProfileRenderer config={config} preview manualPositioning={manualMove} onFramePositionChange={setSettings} /></div></div></div></section></div>{saveState === "saved" && <div role="status" className="fixed bottom-6 end-6 z-40 rounded-xl border border-emerald-400/20 bg-[#12191a] px-4 py-3 text-sm text-emerald-300 shadow-xl">{t("customize.savedToast")}</div>}
     {fullPreview && <div className="fixed inset-0 z-[100] flex flex-col bg-black/80 p-3 sm:p-6">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[.1] bg-[#08080d] shadow-2xl">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[.06] bg-white/[.025] px-4">
@@ -103,8 +103,11 @@ export function CustomizationWorkspace() {
           ...current,
           assets: {
             ...current.assets,
-            audioEnabled: true,
-            ...syncPlaylist([{ id: "video-audio", title: "Video audio", audio: next, artwork: current.assets.audioArtwork || { url: null } }]),
+            audio: next,
+            audioTitle: "Video audio",
+            audioSource: "standalone",
+            tracks: [],
+            audioEnabled: false,
           },
         }));
         setAudioCrop(null);
@@ -135,10 +138,11 @@ function AssetsPanel({ config, setAsset, onUpload, onCrop, onAudioCrop, onTracks
     { key: "background", title: t("customize.bgImage"), description: t("customize.bgImageDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
     { key: "banner", title: t("customize.banner"), description: t("customize.bannerDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
     { key: "backgroundVideo", title: t("customize.bgVideo"), description: t("customize.bgVideoDesc"), icon: Video, accept: "video/mp4,video/webm" },
+    { key: "audio", title: "Audio", description: "Standalone audio upload", icon: Music, accept: "audio/*" },
     { key: "avatar", title: t("customize.avatar"), description: t("customize.avatarDesc"), icon: CircleDot, accept: IMAGE_ACCEPT },
     { key: "cursor", title: t("customize.cursor"), description: t("customize.cursorDesc"), icon: MousePointer2, accept: "image/png,image/gif,image/x-icon" },
   ];
-  return <div><SectionTitle icon={Brush} title={t("customize.assetsTitle")} description={t("customize.assetsDesc")} /><div className="space-y-3">{items.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={onUpload} onCrop={onCrop} />)}</div><div className="mt-4"><PlaylistEditor config={config} onChange={onTracks} /></div>{enabled("customize.assets.audioCrop") && config.assets.backgroundVideo?.url && <Button variant="subtle" className="mt-3 w-full text-xs" onClick={() => onAudioCrop(config.assets.backgroundVideo)}>Use audio from uploaded video</Button>}<div className="mt-4 space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4"><ToggleRow label={t("customize.enableAudio")} checked={config.assets.audioEnabled} onChange={(checked) => setAsset("audioEnabled", checked)} /><div className="py-3"><RangeControl label={t("customize.volume")} value={config.assets.volume} min={0} max={100} suffix="%" onChange={(value) => setAsset("volume", value)} /></div></div></div>;
+  return <div><SectionTitle icon={Brush} title={t("customize.assetsTitle")} description={t("customize.assetsDesc")} /><div className="space-y-3">{items.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={onUpload} onCrop={onCrop} />)}</div><div className="mt-4"><PlaylistEditor config={config} onChange={onTracks} /></div>{enabled("customize.assets.audioCrop") && config.assets.backgroundVideo?.url && <Button variant="subtle" className="mt-3 w-full text-xs" onClick={() => onAudioCrop(config.assets.backgroundVideo)}>Extract and crop audio from video</Button>}<div className="mt-4 space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4"><ToggleRow label={t("customize.enableAudio")} checked={config.assets.audioEnabled} onChange={(checked) => { setAsset("audioEnabled", checked); setAsset("audioSource", checked ? "video" : config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video"); }} /><div className="py-3"><RangeControl label={t("customize.volume")} value={config.assets.volume} min={0} max={100} suffix="%" onChange={(value) => setAsset("volume", value)} /></div></div></div>;
 }
 
 function AssetRow({ item, asset, setAsset, onUpload, onCrop }: { item: { key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"]; title: string; description: string; icon: typeof ImageIcon; accept: string }; asset: ProfileAsset; setAsset: (key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"], asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"], file: File) => Promise<void>; onCrop: (next: { key: CropKey; asset: ProfileAsset }) => void }) {
@@ -221,6 +225,42 @@ function ColorsPanel({ config, setSettings }: { config: ReturnType<typeof import
   );
 }
 
+
+function UsernameEffectPreview({ effect, name, usernameColor, effectColor, large = false }: { effect: UsernameEffect; name: string; usernameColor: string; effectColor: string; large?: boolean }) {
+  const gradient = effect === "Gradient" || effect === "Typewriter" || effect === "Shimmer" || effect === "Rainbow";
+  const style = {
+    color: gradient ? undefined : effect === "Outline" ? "transparent" : usernameColor,
+    textShadow: effect === "Outline"
+      ? "-1px -1px 0 " + effectColor + ", 1px -1px 0 " + effectColor + ", -1px 1px 0 " + effectColor + ", 1px 1px 0 " + effectColor
+      : effect === "Glow" || effect === "Neon" ? "0 0 18px " + effectColor + "aa" : undefined,
+    ["--username-color" as string]: usernameColor,
+    ["--effect-color" as string]: effectColor,
+    ...(effect === "Rainbow" ? { backgroundImage: "linear-gradient(90deg, " + usernameColor + ", " + effectColor + ", #ffd166, " + usernameColor + ")", backgroundSize: "200% 100%" } : {}),
+  } as CSSProperties;
+  return <span className={(large ? "text-2xl sm:text-3xl" : "text-sm") + " font-semibold " + usernameEffectClass(effect)} style={style}>{name}</span>;
+}
+
+function UsernameEffectPicker({ label, value, onChange, name, usernameColor, effectColor }: { label: string; value: UsernameEffect; onChange: (value: UsernameEffect) => void; name: string; usernameColor: string; effectColor: string }) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="rounded-2xl border border-white/[.07] bg-white/[.02] p-3">
+        <div className="flex min-h-20 items-center justify-center overflow-hidden rounded-xl border border-white/[.06] bg-black/20 px-4 py-5">
+          <UsernameEffectPreview effect={value} name={name} usernameColor={usernameColor} effectColor={effectColor} large />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {USERNAME_EFFECTS.map((effect) => (
+            <button key={effect} type="button" onClick={() => onChange(effect)} aria-pressed={value === effect} className={"flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border px-2 py-3 transition " + (value === effect ? "border-[#e11d48]/60 bg-[#e11d48]/10" : "border-white/[.07] bg-white/[.02] hover:border-white/20 hover:bg-white/[.05]")}>
+              <UsernameEffectPreview effect={effect} name={name} usernameColor={usernameColor} effectColor={effectColor} />
+              <span className={"text-[10px] uppercase tracking-[.12em] " + (value === effect ? "text-[#fecdd3]" : "text-zinc-600")}>{effect}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EffectsPanel({ config, setSettings, setAsset, onUpload }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void> }) {
   const t = useT();
   const defaultFonts = useDefaultFonts();
@@ -235,8 +275,8 @@ function EffectsPanel({ config, setSettings, setAsset, onUpload }: { config: Ret
       <SectionTitle icon={Sparkles} title={t("customize.effectsTitle")} description={t("customize.effectsDesc")} />
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-3">
-        <div><FieldLabel>{t("customize.bgEffect")}</FieldLabel><SelectBox value={config.settings.backgroundEffect} options={["None", "Particles", "Stars", "Glow", "Aurora"]} onChange={(value) => setSettings({ backgroundEffect: value as typeof config.settings.backgroundEffect })} /></div>
-        <div><FieldLabel>{t("customize.nameEffect")}</FieldLabel><SelectBox value={config.settings.usernameEffect} options={USERNAME_EFFECTS.filter((effect) => !["Glitch", "Pulse", "Outline", "Neon", "Wave", "Shadow"].includes(effect) || enabled("feature.usernameEffects." + effect.toLowerCase()))} onChange={(value) => setSettings({ usernameEffect: value as UsernameEffect })} /></div>
+        <div><FieldLabel>{t("customize.bgEffect")}</FieldLabel><SelectBox value={config.settings.backgroundEffect} options={["None", "Particles", "Stars", "Glow", "Aurora", "Waves", "Embers", "Rain"]} onChange={(value) => setSettings({ backgroundEffect: value as typeof config.settings.backgroundEffect })} /></div>
+        <div className="col-span-2"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} /></div>
         <div><FieldLabel>{t("customize.pageEnter")}</FieldLabel><SelectBox value={config.settings.pageEnter || "Fade"} options={[...PAGE_ENTERS]} onChange={(value) => setSettings({ pageEnter: value as PageEnter })} /></div>
         <div><FieldLabel>{t("customize.font")}</FieldLabel><SelectBox value={selectedFont?.name || "Inter"} options={defaultFonts.map((font) => font.name)} onChange={(value) => { const next = defaultFonts.find((font) => font.name === value); if (next) setSettings({ profileFont: next.id }); }} /></div>
         </div>

@@ -140,9 +140,13 @@ async def list_templates(
     user: Annotated[User, Depends(require_user)],
     q: str = Query(default="", max_length=80),
     tag: str = Query(default="", max_length=32),
+    sort: str = Query(default="latest", max_length=16),
 ) -> dict[str, Any]:
     _require_store()
-    rows = await admin_db.list_published_templates()
+    sort_key = sort.strip().lower()
+    if sort_key not in {"latest", "popular", "week", "month", "all_time"}:
+        sort_key = "latest"
+    rows = await admin_db.list_published_templates(sort_key)
     favorite_ids = await admin_db.template_favorite_ids(user.id)
     needle = q.strip().lower()
     wanted_tag = tag.strip().lower()

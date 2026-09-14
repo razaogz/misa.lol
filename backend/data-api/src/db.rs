@@ -241,29 +241,34 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
     Ok(())
 }
 
-const ACCOUNT_ID_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-fn account_id_for(_id: Uuid) -> String {
-    let id = Uuid::new_v4();
-    let mut value = u128::from_be_bytes(*id.as_bytes());
-    let mut output = [b'A'; 10];
-    for index in (0..10).rev() {
-        output[index] = ACCOUNT_ID_ALPHABET[(value % ACCOUNT_ID_ALPHABET.len() as u128) as usize];
-        value /= ACCOUNT_ID_ALPHABET.len() as u128;
-    }
-    format!("MISA-{}", String::from_utf8_lossy(&output))
+fn account_id_for() -> String {
+    // This public ID is independent from the internal UUID used by auth and relations.
+    let value = 100_000_000_000u128 + (Uuid::new_v4().as_u128() % 900_000_000_000u128);
+    value.to_string()
 }
 
 async fn ensure_account_ids(pool: &PgPool) -> Result<()> {
-    let users = sqlx::query("SELECT id FROM users WHERE account_id IS NULL").fetch_all(pool).await?;
+    // Replace old MISA-... public IDs without changing users.id or any relationships.
+    let users = sqlx::query("SELECT id FROM users WHERE account_id IS NULL OR account_id !~ '^[0-9]{12}$'")
+        .fetch_all(pool)
+        .await?;
     for row in users {
         let id: Uuid = sqlx::Row::try_get(&row, "id")?;
-        let candidate = account_id_for(id);
-        sqlx::query("UPDATE users SET account_id = $1, updated_at = NOW() WHERE id = $2 AND account_id IS NULL")
-            .bind(candidate)
-            .bind(id)
-            .execute(pool)
-            .await?;
+        let mut updated = false;
+        for _ in 0..32 {
+            let candidate = account_id_for();
+            match sqlx::query("UPDATE users SET account_id = $1, updated_at = NOW() WHERE id = $2")
+                .bind(candidate)
+                .bind(id)
+                .execute(pool)
+                .await
+            {
+                Ok(_) => { updated = true; break; }
+                Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23505") => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if !updated { anyhow::bail!("could not allocate a unique numeric account id") }
     }
     Ok(())
 }
@@ -371,7 +376,7 @@ pub async fn create_user(pool: &PgPool, new_user: NewUser) -> Result<User, sqlx:
         RETURNING {USER_COLUMNS}"
     ))
     .bind(id)
-    .bind(account_id_for(id))
+    .bind(account_id_for())
     .bind(new_user.email)
     .bind(new_user.email_verified.unwrap_or(false))
     .bind(new_user.password_hash)
@@ -518,7 +523,7 @@ pub async fn oauth_upsert(pool: &PgPool, req: OAuthRequest) -> Result<Result<Use
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
     )
     .bind(id)
-    .bind(account_id_for(id))
+    .bind(account_id_for())
     .bind(&req.email)
     .bind(req.email_verified.unwrap_or(false) && req.email.is_some())
     .bind(&req.display_name)

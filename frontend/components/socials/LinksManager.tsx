@@ -101,7 +101,7 @@ function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: So
         action,
         iconColor: iconColor || null,
         iconGlow: glow === "inherit" ? undefined : glow === "on",
-        customIcon: platform === "Custom URL" && isSafeSocialIconUrl(customIcon?.url) ? customIcon : null,
+        customIcon: isSafeSocialIconUrl(customIcon?.url) ? customIcon : null,
       };
       if (initial) return { ...current, socials: current.socials.map((item) => item.id === initial.id ? next : item) };
       return { ...current, socials: [...current.socials, next] };
@@ -118,9 +118,9 @@ function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: So
     }
   };
 
-  return <Modal open={open} title={initial ? t("links.edit", { name: initial.platform }) : t("links.addNamed", { name: platform })} description={t("links.modalDesc")} onClose={onClose}>
+  return <Modal open={open} title={initial ? t("links.edit", { name: initial.platform }) : t("links.add")} description={t("links.modalDesc")} onClose={onClose}>
     <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-      <div><FieldLabel>{t("links.platform")}</FieldLabel><select value={platform} onChange={(e) => { const next = e.target.value as SocialPlatform; setValue(extractSocialHandle(next, value)); setPlatform(next); if (next !== "Custom URL") setCustomIcon(null); }} className="h-11 w-full rounded-xl border border-white/[.08] bg-[#111117] px-3 text-sm text-white outline-none focus:border-[#e11d48]/60">{platformOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
+      <div><FieldLabel>{t("links.platform")}</FieldLabel><select value={platform} onChange={(e) => { const next = e.target.value as SocialPlatform; setValue(extractSocialHandle(next, value)); setPlatform(next); }} className="h-11 w-full rounded-xl border border-white/[.08] bg-[#111117] px-3 text-sm text-white outline-none focus:border-[#e11d48]/60">{platformOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
       <div><FieldLabel>{t("links.displayMode")}</FieldLabel><div className="grid grid-cols-2 gap-2">{(["link", "text"] as const).map((mode) => <button key={mode} type="button" onClick={() => { setDisplayMode(mode); setAction(mode === "text" ? "copy" : "open"); }} className={`rounded-xl border px-3 py-2.5 text-left text-xs ${displayMode === mode ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}>{mode === "link" ? t("links.linkMode") : t("links.textMode")}<span className="mt-1 block text-[10px] text-zinc-600">{mode === "link" ? t("links.linkModeHint") : t("links.textModeHint")}</span></button>)}</div></div>
       <div><FieldLabel>{t("links.clickAction")}</FieldLabel><div className="grid grid-cols-2 gap-2">{([{ id: "open" as const, title: t("links.openAction"), hint: t("links.openHint") }, { id: "copy" as const, title: t("links.copyAction"), hint: t("links.copyHint") }]).map((option) => <button key={option.id} type="button" onClick={() => setAction(option.id)} className={`rounded-xl border px-3 py-2.5 text-left text-xs ${action === option.id ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}>{option.title}<span className="mt-1 block text-[10px] text-zinc-600">{option.hint}</span></button>)}</div></div>
       <div><FieldLabel>{t("links.label")}</FieldLabel><TextInput value={label} onChange={setLabel} placeholder={platform} /></div>
@@ -141,16 +141,6 @@ function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: So
           <TextInput value={value} onChange={(next) => { setValue(next); setError(""); }} placeholder={displayMode === "link" ? "https://..." : "Available for collabs"} />
         )}
       </div>
-      {platform === "Custom URL" && <div>
-        <FieldLabel>{t("links.customIcon")}</FieldLabel>
-        <div className="flex items-center gap-3 rounded-xl border border-white/[.08] bg-white/[.025] p-3">
-          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/[.06] text-[#fecdd3]"><SocialIcon platform={platform} size={18} customIcon={customIcon} /></span>
-          <div className="min-w-0 flex-1"><p className="text-xs text-zinc-400">{customIcon?.name || t("links.iconHint")}</p></div>
-          <input ref={fileInput} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadIcon(file); e.target.value = ""; }} />
-          <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => fileInput.current?.click()}><Upload size={13} />{customIcon?.url ? t("common.replace") : t("common.upload")}</Button>
-          {customIcon?.url && <button type="button" onClick={() => setCustomIcon(null)} className="text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button>}
-        </div>
-      </div>}
       <div>
         <FieldLabel>{t("links.iconColor")}</FieldLabel>
         <div className="flex gap-2">
@@ -160,6 +150,16 @@ function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: So
         </div>
       </div>
       <div><FieldLabel>{t("links.iconGlow")}</FieldLabel><div className="grid grid-cols-3 gap-2">{([{ id: "inherit" as const, title: t("links.inherit"), hint: t("links.inheritHint") }, { id: "on" as const, title: t("links.glowOn"), hint: t("links.glowOnHint") }, { id: "off" as const, title: t("links.glowOff"), hint: t("links.glowOffHint") }]).map((option) => <button key={option.id} type="button" onClick={() => setGlow(option.id)} className={`rounded-xl border px-3 py-2.5 text-left text-xs ${glow === option.id ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}>{option.title}<span className="mt-1 block text-[10px] text-zinc-600">{option.hint}</span></button>)}</div></div>
+      <div>
+        <FieldLabel>{t("links.customIcon")}</FieldLabel>
+        <div className="flex items-center gap-3 rounded-xl border border-white/[.08] bg-white/[.025] p-3">
+          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/[.06] text-[#fecdd3]"><SocialIcon platform={platform} size={18} customIcon={customIcon} /></span>
+          <div className="min-w-0 flex-1"><p className="text-xs text-zinc-400">{customIcon?.name || t("links.iconHint")}</p></div>
+          <input ref={fileInput} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadIcon(file); e.target.value = ""; }} />
+          <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => fileInput.current?.click()}><Upload size={13} />{customIcon?.url ? t("common.replace") : t("common.upload")}</Button>
+          {customIcon?.url && <button type="button" onClick={() => setCustomIcon(null)} className="text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button>}
+        </div>
+      </div>
       {error && <p className="text-xs text-red-300">{error}</p>}
       <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="accent" onClick={save}>{initial ? t("common.save") : t("links.addLink")}</Button></div>
     </div>

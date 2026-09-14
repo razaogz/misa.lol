@@ -201,6 +201,9 @@ async def ensure_template_tables() -> None:
             "CREATE INDEX IF NOT EXISTS template_favorites_user_idx ON template_favorites (user_id, created_at DESC)"
         )
         await _pool.execute(
+            "CREATE INDEX IF NOT EXISTS template_favorites_template_created_idx ON template_favorites (template_id, created_at DESC)"
+        )
+        await _pool.execute(
             "CREATE INDEX IF NOT EXISTS profile_templates_published_idx ON profile_templates (published, updated_at DESC)"
         )
         await _pool.execute(
@@ -286,15 +289,25 @@ def _template_row(row: asyncpg.Record) -> dict[str, Any]:
     return item
 
 
-async def list_published_templates() -> list[dict[str, Any]]:
+async def list_published_templates(sort: str = "latest") -> list[dict[str, Any]]:
+    order_by = {
+        "latest": "t.updated_at DESC, t.id DESC",
+        "popular": "favorite_count DESC, t.updated_at DESC, t.id DESC",
+        "week": "week_favorite_count DESC, t.updated_at DESC, t.id DESC",
+        "month": "month_favorite_count DESC, t.updated_at DESC, t.id DESC",
+        "all_time": "favorite_count DESC, t.created_at ASC, t.id ASC",
+    }.get(sort, "t.updated_at DESC, t.id DESC")
     rows = await _get_pool().fetch(
-        """
+        f"""
         SELECT t.id, t.slug, t.name, t.description, t.preview, t.preview_image_url, t.published, t.visibility, t.tags, t.created_by,
-               t.created_at, t.updated_at, u.username AS creator_username
+               t.created_at, t.updated_at, u.username AS creator_username,
+               (SELECT COUNT(*) FROM template_favorites f WHERE f.template_id = t.id)::int AS favorite_count,
+               (SELECT COUNT(*) FROM template_favorites f WHERE f.template_id = t.id AND f.created_at >= NOW() - INTERVAL '7 days')::int AS week_favorite_count,
+               (SELECT COUNT(*) FROM template_favorites f WHERE f.template_id = t.id AND f.created_at >= NOW() - INTERVAL '30 days')::int AS month_favorite_count
         FROM profile_templates t
         LEFT JOIN users u ON u.id = t.created_by
         WHERE t.published = TRUE AND t.visibility = 'public'
-        ORDER BY t.updated_at DESC
+        ORDER BY {order_by}
         """
     )
     return [_template_row(row) for row in rows]

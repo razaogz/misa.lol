@@ -39,10 +39,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export async function listTemplates(filters?: { q?: string; tag?: string }) {
+export async function listTemplates(filters?: { q?: string; tag?: string; sort?: "latest" | "popular" | "week" | "month" | "all_time" }) {
   const params = new URLSearchParams();
   if (filters?.q?.trim()) params.set("q", filters.q.trim());
   if (filters?.tag?.trim()) params.set("tag", filters.tag.trim());
+  if (filters?.sort) params.set("sort", filters.sort);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   const result = await request<{ templates: ProfileTemplate[] }>(suffix);
   return result.templates || [];

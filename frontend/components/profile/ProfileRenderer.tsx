@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileIdentity, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
+import { resolvedAudioSource } from "@/lib/audio";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { contentAlign, profileFont, profileLayout } from "@/lib/profile-layout";
 import { typeSize } from "@/lib/typography";
@@ -59,14 +60,15 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const frameOpacity = Math.min(100, Math.max(0, s.profileFrameOpacity ?? 100)) / 100;
   const frameDrag = useRef<{ mode: "move" | "resize"; pointerId: number; startX: number; startY: number; baseX: number; baseY: number; baseScale: number } | null>(null);
   const frameVisible = showFrame && frameOpacity > 0;
+  const audioSource = resolvedAudioSource(config.assets);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.volume = Math.min(1, Math.max(0, config.assets.volume / 100));
-    video.muted = !config.assets.audioEnabled;
+    video.muted = audioSource !== "video";
     if (entered) void video.play().catch(() => undefined);
-  }, [config.assets.audioEnabled, config.assets.backgroundVideo.url, config.assets.volume, entered]);
+  }, [audioSource, config.assets.backgroundVideo.url, config.assets.volume, entered]);
   const tap = () => { if (s.clickSound) playClickSound(config.assets.clickSound?.url); };
   const openPage = () => { tap(); setEntered(true); };
   const tilt = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -200,17 +202,20 @@ function ProfileBackground({ config, videoRef, particles }: { config: ProfileCon
   const accent = config.settings.accentColor;
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ backgroundColor: config.settings.backgroundColor }}>
-      <div className="absolute -inset-[10%] animate-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: background?.url ? `url(${background.url})` : `radial-gradient(circle at 19% 10%, ${accent}30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)`, backgroundSize: "cover", backgroundPosition: "center" }} />
-      {backgroundVideo.url && <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ opacity: config.settings.backgroundOpacity / 100 }} src={backgroundVideo.url} autoPlay loop muted={!config.assets.audioEnabled} playsInline preload="metadata" />}
-      {effect === "Glow" && <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_15%,rgba(0,0,0,.45)_78%)]" />}
+      <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: background?.url ? "url(" + background.url + ")" : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
+      {backgroundVideo.url && <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ opacity: config.settings.backgroundOpacity / 100 }} src={backgroundVideo.url} autoPlay loop muted={resolvedAudioSource(config.assets) !== "video"} playsInline preload="metadata" />}
+      {effect === "Glow" && <div className="absolute inset-0 animate-background-glow bg-[radial-gradient(ellipse_at_center,transparent_15%,rgba(0,0,0,.45)_78%)]" />}
       {effect === "Aurora" && (
         <div className="absolute inset-0 overflow-hidden">
-          <span className="animate-aurora absolute -left-1/4 top-[-10%] h-[60%] w-[70%] rounded-full blur-3xl" style={{ background: `${accent}55` }} />
+          <span className="animate-aurora absolute -left-1/4 top-[-10%] h-[60%] w-[70%] rounded-full blur-3xl" style={{ background: accent + "55" }} />
           <span className="animate-aurora absolute -right-1/4 bottom-[-8%] h-[55%] w-[65%] rounded-full blur-3xl" style={{ background: "#5eead455", animationDelay: "-2.4s" }} />
         </div>
       )}
-      {effect === "Particles" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute rounded-full bg-white/35" style={{ left: particle.left, top: particle.top, width: particle.size, height: particle.size, animation: `drift ${7 + i % 5}s ease-in-out ${particle.delay} infinite` }} />)}</div>}
-      {effect === "Stars" && <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "67px 67px" }} />}
+      {effect === "Particles" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute rounded-full bg-white/35" style={{ left: particle.left, top: particle.top, width: particle.size, height: particle.size, animation: "background-particle " + (7 + i % 5) + "s ease-in-out " + particle.delay + " infinite" }} />)}</div>}
+      {effect === "Stars" && <div className="absolute inset-0 animate-background-stars opacity-60" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "67px 67px" }} />}
+      {effect === "Waves" && <div className="absolute -inset-[20%] animate-background-waves" style={{ opacity: 0.35, backgroundImage: "repeating-linear-gradient(115deg, transparent 0 46px, " + accent + "22 47px 49px, transparent 50px 94px)" }} />}
+      {effect === "Embers" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute rounded-full" style={{ left: particle.left, top: particle.top, width: particle.size + 1, height: particle.size + 1, background: accent, boxShadow: "0 0 12px " + accent, animation: "background-ember " + (5 + i % 4) + "s ease-in-out " + particle.delay + " infinite" }} />)}</div>}
+      {effect === "Rain" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute top-[-15%] h-24 w-px bg-white/25" style={{ left: particle.left, height: 70 + (i % 5) * 24, animation: "background-rain " + (2.6 + i % 4 * .4) + "s linear " + particle.delay + " infinite" }} />)}</div>}
     </div>
   );
 }

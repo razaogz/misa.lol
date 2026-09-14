@@ -9,10 +9,10 @@ import { SocialLinks } from "@/components/socials/SocialLinks";
 import { badgePaint, hasVerifiedBadge } from "@/lib/badges";
 import { avatarRadius, formatJoinDate } from "@/lib/profile-layout";
 import { useAuth } from "@/lib/auth-store";
-import { playlistTracks } from "@/lib/audio";
+import { playlistTracks, resolvedAudioSource } from "@/lib/audio";
 import { useDiscordLive } from "@/lib/discord-live";
 import type { ProfileConfig } from "@/lib/types";
-import { bioLines, nameTracking, typeMs, typeSize } from "@/lib/typography";
+import { bioLines, nameTracking, typeMs, typeSize, usernameEffectClass } from "@/lib/typography";
 
 function useCardDiscord(config: ProfileConfig) {
   const live = useDiscordLive()?.state?.card;
@@ -65,9 +65,9 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   const s = config.settings;
   const name = config.profile.displayName;
   const effect = s.usernameEffect;
-  const [typed, setTyped] = useState(effect === "Typewriter" || effect === "Shuffle" ? "" : name);
+  const [typed, setTyped] = useState(effect === "Typewriter" ? "" : name);
   useEffect(() => {
-    if (effect !== "Typewriter" && effect !== "Shuffle") { setTyped(name); return; }
+    if (effect !== "Typewriter") { setTyped(name); return; }
     setTyped("");
     if (effect === "Typewriter") {
       let index = 0;
@@ -92,40 +92,20 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   }, [name, effect]);
   const usernameColor = s.usernameColor || s.textColor || "#ffffff";
   const effectColor = s.usernameEffectColor || s.accentColor || "#e11d48";
-  const effectClass = effect === "Gradient" || effect === "Typewriter"
-    ? "bg-gradient-to-r from-[var(--username-color)] via-[var(--effect-color)] to-[var(--username-color)] bg-clip-text text-transparent"
-    : effect === "Shimmer"
-      ? "animate-shimmer bg-gradient-to-r from-[var(--username-color)] via-[var(--effect-color)] to-[var(--username-color)] bg-clip-text text-transparent"
-      : effect === "Rainbow"
-        ? "animate-name-rainbow bg-clip-text text-transparent"
-        : effect === "Fuzzy"
-          ? "animate-name-fuzzy"
-          : effect === "Sparkle"
-            ? "animate-name-sparkle"
-            : effect === "Glitch"
-              ? "animate-name-glitch"
-              : effect === "Pulse"
-                ? "animate-name-pulse"
-                : effect === "Outline"
-                  ? "text-transparent"
-                  : effect === "Neon"
-                    ? "text-[var(--username-color)]"
-                    : effect === "Wave"
-                      ? "animate-name-wave"
-                      : effect === "Shadow"
-                        ? "animate-name-shadow"
-                        : "";
+  const gradientEffect = effect === "Gradient" || effect === "Typewriter" || effect === "Shimmer" || effect === "Rainbow";
+  const effectClass = usernameEffectClass(effect);
   const rainbow = effect === "Rainbow" ? { backgroundImage: "linear-gradient(90deg, " + usernameColor + ", " + effectColor + ", #ffd166, " + usernameColor + ")", backgroundSize: "200% 100%" } : {};
+  const outlineShadow = effect === "Outline"
+    ? "-1px -1px 0 " + effectColor + ", 1px -1px 0 " + effectColor + ", -1px 1px 0 " + effectColor + ", 1px 1px 0 " + effectColor
+    : undefined;
   return (
     <h1
       className={`font-semibold ${effectClass}`}
       style={{
         fontSize: typeSize(s.fontSize) + 8,
         letterSpacing: nameTracking(s.letterSpacing),
-        color: effect === "Gradient" || effect === "Typewriter" || effect === "Shimmer" || effect === "Rainbow" || effect === "Outline" ? undefined : usernameColor,
-        textShadow: effect === "Outline"
-          ? "-1px -1px 0 " + effectColor + ", 1px -1px 0 " + effectColor + ", -1px 1px 0 " + effectColor + ", 1px 1px 0 " + effectColor
-          : s.usernameGlow || effect === "Glow" || effect === "Neon" ? "0 0 24px " + effectColor + "aa" : undefined,
+        color: gradientEffect ? undefined : effect === "Outline" ? "transparent" : usernameColor,
+        textShadow: outlineShadow || (s.usernameGlow || effect === "Glow" || effect === "Neon" ? "0 0 24px " + effectColor + "aa" : undefined),
         ["--username-color" as string]: usernameColor,
         ["--effect-color" as string]: effectColor,
         ...rainbow,
@@ -223,7 +203,7 @@ export function ProfileMeta({ config, align = "center" }: { config: ProfileConfi
 export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
   // Enabled selects the background video's audio; disabled selects the
   // separately uploaded profile audio.
-  const hasPlaylist = playlistTracks(config.assets).length > 0 && !config.assets.audioEnabled;
+  const hasPlaylist = playlistTracks(config.assets).length > 0 && resolvedAudioSource(config.assets) !== "video";
   return (
     <div style={{ textAlign: align }}>
       <ProfileBio config={config} align={align} />

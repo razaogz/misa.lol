@@ -49,11 +49,13 @@ OFFICIAL_BADGES = (
 )
 MAX_ICON = 1_100_000
 MAX_ASSET = 12_000_000
+# Data URLs expand during base64 encoding; allow headroom for a 20 MB video.
+MAX_VIDEO_ASSET = 28_000_000
 MAX_FONT = 2_800_000
 KEEP_ASSET_URL = "misa:keep"
 ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
 ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
-USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Neon", "Wave", "Shadow"}
+USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Sparkle", "Glitch", "Pulse", "Outline", "Neon", "Wave", "Shadow"}
 PROFILE_FONTS = {"Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"}
 PAGE_ENTERS = {"None", "Fade", "Unfold", "Pop"}
 ASSET_KIND_TYPES = {
@@ -129,7 +131,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     ):
         value = cleaned.get(key)
         cleaned[key] = value if isinstance(value, str) and HEX_COLOR.match(value) else default
-    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora"} else "Glow"
+    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora", "Waves", "Embers", "Rain"} else "Glow"
     cleaned["usernameEffect"] = cleaned.get("usernameEffect") if cleaned.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
     for key, default in (
         ("usernameGlow", True),
@@ -207,6 +209,10 @@ def _sanitize_assets(assets: dict[str, Any]) -> dict[str, Any]:
     if "volume" in cleaned:
         cleaned["volume"] = _clamp_int(cleaned.get("volume"), 65, 0, 100)
     cleaned["tracks"] = _sanitize_tracks(cleaned)
+    source = str(cleaned.get("audioSource") or "").strip().lower()
+    if source not in {"video", "standalone", "tracks"}:
+        source = "tracks" if cleaned["tracks"] else "standalone" if (cleaned.get("audio") or {}).get("url") else "video"
+    cleaned["audioSource"] = source
     if cleaned["tracks"]:
         first = cleaned["tracks"][0]
         cleaned["audio"] = {
@@ -220,6 +226,7 @@ def _sanitize_assets(assets: dict[str, Any]) -> dict[str, Any]:
             "type": str(first["artwork"].get("type") or "")[:40],
         }
         cleaned["audioTitle"] = first["title"]
+        cleaned["audioSource"] = "tracks"
     return cleaned
 
 
@@ -288,7 +295,7 @@ def _safe_asset_url(url: Any, kind: str) -> str | None:
         pattern = {"image": SAFE_ICON, "video": SAFE_VIDEO, "audio": SAFE_AUDIO, "font": SAFE_FONT}.get(kind)
         if pattern is None:
             return None
-        limit = MAX_FONT if kind == "font" else MAX_ASSET
+        limit = MAX_FONT if kind == "font" else MAX_VIDEO_ASSET if kind == "video" else MAX_ASSET
         return text if pattern.match(text) and len(text) <= limit else None
     parsed = urlparse(text)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:

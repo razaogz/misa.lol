@@ -449,7 +449,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     profile_radius = _clamp(settings.get("profileRadius"), 24, 0, 40)
     profile_frame_opacity = _clamp(settings.get("profileFrameOpacity"), 100, 0, 100) / 100
     username_effect = settings.get("usernameEffect") if settings.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
-    background_effect = settings.get("backgroundEffect") if settings.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora"} else "Glow"
+    background_effect = settings.get("backgroundEffect") if settings.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora", "Waves", "Embers", "Rain"} else "Glow"
     layout = settings.get("layout") if settings.get("layout") in {"Modern", "Simplistic", "Sleek"} else "Modern"
     avatar_shape = settings.get("avatarShape") if settings.get("avatarShape") in {"circle", "rounded", "square"} else "circle"
     banner_shape = settings.get("bannerShape") if settings.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
@@ -528,7 +528,10 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     has_background = has_public_asset(assets, "background", "image")
     has_video = has_public_asset(assets, "backgroundVideo", "video")
     has_cursor = has_public_asset(assets, "cursor", "image")
-    audio_enabled = bool(assets.get("audioEnabled", True))
+    audio_source = str(assets.get("audioSource") or "").strip().lower()
+    if audio_source not in {"video", "standalone", "tracks"}:
+        audio_source = "tracks" if assets.get("tracks") else "standalone" if (assets.get("audio") or {}).get("url") else "video"
+    audio_enabled = audio_source in {"standalone", "tracks"} or bool(assets.get("audioEnabled", True)) and audio_source == "video"
     volume = _clamp(assets.get("volume"), 65, 0, 100)
     volume_ratio = volume / 100
     audio_title = escape(str(assets.get("audioTitle") or "").strip() or str((assets.get("audio") or {}).get("name") or "").rsplit(".", 1)[0] or "Profile audio")
@@ -548,12 +551,20 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     avatar_tag = f'<div class="avatar-ring{avatar_border_class}"><div class="avatar-inner{avatar_border_class}">{avatar_face}</div>{deco_tag}</div>' if show_avatar else ""
     guild_img = f'<img src="{guild_badge}" alt="" onerror="this.remove()">' if guild_badge else ""
     guild_tag = f'<span class="guild-tag">{guild_img}{guild_tag_text}</span>' if guild_tag_text else ""
+    video_muted = " muted" if audio_source != "video" else ""
     video_tag = (
-        f'<video class="bg-video" autoplay muted loop playsinline src="{asset_src("backgroundVideo")}"></video>'
+        f'<video class="bg-video" autoplay{video_muted} loop playsinline src="{asset_src("backgroundVideo")}"></video>'
         if has_video
         else ""
     )
-    playlist = public_playlist(username_raw, assets) if audio_enabled else []
+    playlist = public_playlist(username_raw, assets) if audio_source == "tracks" else []
+    if audio_source == "standalone" and asset_src("audio"):
+        playlist = [{
+            "id": "standalone",
+            "title": audio_title,
+            "audio": asset_src("audio"),
+            "artwork": asset_src("audioArtwork") or (asset_src("avatar") if has_avatar else ""),
+        }]
     first = playlist[0] if playlist else None
     art_src = (first or {}).get("artwork") or (asset_src("avatar") if has_avatar else "")
     art_tag = f'<img id="audio-art" class="player-art" src="{escape(art_src, quote=True)}" alt="">' if art_src else '<img id="audio-art" class="player-art player-art-empty" alt="">'
@@ -709,6 +720,11 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .fx-glow::before{{width:280px;height:280px;left:12%;top:8%;background:{accent}55}}
 .fx-glow::after{{width:240px;height:240px;right:10%;bottom:12%;background:{accent}40;animation-delay:-2s}}
 .fx-stars{{opacity:.6;background-image:radial-gradient(circle,rgba(255,255,255,.8) 1px,transparent 1px);background-size:67px 67px}}
+.fx-stars{{animation:background-stars 5s ease-in-out infinite}}
+.fx-waves{{background:repeating-linear-gradient(115deg,transparent 0 46px,{accent}22 47px 49px,transparent 50px 94px);background-size:180px 180px;opacity:.35;animation:background-waves 15s ease-in-out infinite}}
+.ember{{position:absolute;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent};animation:background-ember 6s ease-in-out infinite}}
+.rain{{position:absolute;top:-15%;width:1px;background:#ffffff40;animation:background-rain 3s linear infinite}}
+
 .dot{{position:absolute;border-radius:50%;background:#fff6;animation:drift 8s ease-in-out infinite}}
 .card{{position:relative;width:100%;margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
 .card.no-frame{{border-color:transparent;background:transparent;backdrop-filter:none;box-shadow:none}}
@@ -844,6 +860,11 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 @keyframes shimmer{{0%{{background-position:0 50%}}100%{{background-position:100% 50%}}}}
 @keyframes pulse{{0%,100%{{opacity:.42;transform:scale(1)}}50%{{opacity:.9;transform:scale(1.08)}}}}
 @keyframes aurora{{0%,100%{{transform:translate3d(-6%,-3%,0) scale(1)}}50%{{transform:translate3d(7%,5%,0) scale(1.12)}}}}
+@keyframes background-stars{{0%,100%{{opacity:.35}}50%{{opacity:.8}}}}
+@keyframes background-waves{{0%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:0 0}}50%{{transform:translate3d(4%,2%,0) rotate(3deg);background-position:120px 80px}}100%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:240px 0}}}}
+@keyframes background-ember{{0%,100%{{transform:translate3d(0,18px,0) scale(.65);opacity:.2}}50%{{transform:translate3d(-12px,-28px,0) scale(1.3);opacity:.95}}}}
+@keyframes background-rain{{0%{{transform:translate3d(0,-20vh,0);opacity:0}}15%{{opacity:.7}}100%{{transform:translate3d(18px,130vh,0);opacity:0}}}}
+
 .fx-aurora span{{position:absolute;border-radius:50%;filter:blur(48px);animation:aurora 9s ease-in-out infinite}}
 .fx-aurora span:first-child{{left:-15%;top:-8%;width:70%;height:55%;background:{accent}55}}
 .fx-aurora span:last-child{{right:-12%;bottom:-6%;width:65%;height:50%;background:#5eead455;animation-delay:-2.4s}}
@@ -1048,6 +1069,29 @@ def _effect_markup(effect: str) -> str:
         return '<div class="fx fx-glow"></div>'
     if effect == "Aurora":
         return '<div class="fx fx-aurora"><span></span><span></span></div>'
+    if effect == "Waves":
+        return '<div class="fx fx-waves"></div>'
+    if effect == "Embers":
+        embers = []
+        for index in range(22):
+            left = (index * 37) % 100
+            top = (index * 61) % 100
+            delay = (index % 7) * 0.5
+            size = 3 + (index % 3)
+            embers.append(
+                f'<span class="ember" style="left:{left}%;top:{top}%;width:{size}px;height:{size}px;animation-delay:{delay}s"></span>'
+            )
+        return f'<div class="fx fx-embers">{"".join(embers)}</div>'
+    if effect == "Rain":
+        drops = []
+        for index in range(22):
+            left = (index * 37) % 100
+            delay = (index % 7) * 0.5
+            height = 70 + (index % 5) * 24
+            drops.append(
+                f'<span class="rain" style="left:{left}%;height:{height}px;animation-delay:{delay}s"></span>'
+            )
+        return f'<div class="fx fx-rain">{"".join(drops)}</div>'
     return ""
 
 

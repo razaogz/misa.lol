@@ -98,8 +98,8 @@ ASSET_LIMITS = {
     "avatar": 3_000_000,
     "background": 3_000_000,
     "cursor": 3_000_000,
-    "backgroundVideo": 6_000_000,
-    "audio": 6_000_000,
+    "backgroundVideo": 20_000_000,
+    "audio": 8_000_000,
 }
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 

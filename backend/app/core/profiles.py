@@ -90,6 +90,7 @@ def default_public_profile(user: User) -> dict[str, Any]:
             "customFont": {"url": None},
             "clickSound": {"url": None},
             "audioEnabled": True,
+            "audioSource": "video",
             "volume": 65,
         },
         "socials": starter_socials(username),

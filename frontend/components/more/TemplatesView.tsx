@@ -40,13 +40,14 @@ export function TemplatesView({ creatorOnly = false }: { creatorOnly?: boolean }
   const [busyId, setBusyId] = useState("");
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("");
+  const [sort, setSort] = useState<"latest" | "popular" | "week" | "month" | "all_time">("latest");
   const [tagsInput, setTagsInput] = useState("");
   const [visibility, setVisibility] = useState<ProfileTemplate["visibility"]>("public");
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [publishProgress, setPublishProgress] = useState(0);
 
-  const loadGallery = (filters?: { q?: string; tag?: string }) => listTemplates(filters ?? { q: query, tag }).then(setItems);
+  const loadGallery = (filters?: { q?: string; tag?: string; sort?: "latest" | "popular" | "week" | "month" | "all_time" }) => listTemplates(filters ?? { q: query, tag, sort }).then(setItems);
   const loadMine = () => canCreate ? listMyTemplates().then(setMine).catch(() => setMine([])) : Promise.resolve();
 
   useEffect(() => {
@@ -161,9 +162,16 @@ export function TemplatesView({ creatorOnly = false }: { creatorOnly?: boolean }
         <SectionTitle icon={BookOpen} title={t("templates.gallery")} description={t("templates.galleryDesc")} />
         {status === "loading" && <p className="text-sm text-zinc-500">{t("templates.loading")}</p>}
         {status === "error" && !items.length && <p className="text-sm text-zinc-500">{t("templates.unavailable")}</p>}
-        <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_180px_auto]">
+        <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_180px_190px_auto]">
           <div className="relative"><Search size={15} className="absolute left-3 top-3.5 text-zinc-600" /><TextInput value={query} onChange={setQuery} placeholder={t("templates.search", undefined, "Search templates")} className="pl-9" /></div>
           <TextInput value={tag} onChange={setTag} placeholder={t("templates.tagPh", undefined, "Filter by tag")} />
+          <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="h-10 rounded-xl border border-white/[.1] bg-[#15151d] px-3 text-sm text-zinc-200 outline-none focus:border-[#9b87f5]">
+            <option value="latest">Latest</option>
+            <option value="popular">Most Popular</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="all_time">All Time</option>
+          </select>
           <Button variant="accent" onClick={() => void loadGallery()}><Search size={14} />{t("common.search")}</Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

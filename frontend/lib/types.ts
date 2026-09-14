@@ -6,8 +6,8 @@ export type SocialPlatform =
   | "Patreon" | "Bitcoin" | "Ethereum" | "Litecoin" | "Solana" | "Email" | "Custom URL";
 
 export type BadgeName = "Verified" | "Premium" | "Staff" | "Helper" | "Donor" | "Gifter" | "OG" | "Server Booster" | "Bug Hunter" | "Winner" | "Second Place" | "Third Place";
-export type BackgroundEffect = "None" | "Particles" | "Stars" | "Glow" | "Aurora";
-export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Neon" | "Wave" | "Shadow";
+export type BackgroundEffect = "None" | "Particles" | "Stars" | "Glow" | "Aurora" | "Waves" | "Embers" | "Rain";
+export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Neon" | "Wave" | "Shadow";
 export type SocialAlign = "left" | "center" | "right";
 export type SocialAction = "open" | "copy";
 export type ProfileLayout = "Modern" | "Simplistic" | "Sleek";
@@ -171,6 +171,7 @@ export interface ProfileConfig {
     customFont?: ProfileAsset;
     clickSound?: ProfileAsset;
     audioEnabled: boolean;
+    audioSource?: "video" | "standalone" | "tracks";
     volume: number;
   };
   socials: SocialLink[];
@@ -181,5 +182,6 @@ export interface ProfileConfig {
     avatar?: string | null;
     decoration?: string | null;
     guildTag?: { tag: string; badge: string } | null;
+    status?: string | null;
   };
 }

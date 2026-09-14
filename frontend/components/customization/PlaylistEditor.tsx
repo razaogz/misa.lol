@@ -49,7 +49,7 @@ export function PlaylistEditor({ config, onChange }: { config: ProfileConfig; on
     <section className="rounded-2xl border border-white/[.07] bg-white/[.02] p-3.5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-zinc-200">{t("customize.playlist")}</p>
+          <p className="text-sm font-medium text-zinc-200">{t("customize.tracks", undefined, "Tracks")}</p>
           <p className="mt-1 text-xs text-zinc-600">{t("customize.playlistMeta", { count: tracks.length, max: limits.maxTracks, mb: Math.round(limits.maxTrackBytes / 1_000_000) })}</p>
         </div>
         <input ref={input} className="hidden" type="file" accept="audio/*" multiple onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} />
