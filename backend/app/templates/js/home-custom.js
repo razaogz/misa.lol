@@ -264,6 +264,8 @@
 })();
 
 // Background video: ensure playback on all viewports including mobile.
+// Handles tab visibility changes robustly so the video resumes correctly
+// when the user returns — no frozen frames, no duplicate loops.
 (function () {
   "use strict";
   var video = document.querySelector(".landing-hero-stack__video");
@@ -273,17 +275,44 @@
   if (reduce) { video.pause(); return; }
   if (navigator.connection && navigator.connection.saveData) return;
 
+  var resuming = false; // guard against duplicate play() calls
+
   function play() {
-    if (video.paused) video.play().catch(function () {});
+    if (resuming) return;
+    if (!video.paused) return;
+    resuming = true;
+    video.play().catch(function () {}).finally(function () { resuming = false; });
   }
 
   // Ensure autoplay fires even if the browser blocked it initially.
   video.addEventListener("canplay", play, { once: true });
   play();
 
+  // Core handler: pause when hidden, resume when visible.
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) video.pause();
-    else play();
+    if (document.hidden) {
+      video.pause();
+    } else {
+      play();
+    }
+  });
+
+  // Some browsers throttle background tabs and the video can stall even
+  // without a visibilitychange event (e.g. returning via Alt-Tab on
+  // desktop). Listening to window focus catches those cases.
+  window.addEventListener("focus", function () {
+    if (!document.hidden) play();
+  });
+
+  // If the video ends up paused for any reason while the page is visible
+  // (browser power-saving, etc.), resume it.
+  video.addEventListener("pause", function () {
+    if (!document.hidden) {
+      // Small delay so we don't fight the browser's own pause logic
+      setTimeout(function () {
+        if (video.paused && !document.hidden) play();
+      }, 200);
+    }
   });
 })();
 

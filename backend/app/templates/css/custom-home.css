@@ -699,3 +699,87 @@
   .landing-mobile__form .claim__hint { align-items: flex-start; margin-top: 14px; }
   .landing-mobile__form .claim__hint .dot { margin-top: 7px; }
 }
+
+/* ==========================================================================
+   Landing page UI tweaks (2026-09-14)
+   1. Hero spacing — tighter gap between title graphic and input section
+   2. Typing section visibility — more opaque claim form background
+   3. Claim button — nav CTA uses crimson accent
+   ========================================================================== */
+
+/* 1. HERO SPACING:
+   - Navbar → "I JUST NEED YOUR NAME." (reduced empty space, moved upward)
+   - "I JUST NEED YOUR NAME." → Description text (reduced empty space, moved upward)
+   - Description text → username typing/input section
+*/
+.hero3 .eyebrow {
+  position: relative;
+  z-index: 2;
+}
+
+.hero3__title-graphic {
+  position: relative;
+  z-index: 1;
+  margin-top: clamp(-90px, -6vw, -60px);
+  margin-bottom: clamp(-95px, -6.5vw, -65px);
+}
+
+.hero3 .hero__lede {
+  position: relative;
+  z-index: 2;
+  margin-top: 0;
+}
+
+.hero3 .hero__form {
+  margin-top: 16px;
+}
+
+@media (max-width: 767px) {
+  .landing-mobile__inner {
+    padding-top: 4px;
+  }
+
+  .landing-mobile .eyebrow {
+    position: relative;
+    z-index: 2;
+  }
+
+  .landing-mobile__title-graphic {
+    position: relative;
+    z-index: 1;
+    margin-top: clamp(-50px, -12vw, -35px);
+    margin-bottom: clamp(-55px, -14vw, -38px);
+  }
+
+  .landing-mobile__lede {
+    position: relative;
+    z-index: 2;
+    margin-top: 0;
+  }
+
+  .landing-mobile__form {
+    margin-top: 16px;
+  }
+}
+
+/* 2. TYPING SECTION VISIBILITY — increase opacity of claim form background */
+.claim {
+  background: rgba(10, 11, 12, .92);
+}
+
+.landing-mobile__form .claim {
+  background: rgba(10, 11, 12, .92);
+}
+
+/* 3. CLAIM USERNAME BUTTON — nav CTA uses the existing crimson accent */
+.nav__actions .btn[data-claim] {
+  background: var(--crimson);
+  color: #fff;
+  border-color: var(--crimson);
+  box-shadow: 0 8px 24px -14px var(--crimson-glow);
+}
+
+.nav__actions .btn[data-claim]:hover {
+  background: var(--crimson-2);
+  border-color: var(--crimson-2);
+}
