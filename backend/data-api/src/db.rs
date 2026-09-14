@@ -8,13 +8,14 @@ use std::str::FromStr;
 use std::time::Duration;
 use uuid::Uuid;
 
-const USER_COLUMNS: &str = "id, email, email_verified, password_hash, username, display_name, \
+const USER_COLUMNS: &str = "id, account_id, email, email_verified, password_hash, username, display_name, \
      avatar_url, google_id, discord_id, telegram_id, telegram_username, \
      created_at, updated_at, last_login_at, is_admin, suspended_at, suspension_reason, suspended_until";
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
+    pub account_id: String,
     pub email: Option<String>,
     pub email_verified: bool,
     pub password_hash: Option<String>,
@@ -122,6 +123,7 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
         r#"
         CREATE TABLE IF NOT EXISTS users (
             id UUID PRIMARY KEY,
+            account_id VARCHAR(16),
             email VARCHAR(320) UNIQUE,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             password_hash TEXT,
@@ -141,6 +143,8 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
     .execute(pool)
     .await?;
     for statement in [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_id VARCHAR(16)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS users_account_id_unique_idx ON users (account_id) WHERE account_id IS NOT NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS suspension_reason TEXT",
@@ -231,6 +235,35 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs (created_at DESC)",
     ] {
         sqlx::query(statement).execute(pool).await?;
+    }
+    ensure_account_ids(pool).await?;
+    sqlx::query("ALTER TABLE users ALTER COLUMN account_id SET NOT NULL").execute(pool).await?;
+    Ok(())
+}
+
+const ACCOUNT_ID_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+fn account_id_for(_id: Uuid) -> String {
+    let id = Uuid::new_v4();
+    let mut value = u128::from_be_bytes(*id.as_bytes());
+    let mut output = [b'A'; 10];
+    for index in (0..10).rev() {
+        output[index] = ACCOUNT_ID_ALPHABET[(value % ACCOUNT_ID_ALPHABET.len() as u128) as usize];
+        value /= ACCOUNT_ID_ALPHABET.len() as u128;
+    }
+    format!("MISA-{}", String::from_utf8_lossy(&output))
+}
+
+async fn ensure_account_ids(pool: &PgPool) -> Result<()> {
+    let users = sqlx::query("SELECT id FROM users WHERE account_id IS NULL").fetch_all(pool).await?;
+    for row in users {
+        let id: Uuid = sqlx::Row::try_get(&row, "id")?;
+        let candidate = account_id_for(id);
+        sqlx::query("UPDATE users SET account_id = $1, updated_at = NOW() WHERE id = $2 AND account_id IS NULL")
+            .bind(candidate)
+            .bind(id)
+            .execute(pool)
+            .await?;
     }
     Ok(())
 }
@@ -332,12 +365,13 @@ pub async fn create_user(pool: &PgPool, new_user: NewUser) -> Result<User, sqlx:
     let id = Uuid::new_v4();
     sqlx::query_as::<_, User>(&format!(
         "INSERT INTO users (
-            id, email, email_verified, password_hash, username, display_name, avatar_url,
+            id, account_id, email, email_verified, password_hash, username, display_name, avatar_url,
             google_id, discord_id, telegram_id, telegram_username
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         RETURNING {USER_COLUMNS}"
     ))
     .bind(id)
+    .bind(account_id_for(id))
     .bind(new_user.email)
     .bind(new_user.email_verified.unwrap_or(false))
     .bind(new_user.password_hash)
@@ -479,11 +513,12 @@ pub async fn oauth_upsert(pool: &PgPool, req: OAuthRequest) -> Result<Result<Use
     };
     sqlx::query(
         "INSERT INTO users (
-            id, email, email_verified, display_name, avatar_url,
+            id, account_id, email, email_verified, display_name, avatar_url,
             google_id, discord_id, telegram_id, telegram_username
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
     )
     .bind(id)
+    .bind(account_id_for(id))
     .bind(&req.email)
     .bind(req.email_verified.unwrap_or(false) && req.email.is_some())
     .bind(&req.display_name)

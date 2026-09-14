@@ -1,9 +1,11 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "./auth-store";
-import { createDefaultProfile } from "./profile-defaults";
-import type { AuthUser, ProfileAsset, ProfileConfig } from "./types";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth, type AuthUser } from "./auth-store";
+import { compactProfileForSave, savePayloadTooLarge } from "./audio";
+import { cloneMockProfile } from "./mock-data";
+import { normalizeProfileSocials } from "./socials";
+import type { ProfileAsset, ProfileConfig } from "./types";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 interface ProfileContextValue {
@@ -11,6 +13,7 @@ interface ProfileContextValue {
   updateConfig: (updater: (config: ProfileConfig) => ProfileConfig) => void;
   resetConfig: () => void;
   saveProfile: (nextConfig?: ProfileConfig) => Promise<void>;
+  hydrateFromServer: (nextConfig: ProfileConfig) => void;
   saveState: SaveState;
   saveError: string;
 }
@@ -19,53 +22,75 @@ const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const { user, isReady: authReady } = useAuth();
-  const [config, setConfig] = useState<ProfileConfig>(() => createDefaultProfile());
+  const [config, setConfig] = useState<ProfileConfig>(() => cloneMockProfile());
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
-  const loadGeneration = useRef(0);
+  const lastSavedRef = useRef("");
+
+  const persist = useCallback(async (nextConfig: ProfileConfig) => {
+    if (!user) { setSaveState("error"); setSaveError("You are not signed in."); return; }
+    if (!user.username) { setSaveState("error"); setSaveError("Choose a username in Account settings before saving your profile."); return; }
+    const profileToSave = normalizeProfileSocials(nextConfig);
+    const snapshot = JSON.stringify(profileToSave);
+    if (snapshot === lastSavedRef.current) { setSaveState("saved"); return; }
+    let previous: ProfileConfig | null = null;
+    try { previous = lastSavedRef.current ? JSON.parse(lastSavedRef.current) as ProfileConfig : null; } catch { previous = null; }
+    const body = JSON.stringify(compactProfileForSave(profileToSave, previous));
+    if (savePayloadTooLarge(body)) {
+      setSaveState("error");
+      setSaveError("That playlist is too large to save at once. Use smaller files or fewer tracks.");
+      return;
+    }
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      const response = await fetch("/api/v1/profile/me", { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body });
+      const raw = await response.text();
+      let result: { profile?: ProfileConfig; detail?: string; error?: string } = {};
+      try { result = raw ? JSON.parse(raw) as typeof result : {}; } catch { /* The proxy may return an HTML error page. */ }
+      if (!response.ok && !result.detail && !result.error) result.detail = `Profile save failed (server returned ${response.status}).`;
+      if (!response.ok || !result.profile) throw new Error(result.detail || result.error || "Profile save failed. Please try again.");
+      const saved = normalizeProfileSocials(result.profile);
+      lastSavedRef.current = JSON.stringify(saved);
+      setConfig(saved);
+      setSaveState("saved");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "Profile save failed. Please try again.");
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!authReady) return;
-    const generation = ++loadGeneration.current;
-    const controller = new AbortController();
-    const empty = user ? profileForUser(user) : createDefaultProfile();
-    // Do not display the previous account while the current account is loading.
-    setConfig(empty);
-    setSaveState("idle");
-    setSaveError("");
+    let cancelled = false;
     const load = async () => {
-      const next = user ? await loadProfileForUser(user, controller.signal) : empty;
-      if (generation === loadGeneration.current) { setConfig(next); setSaveState("idle"); setSaveError(""); }
+      const next = user ? await loadProfileForUser(user) : cloneMockProfile();
+      if (cancelled) return;
+      const normalized = normalizeProfileSocials(next);
+      setConfig(normalized);
+      lastSavedRef.current = user?.username ? JSON.stringify(normalized) : "";
+      setSaveState("idle");
+      setSaveError("");
     };
     void load();
-    return () => { controller.abort(); };
+    return () => { cancelled = true; };
   }, [authReady, user]);
 
   const value = useMemo<ProfileContextValue>(() => ({
     config,
     updateConfig: (updater) => { setConfig((current) => updater(current)); setSaveState("idle"); setSaveError(""); },
-    resetConfig: () => { setConfig(user ? profileForUser(user) : createDefaultProfile()); setSaveState("idle"); setSaveError(""); },
-    saveProfile: async (nextConfig) => {
-      if (!user) { setSaveState("error"); setSaveError("You are not signed in. Log in or create an account before saving your profile."); return; }
-      const generation = loadGeneration.current;
-      setSaveState("saving");
+    resetConfig: () => { setConfig(user ? profileForUser(user) : cloneMockProfile()); setSaveState("idle"); setSaveError(""); },
+    saveProfile: async (nextConfig) => { await persist(nextConfig || config); },
+    hydrateFromServer: (nextConfig) => {
+      const normalized = normalizeProfileSocials(nextConfig);
+      lastSavedRef.current = JSON.stringify(normalized);
+      setConfig(normalized);
+      setSaveState("saved");
       setSaveError("");
-      try {
-        const profileToSave = nextConfig || config;
-        const response = await fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(profileToSave) });
-        const result = await response.json() as { profile?: ProfileConfig; error?: string };
-        if (!response.ok || !result.profile) throw new Error(result.error || "Profile save failed. Please try again.");
-        if (generation !== loadGeneration.current) return;
-        setConfig(result.profile);
-        setSaveState("saved");
-      } catch (error) {
-        if (generation !== loadGeneration.current) return;
-        setSaveState("error"); setSaveError(error instanceof Error ? error.message : "Profile save failed. Please try again.");
-      }
     },
     saveState,
     saveError,
-  }), [config, saveState, saveError, user]);
+  }), [config, persist, saveState, saveError, user]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
@@ -75,48 +100,69 @@ export function useProfile() {
   return value;
 }
 
-export async function loadProfileForUsername(username: string, signal?: AbortSignal): Promise<ProfileConfig | null> {
+export async function loadProfileForUsername(username: string): Promise<ProfileConfig | null> {
   const normalized = username.trim().toLowerCase();
   try {
-    const response = await fetch(`/api/profile?username=${encodeURIComponent(normalized)}`, { cache: "no-store", signal });
+    const response = await fetch(`/api/v1/profile?username=${encodeURIComponent(normalized)}`, { cache: "no-store" });
     if (response.ok) {
-      const result = await response.json() as { profile: ProfileConfig };
-      return result.profile;
+      const result = await response.json() as { profile?: ProfileConfig };
+      if (result.profile) return normalizeProfileSocials(result.profile);
     }
-  } catch { return null; }
+  } catch { /* Keep public profiles from crashing if the API is briefly down. */ }
   return null;
 }
 
-export async function assetFromFile(file: File, kind: string): Promise<ProfileAsset> {
-  const form = new FormData();
-  form.append("kind", kind);
-  form.append("file", file);
-  const response = await fetch("/api/v1/profile/assets", { method: "POST", body: form, credentials: "include" });
-  const result = await response.json().catch(() => ({})) as { asset?: ProfileAsset; error?: string; detail?: string };
-  if (!response.ok || !result.asset) throw new Error(result.error || result.detail || "Upload failed. Please try again.");
-  return result.asset;
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  ico: "image/x-icon",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  woff2: "font/woff2",
+  woff: "font/woff",
+  ttf: "font/ttf",
+  otf: "font/otf",
+};
+
+export function assetFromFile(file: File): Promise<ProfileAsset> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      const type = file.type || MIME_BY_EXT[file.name.split(".").pop()?.toLowerCase() || ""] || "";
+      let url = raw || null;
+      if (url?.startsWith("data:") && type.startsWith("font/")) url = url.replace(/^data:[^;,]*/, `data:${type}`);
+      else if (url?.startsWith("data:application/octet-stream") && type) url = url.replace("data:application/octet-stream", `data:${type}`);
+      resolve({ url, name: file.name, type });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
-function profileForUser(user: AuthUser): ProfileConfig {
-  return createDefaultProfile(user.username || "", user.displayName);
+function profileForUser(user: AuthUser) {
+  const profile = cloneMockProfile();
+  profile.profile.username = user.username || "choose-username";
+  profile.profile.displayName = user.displayName;
+  profile.profile.uid = user.id;
+  profile.socials = profile.socials.map((social) => ({ ...social, value: social.value.replaceAll("demo", user.username || "user") }));
+  return profile;
 }
 
-async function loadProfileForUser(user: AuthUser, signal: AbortSignal) {
-  let profile: ProfileConfig | null = null;
-  try {
-    const response = await fetch("/api/profile/me", {
-      credentials: "include",
-      cache: "no-store",
-      headers: { "Cache-Control": "no-store" },
-      signal,
-    });
-    if (response.ok) profile = (await response.json() as { profile?: ProfileConfig }).profile || null;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+async function loadProfileForUser(user: AuthUser) {
+  const response = await fetch("/api/v1/profile/me", { credentials: "include", cache: "no-store" });
+  if (response.ok) {
+    const result = await response.json() as { profile?: ProfileConfig };
+    if (result.profile) return normalizeProfileSocials(result.profile);
   }
-  const next = profile || createDefaultProfile(user.username || "", user.displayName);
-  next.profile.username = user.username || "";
-  next.profile.uid = user.id;
-  if (!next.profile.displayName) next.profile.displayName = user.displayName;
-  return next;
+  return profileForUser(user);
 }

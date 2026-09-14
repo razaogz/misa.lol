@@ -1,26 +1,45 @@
+import hmac
 import secrets
 from typing import Annotated
-from uuid import UUID
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
+from app.core.account_security import (
+    add_switcher_id,
+    attach_switcher_cookie,
+    bump_mfa_ticket,
+    hash_backup_code,
+    load_mfa_ticket,
+    peek_email_change,
+    peek_password_reset,
+    pop_email_change,
+    pop_mfa_ticket,
+    pop_password_reset,
+    put_mfa_ticket,
+    put_password_reset,
+    read_switcher_ids,
+    remember_switcher_user,
+)
 from app.core.config import Settings, get_settings
+from app.core.discord_live import store_discord_session
+from app.core.mailer import mailer_configured, send_password_reset
 from app.core.oauth import (
     discord_authorize_url,
     discord_avatar_url,
+    exchange_discord_code,
     exchange_google_code,
-    fetch_discord_user,
     google_authorize_url,
     pop_oauth_state,
     save_oauth_state,
     telegram_authorize_url,
 )
-from app.core.rate_limit import limit_auth
-from app.core.turnstile import verify_turnstile
+from app.core.public_origin import public_origin_for
+from app.core.rate_limit import client_ip, limit_auth, rate_limit
+from app.core.turnstile import TURNSTILE_ENABLED, verify_turnstile
 from app.core.security import (
     hash_password,
     normalize_email,
@@ -31,21 +50,12 @@ from app.core.security import (
 )
 from app.core.sessions import (
     attach_session_cookie,
-    attach_pending_auth_cookie,
-    clear_pending_auth_cookie,
-    consume_mfa_challenge,
-    consume_pending_auth,
-    create_mfa_challenge,
-    create_pending_auth,
     clear_session_cookie,
     create_session,
     destroy_session,
     get_user_from_request,
-    load_mfa_challenge,
-    load_pending_auth,
-    update_mfa_challenge,
+    revoke_all_sessions,
 )
-from app.core.mfa import verify_totp
 from app.db import admin_db, data_api
 from app.db.data_api import DataConflict
 from app.models import User
@@ -60,29 +70,99 @@ class SignupRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     confirm_password: str = Field(min_length=8, max_length=128)
     tos: bool
-    turnstile_token: str = Field(min_length=1)
+    turnstile_token: str = ""
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
     remember: bool = False
+    turnstile_token: str = ""
 
 
-class CaptchaFinalizeRequest(BaseModel):
-    challenge: str | None = Field(default=None, min_length=20, max_length=256)
-    turnstile_token: str | None = Field(default=None, max_length=4096)
+class ForgotRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
 
 
 class MfaLoginRequest(BaseModel):
-    challenge: str = Field(min_length=20, max_length=256)
-    code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
-    remember: bool = False
+    ticket: str = Field(min_length=16, max_length=256)
+    code: str = Field(min_length=6, max_length=32)
+
+
+class SwitchRequest(BaseModel):
+    user_id: str = Field(min_length=8, max_length=64)
+
+
+class SwitcherForgetRequest(BaseModel):
+    user_id: str = Field(min_length=8, max_length=64)
+
+
+def _oauth_destination(settings: Settings, signed_in: bool, next_path: str) -> str:
+    dashboard = settings.dashboard_url.rstrip("/")
+    if next_path in {"/dashboard", "/dashboard/", ""}:
+        return dashboard or "/dashboard"
+    if next_path.startswith("/dashboard/"):
+        extra = next_path[len("/dashboard"):]
+        if dashboard.startswith("http"):
+            return f"{dashboard}{extra}"
+        return next_path
+    return dashboard if signed_in else next_path
 
 
 def _oauth_error(next_path: str, error: str) -> RedirectResponse:
     separator = "&" if "?" in next_path else "?"
     return RedirectResponse(f"{next_path}{separator}error={error}", status_code=302)
+
+
+def _settings_url(settings: Settings) -> str:
+    dashboard = settings.dashboard_url.rstrip("/")
+    if dashboard.startswith("http"):
+        return f"{dashboard}/settings"
+    return f"{dashboard}/settings" if dashboard else "/dashboard/settings"
+
+
+async def _consume_backup_code(user_id: str, code: str) -> bool:
+    if not admin_db.has_pool():
+        return False
+    digest = hash_backup_code(code)
+    try:
+        hashes = await admin_db.unused_backup_hashes(user_id)
+    except Exception:
+        return False
+    matched = next((stored for stored in hashes if len(digest) == len(stored) and hmac.compare_digest(digest, stored)), None)
+    if not matched:
+        return False
+    try:
+        return await admin_db.consume_backup_code(user_id, matched)
+    except Exception:
+        return False
+
+
+async def _require_mfa_ticket(user: User, remember: bool) -> JSONResponse | None:
+    if not await admin_db.mfa_is_enabled(user.id):
+        return None
+    ticket = await put_mfa_ticket(user.id, remember)
+    return JSONResponse({"ok": True, "mfa_required": True, "ticket": ticket})
+
+
+async def _block_signup_ip(request: Request) -> None:
+    if await admin_db.request_ip_is_banned(client_ip(request)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="New accounts cannot be created from this network.")
+
+
+async def _reject_if_banned(user: User, request: Request) -> None:
+    await admin_db.remember_signup_ip(user.id, client_ip(request))
+    if await admin_db.user_is_banned(user.id):
+        await revoke_all_sessions(user.id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is banned.")
+    if user.currently_suspended:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is currently suspended.")
 
 
 async def _issue_session(
@@ -92,16 +172,13 @@ async def _issue_session(
     settings: Settings,
     remember: bool = False,
 ) -> None:
+    await admin_db.remember_signup_ip(user.id, client_ip(request))
     existing = request.cookies.get(settings.session_cookie_name)
     await destroy_session(existing)
     await data_api.touch_login(user.id)
-    token, ttl = await create_session(
-        user.id,
-        remember,
-        ip=request.client.host if request.client else "",
-        user_agent=request.headers.get("user-agent", "unknown"),
-    )
+    token, ttl = await create_session(user.id, remember, request)
     attach_session_cookie(response, request, token, ttl, settings)
+    remember_switcher_user(response, request, user.id, settings)
 
 
 async def _finish_oauth(
@@ -116,12 +193,11 @@ async def _finish_oauth(
     avatar_url: str | None,
     telegram_username: str | None = None,
     next_path: str = "/dashboard",
-    link: bool = False,
-) -> RedirectResponse:
+) -> tuple[RedirectResponse, User | None]:
     current_user = await get_user_from_request(request)
-    if link and current_user is None:
-        return _oauth_error("/login", "not_authenticated")
-    destination = next_path if link else ("/dashboard" if current_user else next_path)
+    destination = _oauth_destination(settings, current_user is not None, next_path)
+    if current_user is None and await admin_db.request_ip_is_banned(client_ip(request)):
+        return _oauth_error("/signup", "account_banned"), None
     try:
         user = await data_api.oauth_upsert(
             provider=provider,
@@ -135,15 +211,19 @@ async def _finish_oauth(
         )
     except DataConflict as exc:
         bounce = "/dashboard" if current_user else "/login"
-        return _oauth_error(bounce, exc.code)
+        return _oauth_error(bounce, exc.code), None
+    await admin_db.remember_signup_ip(user.id, client_ip(request))
+    if await admin_db.user_is_banned(user.id):
+        return _oauth_error("/login", "account_banned"), None
     if user.currently_suspended:
-        return _oauth_error("/login", "account_suspended")
-    if link:
-        return RedirectResponse(destination, status_code=302)
-    challenge = await create_pending_auth(user.id, remember=True, next_path=destination, provider=provider)
-    response = RedirectResponse("/login.html?captcha=1", status_code=302)
-    attach_pending_auth_cookie(response, request, challenge, settings)
-    return response
+        return _oauth_error("/login", "account_suspended"), None
+    linking = current_user is not None
+    if not linking and await admin_db.mfa_is_enabled(user.id):
+        ticket = await put_mfa_ticket(user.id, True)
+        return RedirectResponse(f"/login?mfa_ticket={ticket}", status_code=302), user
+    response = RedirectResponse(destination, status_code=302)
+    await _issue_session(response, request, user, settings, remember=True)
+    return response, user
 
 
 @router.get("/providers")
@@ -153,7 +233,7 @@ async def providers(settings: SettingsDep) -> dict:
         "google": settings.google_enabled,
         "discord": settings.discord_enabled,
         "telegram": settings.telegram_enabled,
-        "turnstile_site_key": settings.turnstile_site_key,
+        "turnstile_site_key": settings.turnstile_site_key if TURNSTILE_ENABLED else "",
     }
 
 
@@ -165,10 +245,9 @@ async def signup(payload: SignupRequest, request: Request, settings: SettingsDep
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the Terms of Service.")
     if payload.password != payload.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match.")
+    await _block_signup_ip(request)
 
     email = normalize_email(str(payload.email))
-    if email == settings.admin_root_email.lower():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That address is reserved for administration.")
     if await data_api.find_user(email=email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.")
 
@@ -182,7 +261,7 @@ async def signup(payload: SignupRequest, request: Request, settings: SettingsDep
     except DataConflict:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.") from None
 
-    response = JSONResponse({"ok": True, "redirect": "/dashboard"})
+    response = JSONResponse({"ok": True, "redirect": settings.dashboard_url})
     await _issue_session(response, request, user, settings, remember=False)
     return response
 
@@ -190,68 +269,17 @@ async def signup(payload: SignupRequest, request: Request, settings: SettingsDep
 @router.post("/login")
 async def login(payload: LoginRequest, request: Request, settings: SettingsDep) -> JSONResponse:
     await limit_auth(request, "login", limit=12, window_seconds=60)
+    await verify_turnstile(request, payload.turnstile_token, settings)
     email = normalize_email(str(payload.email))
     user = await data_api.find_user(email=email)
     if user is None or not user.password_hash or not verify_password(user.password_hash, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
-    if user.currently_suspended:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is currently suspended.")
-    challenge = await create_pending_auth(user.id, remember=payload.remember, next_path="/dashboard", provider="password")
-    return JSONResponse({"ok": False, "captcha_required": True, "challenge": challenge})
-
-
-@router.post("/captcha")
-async def finalize_captcha(payload: CaptchaFinalizeRequest, request: Request, settings: SettingsDep) -> JSONResponse:
-    await limit_auth(request, "captcha-finalize", limit=10, window_seconds=900)
-    challenge = payload.challenge or request.cookies.get("misa_pending_auth")
-    pending = await load_pending_auth(challenge)
-    if not pending:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="The verification request has expired.")
-
-    # The final session is impossible to create until this server-side check succeeds.
-    await verify_turnstile(request, payload.turnstile_token, settings)
-    pending = await consume_pending_auth(challenge)
-    if not pending:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="The verification request has expired.")
-    user = await data_api.get_user(str(pending["user_id"]))
-    if user is None or user.currently_suspended:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed.")
-
-    mfa_enabled, _ = await admin_db.get_user_security(UUID(str(user.id)))
-    if mfa_enabled:
-        mfa_challenge = await create_mfa_challenge(user.id, bool(pending.get("remember")))
-        response = JSONResponse({"ok": False, "mfa_required": True, "challenge": mfa_challenge})
-        clear_pending_auth_cookie(response, request, settings)
-        return response
-
-    response = JSONResponse({"ok": True, "redirect": safe_next_path(pending.get("next"))})
-    await _issue_session(response, request, user, settings, remember=bool(pending.get("remember")))
-    clear_pending_auth_cookie(response, request, settings)
-    return response
-
-
-@router.post("/mfa")
-async def verify_login_mfa(payload: MfaLoginRequest, request: Request, settings: SettingsDep) -> JSONResponse:
-    await limit_auth(request, "mfa-login", limit=5, window_seconds=300)
-    challenge = await load_mfa_challenge(payload.challenge)
-    if not challenge or not challenge.get("user_id"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="The verification request has expired.")
-    user = await data_api.get_user(str(challenge["user_id"]))
-    if user is None or user.currently_suspended:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA verification failed.")
-    enabled, secret = await admin_db.get_user_security(UUID(str(user.id)))
-    if not enabled or not secret or not verify_totp(secret, payload.code):
-        attempts = int(challenge.get("attempts", 0)) + 1
-        if attempts >= 5:
-            await consume_mfa_challenge(payload.challenge)
-        else:
-            challenge["attempts"] = attempts
-            await update_mfa_challenge(payload.challenge, challenge)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code.")
-    if await consume_mfa_challenge(payload.challenge) is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="The verification request has expired.")
-    response = JSONResponse({"ok": True, "redirect": "/dashboard"})
-    await _issue_session(response, request, user, settings, remember=bool(challenge.get("remember")))
+    await _reject_if_banned(user, request)
+    mfa = await _require_mfa_ticket(user, payload.remember)
+    if mfa is not None:
+        return mfa
+    response = JSONResponse({"ok": True, "redirect": settings.dashboard_url})
+    await _issue_session(response, request, user, settings, remember=payload.remember)
     return response
 
 
@@ -263,21 +291,144 @@ async def logout(request: Request, settings: SettingsDep) -> JSONResponse:
     return response
 
 
+@router.post("/forgot")
+async def forgot_password(
+    payload: ForgotRequest,
+    request: Request,
+    settings: SettingsDep,
+    background: BackgroundTasks,
+) -> JSONResponse:
+    await limit_auth(request, "forgot", limit=5, window_seconds=3600)
+    email = normalize_email(str(payload.email))
+    await rate_limit(f"rl:forgot-email:{hash_backup_code(email)[:24]}", 3, 3600)
+    user = await data_api.find_user(email=email)
+    if user and user.email and not user.currently_suspended and mailer_configured(settings):
+        token = await put_password_reset(user.id)
+        reset_url = f"{public_origin_for(request)}/reset-password?token={token}"
+        background.add_task(send_password_reset, user.email, reset_url, settings)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/reset")
+async def reset_password(payload: ResetRequest, request: Request, settings: SettingsDep) -> JSONResponse:
+    await limit_auth(request, "reset", limit=10, window_seconds=3600)
+    if payload.password != payload.confirm_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match.")
+    saved = await peek_password_reset(payload.token)
+    if not saved or not saved.get("user_id"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That reset link is invalid or expired.")
+    user = await data_api.get_user(str(saved["user_id"]))
+    if user is None or user.currently_suspended:
+        await pop_password_reset(payload.token)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That reset link is invalid or expired.")
+    updated = await data_api.update_user(user.id, password_hash=hash_password(payload.password))
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not update that password.")
+    await pop_password_reset(payload.token)
+    await revoke_all_sessions(user.id)
+    response = JSONResponse({"ok": True, "redirect": "/login"})
+    clear_session_cookie(response, request, settings)
+    return response
+
+
+@router.get("/confirm-email")
+async def confirm_email(request: Request, settings: SettingsDep, token: str = "") -> RedirectResponse:
+    dest = _settings_url(settings)
+    saved = await peek_email_change(token) if token else None
+    if not saved or not saved.get("user_id") or not saved.get("email"):
+        return RedirectResponse(f"{dest}?email=invalid", status_code=302)
+    email = normalize_email(str(saved["email"]))
+    existing = await data_api.find_user(email=email)
+    if existing and existing.id != str(saved["user_id"]):
+        await pop_email_change(token)
+        return RedirectResponse(f"{dest}?email=taken", status_code=302)
+    try:
+        updated = await data_api.update_user(str(saved["user_id"]), email=email, email_verified=True)
+    except DataConflict:
+        await pop_email_change(token)
+        return RedirectResponse(f"{dest}?email=taken", status_code=302)
+    if updated is None:
+        return RedirectResponse(f"{dest}?email=invalid", status_code=302)
+    await pop_email_change(token)
+    return RedirectResponse(f"{dest}?email=confirmed", status_code=302)
+
+
+@router.post("/login/mfa")
+async def login_mfa(payload: MfaLoginRequest, request: Request, settings: SettingsDep) -> JSONResponse:
+    await limit_auth(request, "mfa", limit=8, window_seconds=600)
+    ticket = await load_mfa_ticket(payload.ticket)
+    if not ticket or not ticket.get("user_id"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That verification step expired. Sign in again.")
+    attempts = int(ticket.get("attempts") or 0) + 1
+    if attempts > 8:
+        await pop_mfa_ticket(payload.ticket)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Too many backup-code attempts. Sign in again.")
+    user = await data_api.get_user(str(ticket["user_id"]))
+    if user is None or not await admin_db.mfa_is_enabled(user.id):
+        await pop_mfa_ticket(payload.ticket)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That verification step expired. Sign in again.")
+    try:
+        await _reject_if_banned(user, request)
+    except HTTPException:
+        await pop_mfa_ticket(payload.ticket)
+        raise
+    if not await _consume_backup_code(user.id, payload.code):
+        ticket["attempts"] = attempts
+        await bump_mfa_ticket(payload.ticket, ticket)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That backup code is not valid.")
+    await pop_mfa_ticket(payload.ticket)
+    response = JSONResponse({"ok": True, "redirect": settings.dashboard_url})
+    await _issue_session(response, request, user, settings, remember=bool(ticket.get("remember")))
+    return response
+
+
+@router.post("/switch")
+async def switch_account(payload: SwitchRequest, request: Request, settings: SettingsDep) -> JSONResponse:
+    await limit_auth(request, "switch", limit=20, window_seconds=3600)
+    current = await get_user_from_request(request)
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated.")
+    allowed = read_switcher_ids(request, settings)
+    if payload.user_id not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="That account is not saved on this browser.")
+    if payload.user_id == current.id:
+        return JSONResponse({"ok": True, "redirect": settings.dashboard_url})
+    target = await data_api.get_user(payload.user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="That account is not available.")
+    try:
+        await _reject_if_banned(target, request)
+    except HTTPException:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="That account is not available.") from None
+    response = JSONResponse({"ok": True, "redirect": settings.dashboard_url})
+    await _issue_session(response, request, target, settings, remember=True)
+    return response
+
+
+@router.post("/switcher/forget")
+async def forget_switcher_account(payload: SwitcherForgetRequest, request: Request, settings: SettingsDep) -> JSONResponse:
+    current = await get_user_from_request(request)
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated.")
+    remaining = [item for item in read_switcher_ids(request, settings) if item != payload.user_id]
+    if current.id not in remaining:
+        remaining = add_switcher_id(remaining, current.id)
+    response = JSONResponse({"ok": True})
+    attach_switcher_cookie(response, request, remaining, settings)
+    return response
+
+
 @router.get("/google")
 async def google_start(
     request: Request,
     settings: SettingsDep,
     next_path: str = Query("/dashboard", alias="next"),
-    mode: str = Query("login"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
     if not settings.google_enabled:
         return _oauth_error("/login", "google_not_configured")
     nonce = secrets.token_urlsafe(24)
-    link = mode == "link"
-    if link and await get_user_from_request(request) is None:
-        return _oauth_error("/login", "not_authenticated")
-    state = await save_oauth_state("google", safe_next_path(next_path), nonce, "link" if link else "login")
+    state = await save_oauth_state("google", safe_next_path(next_path), nonce)
     return RedirectResponse(google_authorize_url(settings, state, nonce), status_code=302)
 
 
@@ -304,7 +455,7 @@ async def google_callback(
     if not sub:
         return _oauth_error("/login", "oauth_failed")
     email = normalize_email(claims["email"]) if claims.get("email") else None
-    return await _finish_oauth(
+    response, _user = await _finish_oauth(
         request,
         settings,
         provider="google",
@@ -314,8 +465,8 @@ async def google_callback(
         display_name=claims.get("name"),
         avatar_url=claims.get("picture"),
         next_path=safe_next_path(saved.get("next")),
-        link=saved.get("mode") == "link",
     )
+    return response
 
 
 @router.get("/discord")
@@ -323,15 +474,11 @@ async def discord_start(
     request: Request,
     settings: SettingsDep,
     next_path: str = Query("/dashboard", alias="next"),
-    mode: str = Query("login"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
     if not settings.discord_enabled:
         return _oauth_error("/login", "discord_not_configured")
-    link = mode == "link"
-    if link and await get_user_from_request(request) is None:
-        return _oauth_error("/login", "not_authenticated")
-    state = await save_oauth_state("discord", safe_next_path(next_path), mode="link" if link else "login")
+    state = await save_oauth_state("discord", safe_next_path(next_path))
     return RedirectResponse(discord_authorize_url(settings, state), status_code=302)
 
 
@@ -349,14 +496,14 @@ async def discord_callback(
     if not saved:
         return _oauth_error("/login", "oauth_failed")
     try:
-        profile = await fetch_discord_user(settings, code)
+        profile, tokens = await exchange_discord_code(settings, code)
     except (httpx.HTTPError, ValueError):
         return _oauth_error("/login", "oauth_failed")
     discord_id = profile.get("id")
     if not discord_id:
         return _oauth_error("/login", "oauth_failed")
     email = normalize_email(profile["email"]) if profile.get("email") else None
-    return await _finish_oauth(
+    response, user = await _finish_oauth(
         request,
         settings,
         provider="discord",
@@ -366,8 +513,13 @@ async def discord_callback(
         display_name=profile.get("global_name") or profile.get("username"),
         avatar_url=discord_avatar_url(profile),
         next_path=safe_next_path(saved.get("next")),
-        link=saved.get("mode") == "link",
     )
+    if user:
+        try:
+            await store_discord_session(user.id, str(discord_id), tokens, settings)
+        except Exception:
+            pass
+    return response
 
 
 @router.get("/telegram")
@@ -429,7 +581,7 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
     first_name = payload.get("first_name") or ""
     last_name = payload.get("last_name") or ""
     display_name = f"{first_name} {last_name}".strip() or payload.get("username")
-    return await _finish_oauth(
+    response, _user = await _finish_oauth(
         request,
         settings,
         provider="telegram",
@@ -441,3 +593,4 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
         telegram_username=payload.get("username"),
         next_path="/dashboard",
     )
+    return response

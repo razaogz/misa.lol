@@ -6,8 +6,12 @@ from app.core.rate_limit import client_ip
 
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
+TURNSTILE_ENABLED = True
+
 
 async def verify_turnstile(request: Request, token: str | None, settings: Settings) -> None:
+    if not TURNSTILE_ENABLED:
+        return
     if not settings.turnstile_site_key or not settings.turnstile_secret_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

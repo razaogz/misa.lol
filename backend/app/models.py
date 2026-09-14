@@ -12,6 +12,7 @@ def utcnow() -> datetime:
 @dataclass
 class User:
     id: str
+    account_id: str | None = None
     email: str | None = None
     email_verified: bool = False
     password_hash: str | None = None
@@ -46,6 +47,7 @@ class User:
     def from_api(cls, data: dict[str, Any]) -> User:
         return cls(
             id=str(data["id"]),
+            account_id=data.get("account_id"),
             email=data.get("email"),
             email_verified=bool(data.get("email_verified")),
             password_hash=data.get("password_hash"),
@@ -68,6 +70,7 @@ class User:
     def to_public_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "account_id": self.account_id,
             "email": self.email,
             "email_verified": self.email_verified,
             "username": self.username,

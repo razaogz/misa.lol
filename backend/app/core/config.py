@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     domain: str = "misa.lol"
     public_base_url: str = "https://misa.lol"
+    dashboard_url: str = "/dashboard"
     database_url: str = Field(default="", validation_alias=AliasChoices("DATABASE_URL", "MISA_DATABASE_URL"))
 
     data_api_url: str = Field(
@@ -47,17 +48,35 @@ class Settings(BaseSettings):
     discord_client_secret: str = ""
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
+    lastfm_api_key: str = ""
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
-    supabase_url: str = ""
-    supabase_service_role_key: str = ""
-    storage_bucket: str = "misa-assets"
     admin_user_ids: str = ""
-    admin_root_email: str = Field(default="", validation_alias=AliasChoices("SUPER_ADMIN_EMAIL"))
-    admin_token_secret: str = ""
-    email_api_url: str = ""
-    email_api_key: str = ""
-    email_from: str = "Misa.lol <no-reply@misa.lol>"
+    admin_root_email: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_ADMIN_ROOT_EMAIL", "SUPER_ADMIN_EMAIL", "ADMIN_ROOT_EMAIL"),
+    )
+    admin_token_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_ADMIN_TOKEN_SECRET", "ADMIN_TOKEN_SECRET"),
+    )
+    email_api_url: str = Field(
+        default="https://api.resend.com/emails",
+        validation_alias=AliasChoices("MISA_EMAIL_API_URL", "EMAIL_API_URL"),
+    )
+    email_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_EMAIL_API_KEY", "EMAIL_API_KEY"),
+    )
+    email_from: str = Field(
+        default="Misa.lol <no-reply@misa.lol>",
+        validation_alias=AliasChoices("MISA_EMAIL_FROM", "EMAIL_FROM"),
+    )
+    max_profile_tracks: int = 8
+    max_track_upload_bytes: int = 8_000_000
+
+    switcher_cookie_name: str = "misa_switcher"
+    switcher_ttl_seconds: int = 60 * 60 * 24 * 90
 
     @property
     def cors_origin_list(self) -> list[str]:

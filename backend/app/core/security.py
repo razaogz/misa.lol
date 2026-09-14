@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import ipaddress
 import re
 import time
 
@@ -12,29 +13,38 @@ from app.core.config import Settings
 _hasher = PasswordHasher()
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_]{2,23}$")
+BANNED_WORD_RE = re.compile(r"^[a-z0-9_]{2,24}$")
 RESERVED_USERNAMES = {
     "about",
     "account",
     "admin",
+    "analytics",
     "api",
     "auth",
+    "badges",
     "css",
+    "customize",
     "dashboard",
     "discord",
     "explore",
+    "forgot-password",
     "google",
     "help",
+    "host",
     "icons",
     "images",
     "index",
     "js",
+    "links",
     "login",
     "logout",
     "me",
     "misa",
     "plus",
+    "premium",
     "pricing",
     "privacy",
+    "reset-password",
     "root",
     "settings",
     "signup",
@@ -42,6 +52,7 @@ RESERVED_USERNAMES = {
     "status",
     "support",
     "telegram",
+    "templates",
     "terms",
     "www",
 }
@@ -73,6 +84,42 @@ def validate_username(username: str) -> str:
     if value in RESERVED_USERNAMES:
         raise ValueError("That username is reserved.")
     return value
+
+
+def normalize_banned_word(word: str) -> str:
+    value = (word or "").strip().lower()
+    if not BANNED_WORD_RE.fullmatch(value):
+        raise ValueError("Use 2-24 letters, numbers, or underscores.")
+    return value
+
+
+def normalize_ip(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw or raw.lower() in {"unknown", "*"}:
+        raise ValueError("Enter a valid IP address.")
+    try:
+        parsed = ipaddress.ip_address(raw)
+    except ValueError as exc:
+        raise ValueError("Enter a valid IP address.") from exc
+    mapped = getattr(parsed, "ipv4_mapped", None)
+    if mapped is not None:
+        parsed = mapped
+    return str(parsed)
+
+
+def username_hits_banned_word(username: str, words: list[str]) -> bool:
+    handle = normalize_username(username)
+    if not handle:
+        return False
+    for raw in words:
+        word = (raw or "").strip().lower()
+        if not word:
+            continue
+        if handle == word:
+            return True
+        if len(word) >= 4 and word in handle:
+            return True
+    return False
 
 
 TELEGRAM_AUTH_KEYS = ("id", "first_name", "last_name", "username", "photo_url", "auth_date", "hash")

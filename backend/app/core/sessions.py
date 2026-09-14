@@ -1,3 +1,4 @@
+import hashlib
 import json
 import secrets
 from datetime import datetime, timezone
@@ -8,49 +9,48 @@ from fastapi import Response
 from starlette.requests import Request
 
 from app.core.config import Settings, get_settings
+from app.core.rate_limit import client_ip
 from app.core.security import cookie_should_be_secure
 from app.db import data_api
 from app.db.dragonfly import get_dragonfly
 from app.models import User
+
+USER_SESSIONS_TTL = 60 * 60 * 24 * 90
+TOUCH_EVERY_SECONDS = 300
 
 
 def _session_key(token: str) -> str:
     return f"session:{token}"
 
 
-def _session_id_key(session_id: str) -> str:
-    return f"session-id:{session_id}"
-
-
 def _user_sessions_key(user_id: str) -> str:
-    return f"user-sessions:{user_id}"
+    return f"user_sessions:{user_id}"
 
 
-def _mfa_challenge_key(challenge: str) -> str:
-    return f"mfa-login:{challenge}"
+def session_id_for(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _pending_auth_key(challenge: str) -> str:
-    return f"pending-auth:{challenge}"
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-async def create_session(user_id: str, remember: bool = False, ip: str = "", user_agent: str = "") -> tuple[str, int]:
+async def create_session(user_id: str, remember: bool = False, request: Request | None = None) -> tuple[str, int]:
     settings = get_settings()
     token = secrets.token_urlsafe(32)
-    session_id = secrets.token_urlsafe(16)
     ttl = settings.session_remember_ttl_seconds if remember else settings.session_ttl_seconds
     payload = {
         "user_id": user_id,
         "remember": remember,
-        "session_id": session_id,
-        "ip": ip,
-        "user_agent": user_agent,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": _now(),
+        "last_seen_at": _now(),
+        "user_agent": ((request.headers.get("user-agent") or "")[:240] if request else ""),
+        "ip": client_ip(request) if request else "",
     }
     redis = get_dragonfly()
     await redis.set(_session_key(token), json.dumps(payload), ex=ttl)
-    await redis.set(_session_id_key(session_id), token, ex=ttl)
-    await redis.sadd(_user_sessions_key(user_id), session_id)
+    await redis.sadd(_user_sessions_key(user_id), token)
+    await redis.expire(_user_sessions_key(user_id), max(ttl, USER_SESSIONS_TTL))
     return token, ttl
 
 
@@ -58,20 +58,10 @@ async def destroy_session(token: str | None) -> None:
     if not token:
         return
     redis = get_dragonfly()
-    raw = await redis.get(_session_key(token))
+    data = await load_session(token)
     await redis.delete(_session_key(token))
-    if not raw:
-        return
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        return
-    session_id = payload.get("session_id")
-    user_id = payload.get("user_id")
-    if session_id:
-        await redis.delete(_session_id_key(str(session_id)))
-    if user_id and session_id:
-        await redis.srem(_user_sessions_key(str(user_id)), str(session_id))
+    if data and data.get("user_id"):
+        await redis.srem(_user_sessions_key(str(data["user_id"])), token)
 
 
 async def load_session(token: str | None) -> dict[str, Any] | None:
@@ -91,170 +81,25 @@ async def touch_session(token: str, remember: bool) -> None:
     settings = get_settings()
     ttl = settings.session_remember_ttl_seconds if remember else settings.session_ttl_seconds
     redis = get_dragonfly()
-    await redis.expire(_session_key(token), ttl)
-    payload = await load_session(token)
-    if payload and payload.get("session_id"):
-        await redis.expire(_session_id_key(str(payload["session_id"])), ttl)
-
-
-async def register_legacy_session(token: str, payload: dict[str, Any]) -> None:
-    """Index sessions created before session-management metadata was added."""
-    if payload.get("session_id") or not payload.get("user_id"):
+    data = await load_session(token)
+    if not data:
         return
-    session_id = secrets.token_urlsafe(16)
-    payload["session_id"] = session_id
-    redis = get_dragonfly()
-    ttl = max(await redis.ttl(_session_key(token)), 1)
-    await redis.set(_session_key(token), json.dumps(payload), ex=ttl)
-    await redis.set(_session_id_key(session_id), token, ex=ttl)
-    await redis.sadd(_user_sessions_key(str(payload["user_id"])), session_id)
-
-
-async def list_user_sessions(user_id: str, current_token: str | None = None) -> list[dict[str, Any]]:
-    redis = get_dragonfly()
-    if current_token:
-        current_payload = await load_session(current_token)
-        if current_payload and str(current_payload.get("user_id")) == str(user_id):
-            await register_legacy_session(current_token, current_payload)
-    session_ids = await redis.smembers(_user_sessions_key(user_id))
-    sessions: list[dict[str, Any]] = []
-    for session_id in session_ids:
-        token = await redis.get(_session_id_key(str(session_id)))
-        if not token:
-            await redis.srem(_user_sessions_key(user_id), str(session_id))
-            continue
-        payload = await load_session(token)
-        if not payload or str(payload.get("user_id")) != str(user_id):
-            await redis.srem(_user_sessions_key(user_id), str(session_id))
-            continue
-        sessions.append({
-            "id": str(payload.get("session_id") or session_id),
-            "ip": payload.get("ip") or "unknown",
-            "user_agent": payload.get("user_agent") or "Unknown device",
-            "created_at": payload.get("created_at"),
-            "remember": bool(payload.get("remember")),
-            "current": bool(current_token and token == current_token),
-        })
-    sessions.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    return sessions
-
-
-async def revoke_user_session(user_id: str, session_id: str) -> bool:
-    redis = get_dragonfly()
-    token = await redis.get(_session_id_key(session_id))
-    if not token:
-        await redis.srem(_user_sessions_key(user_id), session_id)
-        return False
-    payload = await load_session(token)
-    if not payload or str(payload.get("user_id")) != str(user_id):
-        return False
-    await destroy_session(token)
-    return True
-
-
-async def revoke_all_user_sessions(user_id: str) -> None:
-    redis = get_dragonfly()
-    for session_id in await redis.smembers(_user_sessions_key(user_id)):
-        await revoke_user_session(user_id, str(session_id))
-
-
-async def create_mfa_challenge(user_id: str, remember: bool) -> str:
-    challenge = secrets.token_urlsafe(32)
-    await get_dragonfly().set(_mfa_challenge_key(challenge), json.dumps({"user_id": user_id, "remember": remember, "attempts": 0}), ex=300)
-    return challenge
-
-
-async def load_mfa_challenge(challenge: str) -> dict[str, Any] | None:
-    raw = await get_dragonfly().get(_mfa_challenge_key(challenge))
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) else None
-
-
-async def update_mfa_challenge(challenge: str, value: dict[str, Any]) -> bool:
-    redis = get_dragonfly()
-    ttl = await redis.ttl(_mfa_challenge_key(challenge))
-    if ttl <= 0:
-        return False
-    await redis.set(_mfa_challenge_key(challenge), json.dumps(value), ex=ttl)
-    return True
-
-
-async def consume_mfa_challenge(challenge: str) -> dict[str, Any] | None:
-    redis = get_dragonfly()
-    raw = await redis.getdel(_mfa_challenge_key(challenge))
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) else None
-
-
-async def create_pending_auth(user_id: str, remember: bool, next_path: str = "/dashboard", provider: str = "password") -> str:
-    """Create a short-lived, opaque gate which must be cleared by CAPTCHA before login."""
-    challenge = secrets.token_urlsafe(32)
-    payload = {
-        "user_id": user_id,
-        "remember": bool(remember),
-        "next": next_path,
-        "provider": provider,
-    }
-    await get_dragonfly().set(_pending_auth_key(challenge), json.dumps(payload), ex=300)
-    return challenge
-
-
-async def load_pending_auth(challenge: str | None) -> dict[str, Any] | None:
-    if not challenge:
-        return None
-    raw = await get_dragonfly().get(_pending_auth_key(challenge))
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) and value.get("user_id") else None
-
-
-async def consume_pending_auth(challenge: str | None) -> dict[str, Any] | None:
-    if not challenge:
-        return None
-    raw = await get_dragonfly().getdel(_pending_auth_key(challenge))
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) and value.get("user_id") else None
-
-
-def attach_pending_auth_cookie(response: Response, request: Request, challenge: str, settings: Settings) -> None:
-    response.set_cookie(
-        key="misa_pending_auth",
-        value=challenge,
-        max_age=300,
-        path="/",
-        httponly=True,
-        secure=cookie_should_be_secure(request, settings),
-        samesite="lax",
-    )
-
-
-def clear_pending_auth_cookie(response: Response, request: Request, settings: Settings) -> None:
-    response.delete_cookie(
-        key="misa_pending_auth",
-        path="/",
-        httponly=True,
-        secure=cookie_should_be_secure(request, settings),
-        samesite="lax",
-    )
+    last = str(data.get("last_seen_at") or "")
+    should_write = True
+    if last:
+        try:
+            previous = datetime.fromisoformat(last)
+            should_write = (datetime.now(timezone.utc) - previous).total_seconds() >= TOUCH_EVERY_SECONDS
+        except ValueError:
+            should_write = True
+    if should_write:
+        data["last_seen_at"] = _now()
+        await redis.set(_session_key(token), json.dumps(data), ex=ttl)
+    else:
+        await redis.expire(_session_key(token), ttl)
+    if data.get("user_id"):
+        await redis.sadd(_user_sessions_key(str(data["user_id"])), token)
+        await redis.expire(_user_sessions_key(str(data["user_id"])), USER_SESSIONS_TTL)
 
 
 def attach_session_cookie(response: Response, request: Request, token: str, ttl: int, settings: Settings) -> None:
@@ -279,6 +124,52 @@ def clear_session_cookie(response: Response, request: Request, settings: Setting
     )
 
 
+async def list_sessions(user_id: str, current_token: str | None = None) -> list[dict[str, Any]]:
+    redis = get_dragonfly()
+    tokens = await redis.smembers(_user_sessions_key(user_id))
+    sessions: list[dict[str, Any]] = []
+    for token in tokens or []:
+        data = await load_session(token)
+        if not data:
+            await redis.srem(_user_sessions_key(user_id), token)
+            continue
+        sessions.append({
+            "id": session_id_for(token),
+            "created_at": data.get("created_at"),
+            "last_seen_at": data.get("last_seen_at") or data.get("created_at"),
+            "user_agent": data.get("user_agent") or "",
+            "ip": data.get("ip") or "",
+            "current": bool(current_token) and len(token) == len(current_token) and secrets.compare_digest(token, current_token),
+        })
+    sessions.sort(key=lambda item: (item["current"], str(item.get("last_seen_at") or "")), reverse=True)
+    return sessions
+
+
+async def revoke_session(user_id: str, session_id: str) -> bool:
+    redis = get_dragonfly()
+    for token in await redis.smembers(_user_sessions_key(user_id)) or []:
+        digest = session_id_for(token)
+        if len(digest) == len(session_id) and secrets.compare_digest(digest, session_id):
+            await destroy_session(token)
+            return True
+    return False
+
+
+async def revoke_other_sessions(user_id: str, keep_token: str | None) -> int:
+    redis = get_dragonfly()
+    removed = 0
+    for token in await redis.smembers(_user_sessions_key(user_id)) or []:
+        if keep_token and len(token) == len(keep_token) and secrets.compare_digest(token, keep_token):
+            continue
+        await destroy_session(token)
+        removed += 1
+    return removed
+
+
+async def revoke_all_sessions(user_id: str) -> int:
+    return await revoke_other_sessions(user_id, None)
+
+
 async def get_user_from_request(request: Request) -> User | None:
     settings = get_settings()
     token = request.cookies.get(settings.session_cookie_name)
@@ -294,6 +185,10 @@ async def get_user_from_request(request: Request) -> User | None:
         await destroy_session(token)
         return None
     if user.currently_suspended:
+        await destroy_session(token)
+        return None
+    from app.db import admin_db
+    if await admin_db.user_is_banned(user.id):
         await destroy_session(token)
         return None
     await touch_session(token, bool(data.get("remember")))

@@ -15,6 +15,7 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 DISCORD_AUTH_URL = "https://discord.com/api/oauth2/authorize"
 DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
+DISCORD_REVOKE_URL = "https://discord.com/api/oauth2/token/revoke"
 DISCORD_USER_URL = "https://discord.com/api/users/@me"
 TELEGRAM_AUTH_URL = "https://oauth.telegram.org/auth"
 
@@ -25,9 +26,9 @@ def _state_key(state: str) -> str:
     return f"oauth:{state}"
 
 
-async def save_oauth_state(provider: str, next_path: str, nonce: str = "", mode: str = "login") -> str:
+async def save_oauth_state(provider: str, next_path: str, nonce: str = "") -> str:
     state = secrets.token_urlsafe(32)
-    payload = {"provider": provider, "next": next_path, "nonce": nonce, "mode": mode}
+    payload = {"provider": provider, "next": next_path, "nonce": nonce}
     await get_dragonfly().set(_state_key(state), json.dumps(payload), ex=600)
     return state
 
@@ -36,9 +37,8 @@ async def pop_oauth_state(state: str | None, provider: str) -> dict[str, Any] | 
     if not state:
         return None
     redis = get_dragonfly()
-    # Consume the provider state atomically so a callback cannot be replayed
-    # concurrently before the delete reaches Dragonfly.
-    raw = await redis.getdel(_state_key(state))
+    raw = await redis.get(_state_key(state))
+    await redis.delete(_state_key(state))
     if not raw:
         return None
     try:
@@ -133,7 +133,7 @@ async def exchange_google_code(settings: Settings, code: str) -> dict[str, Any]:
     return claims
 
 
-async def fetch_discord_user(settings: Settings, code: str) -> dict[str, Any]:
+async def exchange_discord_code(settings: Settings, code: str) -> tuple[dict[str, Any], dict[str, Any]]:
     async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "misa.lol (https://misa.lol)"}) as client:
         token_response = await client.post(
             DISCORD_TOKEN_URL,
@@ -147,7 +147,8 @@ async def fetch_discord_user(settings: Settings, code: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token_response.raise_for_status()
-        access_token = token_response.json().get("access_token")
+        tokens = token_response.json()
+        access_token = tokens.get("access_token")
         if not access_token:
             raise ValueError("Discord did not return an access_token")
         user_response = await client.get(
@@ -155,7 +156,31 @@ async def fetch_discord_user(settings: Settings, code: str) -> dict[str, Any]:
             headers={"Authorization": f"Bearer {access_token}"},
         )
         user_response.raise_for_status()
-        return user_response.json()
+        profile = user_response.json()
+    if not isinstance(profile, dict):
+        raise ValueError("Discord did not return a user")
+    return profile, tokens if isinstance(tokens, dict) else {}
+
+
+async def fetch_discord_user(settings: Settings, code: str) -> dict[str, Any]:
+    profile, _tokens = await exchange_discord_code(settings, code)
+    return profile
+
+
+async def revoke_discord_token(settings: Settings, token: str, hint: str = "refresh_token") -> None:
+    if not token:
+        return
+    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "misa.lol (https://misa.lol)"}) as client:
+        await client.post(
+            DISCORD_REVOKE_URL,
+            data={
+                "client_id": settings.discord_client_id,
+                "client_secret": settings.discord_client_secret,
+                "token": token,
+                "token_type_hint": hint,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
 
 
 def discord_avatar_url(user: dict[str, Any]) -> str | None:

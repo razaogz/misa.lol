@@ -1,77 +1,648 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BarChart3, BadgeCheck, Database, Flag, KeyRound, Plus, Search, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
-import { Button, PageHeader, SectionTitle, TextInput, Toggle } from "@/components/ui";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Ban, Database, Flag, KeyRound, Search, ShieldCheck, ShieldOff, Type, Upload, Users } from "lucide-react";
+import { Button, FieldLabel, Modal, PageHeader, SectionTitle, TextInput } from "@/components/ui";
+import { BADGE_CATALOG } from "@/lib/badges";
+import { useT } from "@/lib/i18n";
+import { iconFromFile } from "@/lib/socials";
+import { assetFromFile } from "@/lib/profile-store";
+import { FONT_ACCEPT } from "@/lib/typography";
 
-type AdminUser = { id: string; username?: string | null; email?: string | null; display_name?: string | null; discord_id?: string | null; suspended_at?: string | null; badge_count?: number };
-type Badge = { id: string; name: string; description: string; color: string; icon_url?: string | null; badge_type: string; active: boolean; recipient_count: number };
-type RecordItem = Record<string, unknown>;
+type Tab = "users" | "bans" | "reserved" | "banned" | "badges" | "premium" | "reports" | "flags" | "bakaboost" | "themes" | "templates" | "fonts" | "audit" | "staff" | "roles";
+type StaffRole = "owner" | "admin" | "moderator";
+type AdminSession = { id: string; email: string; name: string; role: string; permissions: Record<string, boolean>; status: string; suspended: boolean };
+const SECTION_TABS: Tab[] = ["users", "bans", "reserved", "banned", "badges", "premium", "reports", "flags", "bakaboost", "themes", "templates", "fonts", "audit"];
+const tabs: Array<[Tab, string]> = [["users", "Users"], ["bans", "Bans"], ["reserved", "Reserved names"], ["banned", "Banned words"], ["badges", "Badges"], ["premium", "Premium"], ["reports", "Reports"], ["flags", "Feature flags"], ["bakaboost", "BakaBoost"], ["themes", "Themes"], ["templates", "Templates"], ["fonts", "Default fonts"], ["audit", "Audit logs"], ["staff", "Staff"], ["roles", "Roles"]];
 
-async function adminApi(path: string, init?: RequestInit) {
+async function api(path: string, init?: RequestInit) {
   const response = await fetch(`/api/v1/admin${path}`, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
   const body = await response.json().catch(() => ({})) as { detail?: string; error?: string };
   if (!response.ok) throw new Error(body.detail || body.error || "Admin request failed.");
-  return body as Record<string, unknown>;
+  return body as Record<string, any>;
 }
-
-const prettyDate = (value: unknown) => value ? new Date(String(value)).toLocaleString() : "—";
 
 export function AdminView() {
+  const t = useT();
   const router = useRouter();
-  const [admin, setAdmin] = useState<RecordItem | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const [tab, setTab] = useState("overview");
-  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  useEffect(() => { void fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((value: { admin?: RecordItem } | null) => setAdmin(value?.admin || null)).catch(() => setAdmin(null)).finally(() => setIsReady(true)); }, []);
-  useEffect(() => { if (isReady && !admin) router.replace("/admin/login"); }, [admin, isReady, router]);
-  if (!isReady) return <main className="grid min-h-[100svh] place-items-center bg-[#07070a] text-sm text-white/50">Loading admin tools…</main>;
-  if (!admin) return <main className="mx-auto max-w-[900px] px-5 py-16"><div className="surface rounded-2xl p-8 text-center"><ShieldCheck className="mx-auto mb-4 text-red-300" /><h1 className="text-xl font-semibold">Admin authentication required</h1><p className="mt-2 text-sm text-zinc-500">Sign in with your administrator email and one-time code.</p><Link href="/admin/login" className="mt-5 inline-flex rounded-xl bg-[#9b87f5] px-4 py-2.5 text-sm font-medium text-white">Open admin login</Link></div></main>;
-  const tabs = [["overview", "Overview", BarChart3], ["users", "Users", Users], ["usernames", "Usernames", KeyRound], ["badges", "Badges", BadgeCheck], ["reports", "Reports", Flag], ["audit", "Audit logs", Database]] as const;
-  return <main className="mx-auto min-h-screen max-w-[1400px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12"><div className="flex items-start gap-6 lg:gap-8"><aside className="surface sticky top-6 hidden w-[210px] shrink-0 rounded-2xl p-3 lg:block"><p className="mb-3 px-3 pt-2 text-[10px] font-semibold uppercase tracking-[.18em] text-zinc-600">Admin navigation</p><nav className="space-y-1">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => { setTab(key); setSelectedUser(null); }} className={`flex min-h-10 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs transition ${tab === key ? "border-[#9b87f5]/50 bg-[#9b87f5]/10 text-white" : "border-transparent text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"}`}><Icon size={14} />{label}</button>)}</nav></aside><div className="min-w-0 flex-1"><div className="mb-7 flex gap-2 overflow-x-auto lg:hidden">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => { setTab(key); setSelectedUser(null); }} className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${tab === key ? "border-[#9b87f5]/50 bg-[#9b87f5]/10 text-white" : "border-white/[.08] text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"}`}><Icon size={14} />{label}</button>)}</div><PageHeader eyebrow="Administration" title="Admin control center" description="Real platform data and audited staff operations." action={<Link href="/admin/staff" className="inline-flex min-h-10 items-center rounded-xl border border-white/[.08] bg-white/[.035] px-4 text-sm text-zinc-300 hover:bg-white/[.08] hover:text-white">Staff</Link>} />{tab === "overview" && <OverviewPanel onNavigate={setTab} />}{tab === "users" && (selectedUser ? <UserDetailPanel user={selectedUser} onBack={() => setSelectedUser(null)} /> : <UsersPanel onSelect={setSelectedUser} />)}{tab === "usernames" && <UsernamesPanel />}{tab === "badges" && <BadgesPanel />}{tab === "reports" && <ReportsPanel />}{tab === "audit" && <AuditPanel />}<div className="mt-7 grid gap-4 sm:grid-cols-2"><ComingSoon title="Premium" /><ComingSoon title="Templates" /></div></div></div></main>;
+  const [admin, setAdmin] = useState<AdminSession | null>(null);
+  const [adminReady, setAdminReady] = useState(false);
+  const [tab, setTab] = useState<Tab>("users");
+  const [role, setRole] = useState<StaffRole | null>(null);
+  const [sections, setSections] = useState<Tab[]>(SECTION_TABS);
+  const [accessReady, setAccessReady] = useState(false);
+  const tabLabel: Record<Tab, string> = { users: t("admin.users"), bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), fonts: "Default fonts", audit: t("admin.audit"), staff: t("admin.staff"), roles: t("admin.roles") };
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store", headers: { "Cache-Control": "no-store" } })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const body = await response.json() as { admin?: AdminSession };
+        return body.admin || null;
+      })
+      .then((currentAdmin) => {
+        if (cancelled) return;
+        if (!currentAdmin) {
+          router.replace("/admin/login");
+          return;
+        }
+        setAdmin(currentAdmin);
+        setAdminReady(true);
+      })
+      .catch(() => { if (!cancelled) router.replace("/admin/login"); })
+      .finally(() => { if (!cancelled) setAdminReady(true); });
+    return () => { cancelled = true; };
+  }, [router]);
+  useEffect(() => {
+    if (!adminReady || !admin) return;
+    void api("/access").then((r) => {
+      const nextRole = r.role === "owner" || r.role === "admin" || r.role === "moderator" ? r.role : null;
+      const nextSections = Array.isArray(r.sections) ? r.sections.filter((item: string): item is Tab => SECTION_TABS.includes(item as Tab)) : SECTION_TABS;
+      setRole(nextRole);
+      setSections(nextRole === "owner" ? SECTION_TABS : nextSections);
+      setAccessReady(true);
+    }).catch(() => setAccessReady(true));
+  }, [admin, adminReady]);
+  const visible = tabs.filter(([id]) => {
+    if (id === "roles") return role === "owner";
+    if (id === "staff") return role === "owner" || role === "admin";
+    return role === "owner" || sections.includes(id);
+  });
+  useEffect(() => {
+    if (!accessReady || !visible.length) return;
+    if (!visible.some(([id]) => id === tab)) setTab(visible[0][0]);
+  }, [accessReady, tab, visible]);
+  if (!adminReady || !admin) return <main className="mx-auto max-w-[1200px] px-5 py-12 text-zinc-500">{t("admin.loading")}</main>;
+  return <main className="mx-auto min-h-screen max-w-[1400px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12"><PageHeader eyebrow={t("admin.eyebrow")} title={t("admin.title")} description={t("admin.description")} /><div className="mb-8 flex flex-wrap gap-2">{visible.map(([id]) => <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-xl border px-3 py-2 text-xs ${tab === id ? "border-[#e11d48]/50 bg-[#e11d48]/15 text-white" : "border-white/[.08] text-zinc-500 hover:text-white"}`}>{tabLabel[id]}</button>)}</div>{tab === "users" && <UsersPanel staffRole={role} />}{tab === "bans" && <BansPanel />}{tab === "reserved" && <ReservedPanel />}{tab === "banned" && <BannedPanel />}{tab === "badges" && <BadgesPanel />}{tab === "premium" && <PremiumPanel />}{tab === "reports" && <ReportsPanel />}{tab === "flags" && <FlagsPanel />}{tab === "bakaboost" && <BakaBoostPanel />}{tab === "themes" && <ThemesPanel />}{tab === "templates" && <TemplatesPanel />}{tab === "fonts" && <DefaultFontsPanel />}{tab === "audit" && <AuditPanel />}{tab === "staff" && (role === "owner" || role === "admin") && <StaffPanel staffRole={role} />}{tab === "roles" && role === "owner" && <RolesPanel />}</main>;
 }
 
-function OverviewPanel({ onNavigate }: { onNavigate: (tab: string) => void }) {
-  const [data, setData] = useState<{ stats?: RecordItem; recent_purchases?: RecordItem[] }>({}); const [error, setError] = useState("");
-  useEffect(() => { void adminApi("/overview").then((value) => setData(value as typeof data)).catch((e) => setError(e instanceof Error ? e.message : "Could not load overview.")); }, []);
-  const stats = data.stats || {}; const cards = [["Total users", "total_users", "users"], ["Published profiles", "published_profiles", "users"], ["New registrations · 30d", "new_registrations", "users"], ["Active users · 30d", "active_users", "users"], ["Premium users", "premium_users", "soon"], ["Unresolved reports", "unresolved_reports", "reports"], ["Upload/processing errors", "processing_errors", "audit"]];
-  return <div className="space-y-6">{error && <p className="text-xs text-red-300">{error}</p>}<section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{cards.map(([label, key, target]) => <button type="button" key={key} onClick={() => target !== "soon" && onNavigate(target)} className="surface rounded-2xl p-5 text-left transition hover:border-[#9b87f5]/30"><p className="text-xs text-zinc-500">{label}</p><p className="mt-3 text-3xl font-semibold text-white">{String(stats[key] ?? "—")}</p>{target === "soon" && <p className="mt-2 text-[10px] uppercase tracking-widest text-[#b8acff]">Coming soon</p>}</button>)}</section><section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={Database} title="Recent purchases" description="Recorded entitlements from the database. Checkout remains Coming Soon." /><div className="space-y-2">{(data.recent_purchases || []).map((item, index) => <div key={String(item.id || index)} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[.06] p-3 text-xs"><span className="font-mono text-zinc-300">{String(item.user_id)}</span><span className="text-[#b8acff]">{String(item.plan)}</span><span className="text-zinc-600">{prettyDate(item.created_at)}</span></div>)}{!data.recent_purchases?.length && <p className="text-xs text-zinc-600">No purchases recorded.</p>}</div></section></div>;
+function UsersPanel({ staffRole }: { staffRole: StaffRole | null }) {
+  const t = useT();
+  const [search, setSearch] = useState(""); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState("");
+  const load = () => void api(`/users?search=${encodeURIComponent(search)}`).then((r) => setItems(r.users || [])).catch((e) => setError(e.message)); useEffect(load, []);
+  const suspend = async (item: any) => { const suspended = !item.suspended_at; if (!window.confirm(`${suspended ? "Suspend" : "Unsuspend"} this user?`)) return; try { await api(`/users/${item.id}/suspension`, { method: "PATCH", body: JSON.stringify({ suspended, reason: suspended ? "Administrative action" : null }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Update failed."); } };
+  const toggleCreator = async (item: any) => { try { await api(`/users/${item.id}/roles`, { method: "PATCH", body: JSON.stringify({ role: "template_creator", granted: !item.is_template_creator }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update creator role."); } };
+  const setStaff = async (item: any, role: "admin" | "moderator", granted: boolean) => { try { await api(`/users/${item.id}/roles`, { method: "PATCH", body: JSON.stringify({ role, granted }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update role."); } };
+  const roleText = (item: any) => item.staff_role === "owner" ? t("admin.owner") : item.staff_role === "admin" ? t("admin.adminRole") : item.staff_role === "moderator" ? t("admin.moderatorRole") : item.is_template_creator || item.is_admin ? (item.is_admin ? "Admin" : "Creator") : "No";
+  return <section><SectionTitle icon={Users} title={t("admin.users")} description={t("admin.usersDesc")} /><div className="mb-4 flex gap-2"><div className="relative max-w-lg flex-1"><Search size={15} className="absolute left-3 top-3.5 text-zinc-600" /><TextInput value={search} onChange={setSearch} placeholder={t("admin.searchUsers")} className="pl-9" /></div><Button variant="accent" onClick={load}>{t("common.search")}</Button></div>{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface overflow-x-auto rounded-2xl"><table className="w-full min-w-[900px] text-left text-xs"><thead className="border-b border-white/[.06] text-zinc-600"><tr><th className="p-4">User</th><th className="p-4">Email</th><th className="p-4">Providers</th><th className="p-4">State</th><th className="p-4">Creator</th><th className="p-4">Action</th></tr></thead><tbody className="divide-y divide-white/[.06]">{items.map((item) => <tr key={item.id}><td className="p-4"><p className="text-zinc-200">@{item.username || "unclaimed"}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{item.id}</p></td><td className="p-4 text-zinc-400">{item.email || "—"}</td><td className="p-4 text-zinc-500">{Object.entries(item.providers || {}).filter(([, value]) => value).map(([key]) => key).join(", ") || "email"}</td><td className="p-4">{item.suspended_at ? <span className="text-red-300">Suspended</span> : <span className="text-emerald-400">Active</span>}</td><td className="p-4">{item.staff_role || item.is_template_creator || item.is_admin ? <span className="text-[#b6aaff]">{roleText(item)}</span> : <span className="text-zinc-600">No</span>}</td><td className="p-4"><div className="flex flex-wrap gap-2"><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void suspend(item)}>{item.suspended_at ? "Unsuspend" : "Suspend"}</Button><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void toggleCreator(item)}>{item.is_template_creator ? "Revoke creator" : "Grant creator"}</Button>{staffRole === "owner" && item.staff_role !== "owner" && <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void setStaff(item, "admin", item.staff_role !== "admin")}>{item.staff_role === "admin" ? t("admin.revokeAdmin") : t("admin.grantAdmin")}</Button>}{(staffRole === "owner" || staffRole === "admin") && item.staff_role !== "owner" && item.staff_role !== "admin" && <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void setStaff(item, "moderator", item.staff_role !== "moderator")}>{item.staff_role === "moderator" ? t("admin.revokeMod") : t("admin.grantMod")}</Button>}</div></td></tr>)}</tbody></table>{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No users found.</p>}</div></section>;
 }
 
-function UsersPanel({ onSelect }: { onSelect: (user: AdminUser) => void }) {
-  const [search, setSearch] = useState(""); const [items, setItems] = useState<AdminUser[]>([]); const [error, setError] = useState("");
-  const load = () => void adminApi(`/users?search=${encodeURIComponent(search)}`).then((r) => setItems((r.users || []) as AdminUser[])).catch((e) => setError(e instanceof Error ? e.message : "Could not load users."));
+function StaffPanel({ staffRole }: { staffRole: StaffRole }) {
+  const t = useT();
+  const canAdmin = staffRole === "owner";
+  const [items, setItems] = useState<any[]>([]);
+  const [username, setUsername] = useState("");
+  const [role, setRole] = useState<"admin" | "moderator">(canAdmin ? "admin" : "moderator");
+  const [error, setError] = useState("");
+  const load = () => void api("/staff").then((r) => setItems(r.staff || [])).catch((e) => setError(e.message));
   useEffect(load, []);
-  return <section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={Users} title="Users" description="Search by ID, username, email, or connected Discord ID." /><div className="mb-4 flex gap-2"><div className="relative max-w-lg flex-1"><Search size={15} className="absolute left-3 top-3.5 text-zinc-600" /><TextInput value={search} onChange={setSearch} placeholder="Search users" className="pl-9" /></div><Button variant="accent" onClick={load}>Search</Button></div>{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-xs"><thead className="border-b border-white/[.06] text-zinc-600"><tr><th className="p-3">User</th><th className="p-3">Email</th><th className="p-3">Discord</th><th className="p-3">Badges</th><th className="p-3">State</th><th className="p-3" /></tr></thead><tbody className="divide-y divide-white/[.06]">{items.map((item) => <tr key={item.id}><td className="p-3"><p className="text-zinc-200">@{item.username || "unclaimed"}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{item.id}</p></td><td className="p-3 text-zinc-400">{item.email || "—"}</td><td className="p-3 text-zinc-500">{item.discord_id || "—"}</td><td className="p-3 text-zinc-400">{String(item.badge_count ?? 0)}</td><td className="p-3">{item.suspended_at ? <span className="text-red-300">Suspended</span> : <span className="text-emerald-400">Active</span>}</td><td className="p-3"><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => onSelect(item)}>View</Button></td></tr>)}</tbody></table>{!items.length && <p className="p-6 text-center text-xs text-zinc-600">No users found.</p>}</div></section>;
+  const assign = async () => {
+    try {
+      await api("/staff", { method: "POST", body: JSON.stringify({ username, role, granted: true }) });
+      setUsername("");
+      setError("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not assign that role.");
+    }
+  };
+  const remove = async (item: any) => {
+    if (!window.confirm(`Remove ${item.staff_role} from @${item.username || item.id}?`)) return;
+    try {
+      await api(`/staff/${encodeURIComponent(item.username || item.id)}?role=${encodeURIComponent(item.staff_role)}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove that role.");
+    }
+  };
+  return (
+    <section>
+      <SectionTitle icon={ShieldCheck} title={t("admin.staffTitle")} description={t("admin.staffDesc")} />
+      <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_auto_auto]">
+        <TextInput value={username} onChange={setUsername} placeholder={t("admin.staffUsername")} />
+        <select value={role} onChange={(event) => setRole(event.target.value as "admin" | "moderator")} className="h-11 rounded-xl border border-white/[.08] bg-white/[.04] px-3 text-sm text-zinc-200 outline-none">
+          {canAdmin && <option value="admin">{t("admin.adminRole")}</option>}
+          <option value="moderator">{t("admin.moderatorRole")}</option>
+        </select>
+        <Button variant="accent" onClick={() => void assign()}>{t("admin.staffAssign")}</Button>
+      </div>
+      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
+      <div className="surface divide-y divide-white/[.06] rounded-2xl">
+        {(staffRole === "admin" ? items.filter((item) => item.staff_role === "moderator") : items).map((item) => (
+          <div key={`${item.id}-${item.staff_role}`} className="flex items-center gap-3 p-4">
+            <span className="flex-1 text-sm text-zinc-200">
+              @{item.username || "unclaimed"}
+              <span className="ms-3 text-xs text-[#b6aaff]">{item.staff_role === "admin" ? t("admin.adminRole") : t("admin.moderatorRole")}</span>
+            </span>
+            <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item)}>{t("common.remove")}</Button>
+          </div>
+        ))}
+        {!(staffRole === "admin" ? items.filter((item) => item.staff_role === "moderator") : items).length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.staffEmpty")}</p>}
+      </div>
+    </section>
+  );
 }
 
-function UserDetailPanel({ user, onBack }: { user: AdminUser; onBack: () => void }) {
-  const [data, setData] = useState<RecordItem | null>(null); const [badges, setBadges] = useState<Badge[]>([]); const [badgeId, setBadgeId] = useState(""); const [reason, setReason] = useState(""); const [newUsername, setNewUsername] = useState(""); const [usernameReason, setUsernameReason] = useState(""); const [error, setError] = useState("");
-  const load = () => void Promise.all([adminApi(`/users/${user.id}`), adminApi("/badges")]).then(([detail, definitions]) => { setData(detail); setBadges((definitions.badges || []) as Badge[]); }).catch((e) => setError(e instanceof Error ? e.message : "Could not load user detail."));
-  useEffect(load, [user.id]);
-  const action = async (path: string, init: RequestInit) => { setError(""); try { await adminApi(path, init); load(); } catch (e) { setError(e instanceof Error ? e.message : "Action failed."); } };
-  const detailUser = (data?.user || user) as AdminUser & RecordItem; const profile = data?.profile as RecordItem | null; const assigned = (data?.badges || []) as RecordItem[];
-  return <section className="space-y-5"><Button variant="ghost" onClick={onBack}>← Back to users</Button>{error && <p className="text-xs text-red-300">{error}</p>}<section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={UserRound} title={`@${String(detailUser.username || "unclaimed")}`} description={String(detailUser.id)} /><div className="grid gap-3 text-xs text-zinc-400 sm:grid-cols-2"><p>Email: <span className="text-zinc-200">{String(detailUser.email || "—")}</span></p><p>Registered: <span className="text-zinc-200">{prettyDate(detailUser.created_at)}</span></p><p>Last login: <span className="text-zinc-200">{prettyDate(detailUser.last_login_at)}</span></p><p>Status: <span className={detailUser.suspended_at ? "text-red-300" : "text-emerald-400"}>{detailUser.suspended_at ? "Suspended" : "Active"}</span></p><p>Profile: <span className={profile?.disabled_at ? "text-red-300" : "text-emerald-400"}>{profile?.disabled_at ? "Disabled" : "Published"}</span></p><p>Discord: <span className="text-zinc-200">{String(detailUser.discord_id || "—")}</span></p></div><div className="mt-5 flex flex-wrap gap-2"><Button variant="subtle" onClick={() => { const suspend = !detailUser.suspended_at; if (window.confirm(`${suspend ? "Suspend" : "Restore"} this account?`)) void action(`/users/${user.id}/suspension`, { method: "PATCH", body: JSON.stringify({ suspended: suspend, reason: suspend ? "Administrative action" : null }) }); }}>{detailUser.suspended_at ? "Restore account" : "Suspend account"}</Button><Button variant="subtle" onClick={() => { const disabled = !profile?.disabled_at; if (window.confirm(`${disabled ? "Disable" : "Restore"} this profile?`)) void action(`/users/${user.id}/profile`, { method: "PATCH", body: JSON.stringify({ disabled, reason: disabled ? "Administrative action" : null }) }); }}>{profile?.disabled_at ? "Restore profile" : "Disable profile"}</Button></div><div className="mt-5 border-t border-white/[.06] pt-5"><p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Force username change</p><div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><TextInput value={newUsername} onChange={setNewUsername} placeholder="new username" /><TextInput value={usernameReason} onChange={setUsernameReason} placeholder="Required reason" /><Button variant="subtle" disabled={!newUsername.trim() || !usernameReason.trim()} onClick={() => { if (window.confirm("Force this username change?")) void action(`/users/${user.id}/username`, { method: "POST", body: JSON.stringify({ username: newUsername.trim().toLowerCase(), reason: usernameReason.trim() }) }); }}>Change</Button></div></div></section><section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={BadgeCheck} title="Assigned badges" description="Assignments are stored and revoked server-side." /><div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><select value={badgeId} onChange={(event) => setBadgeId(event.target.value)} className="h-11 rounded-[11px] border border-white/[.08] bg-white/[.025] px-3 text-sm text-white"><option value="">Select badge</option>{badges.filter((badge) => badge.active).map((badge) => <option key={badge.id} value={badge.id}>{badge.name} · {badge.badge_type}</option>)}</select><TextInput value={reason} onChange={setReason} placeholder="Award reason (optional)" /><Button variant="accent" disabled={!badgeId} onClick={() => void action(`/users/${user.id}/badges/${badgeId}`, { method: "PUT", body: JSON.stringify({ enabled: true, reason: reason || null }) })}>Award</Button></div><div className="space-y-2">{assigned.map((item, index) => <div key={`${String(item.id)}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[.06] p-3 text-xs"><div><span className={item.revoked_at ? "text-zinc-600 line-through" : "text-zinc-200"}>{String(item.name)}</span><span className="ml-2 text-zinc-600">{item.revoked_at ? `revoked ${prettyDate(item.revoked_at)}` : String(item.badge_type)}</span></div>{!item.revoked_at && <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => { if (window.confirm("Revoke this badge?")) void action(`/users/${user.id}/badges/${String(item.id)}`, { method: "DELETE", body: JSON.stringify({ reason: "Administrative action" }) }); }}>Revoke</Button>}</div>)}{!assigned.length && <p className="text-xs text-zinc-600">No badge assignments.</p>}</div></section></section>;
-}
-
-function UsernamesPanel() {
-  const [reserved, setReserved] = useState<RecordItem[]>([]); const [history, setHistory] = useState<RecordItem[]>([]); const [username, setUsername] = useState(""); const [reason, setReason] = useState(""); const [error, setError] = useState("");
-  const load = () => void Promise.all([adminApi("/reserved-usernames"), adminApi("/username-history")]).then(([a, b]) => { setReserved((a.reserved || []) as RecordItem[]); setHistory((b.history || []) as RecordItem[]); }).catch((e) => setError(e instanceof Error ? e.message : "Could not load usernames."));
+function RolesPanel() {
+  const t = useT();
+  const labels: Record<string, string> = { users: t("admin.users"), bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), audit: t("admin.audit") };
+  const empty = { admin: Object.fromEntries(SECTION_TABS.map((id) => [id, true])), moderator: Object.fromEntries(SECTION_TABS.map((id) => [id, true])) };
+  const [access, setAccess] = useState<Record<string, Record<string, boolean>>>(empty);
+  const [error, setError] = useState("");
+  const load = () => void api("/access").then((r) => { if (r.access) setAccess({ admin: { ...empty.admin, ...(r.access.admin || {}) }, moderator: { ...empty.moderator, ...(r.access.moderator || {}) } }); }).catch((e) => setError(e.message));
   useEffect(load, []);
-  const add = async () => { try { await adminApi("/reserved-usernames", { method: "POST", body: JSON.stringify({ username, reason: reason || null }) }); setUsername(""); setReason(""); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not reserve username."); } };
-  return <div className="grid gap-6 lg:grid-cols-2">{error && <p className="text-xs text-red-300 lg:col-span-2">{error}</p>}<section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={KeyRound} title="Reserved usernames" description="Manage protected names in the database." /><div className="space-y-2"><TextInput value={username} onChange={setUsername} placeholder="username" /><TextInput value={reason} onChange={setReason} placeholder="Reason" /><Button variant="accent" disabled={!username.trim() || !reason.trim()} onClick={() => void add()}><Plus size={15} />Reserve</Button>{reserved.map((item) => <div key={String(item.username)} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.06] p-3 text-xs"><span className="text-zinc-200">@{String(item.username)}</span><span className="flex-1 text-zinc-600">{String(item.reason || "—")}</span><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void adminApi(`/reserved-usernames/${encodeURIComponent(String(item.username))}`, { method: "DELETE" }).then(load).catch((e) => setError(e instanceof Error ? e.message : "Could not remove username."))}>Remove</Button></div>)}</div></section><section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={Database} title="Username history" description="Every staff-forced change is retained." /><div className="space-y-2">{history.map((item, index) => <div key={String(item.id || index)} className="rounded-xl border border-white/[.06] p-3 text-xs"><p className="text-zinc-200">{String(item.old_username || "unclaimed")} → {String(item.new_username)}</p><p className="mt-1 text-zinc-600">{String(item.reason)} · {prettyDate(item.created_at)}</p></div>)}{!history.length && <p className="text-xs text-zinc-600">No username history.</p>}</div></section></div>;
+  const toggle = async (role: "admin" | "moderator", section: string) => {
+    const next = { ...access[role], [section]: !access[role][section] };
+    setAccess((current) => ({ ...current, [role]: next }));
+    try {
+      await api("/access", { method: "PUT", body: JSON.stringify({ role, sections: next }) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update access.");
+      load();
+    }
+  };
+  return (
+    <section>
+      <SectionTitle icon={ShieldCheck} title={t("admin.rolesTitle")} description={t("admin.rolesDesc")} />
+      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {(["admin", "moderator"] as const).map((role) => (
+          <div key={role} className="surface rounded-2xl p-5">
+            <h3 className="mb-4 text-sm font-medium text-white">{role === "admin" ? t("admin.rolesAdmin") : t("admin.rolesModerator")}</h3>
+            <div className="divide-y divide-white/[.06]">
+              {SECTION_TABS.map((section) => (
+                <div key={section} className="flex items-center justify-between gap-3 py-3">
+                  <span className="text-sm text-zinc-300">{labels[section]}</span>
+                  <button type="button" onClick={() => void toggle(role, section)} className={`relative h-6 w-11 rounded-full transition ${access[role][section] ? "bg-[#e11d48]" : "bg-white/10"}`} aria-pressed={access[role][section]}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${access[role][section] ? "left-5" : "left-0.5"}`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReservedPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [username, setUsername] = useState(""); const [reason, setReason] = useState(""); const [error, setError] = useState(""); const load = () => void api("/reserved-usernames").then((r) => setItems(r.reserved || [])).catch((e) => setError(e.message)); useEffect(load, []); const add = async () => { try { await api("/reserved-usernames", { method: "POST", body: JSON.stringify({ username, reason }) }); setUsername(""); setReason(""); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not reserve username."); } }; const remove = async (value: string) => { if (!window.confirm(`Remove ${value}?`)) return; try { await api(`/reserved-usernames/${encodeURIComponent(value)}`, { method: "DELETE" }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not remove username."); } }; return <section><SectionTitle icon={KeyRound} title={t("admin.reservedTitle")} description={t("admin.reservedDesc")} /><div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_1fr_auto]"><TextInput value={username} onChange={setUsername} placeholder="username" /><TextInput value={reason} onChange={setReason} placeholder="Reason" /><Button variant="accent" onClick={() => void add()}>Reserve</Button></div>{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.username} className="flex items-center gap-3 p-4"><span className="flex-1 text-sm text-zinc-200">@{item.username}<span className="ml-3 text-xs text-zinc-600">{item.reason || "No reason"}</span></span><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item.username)}>Remove</Button></div>)}</div></section>; }
+
+function BansPanel() {
+  const t = useT();
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [ips, setIps] = useState<any[]>([]);
+  const [username, setUsername] = useState("");
+  const [accountReason, setAccountReason] = useState("");
+  const [ip, setIp] = useState("");
+  const [ipReason, setIpReason] = useState("");
+  const [error, setError] = useState("");
+  const load = () => void api("/bans").then((r) => { setAccounts(r.accounts || []); setIps(r.ips || []); }).catch((e) => setError(e.message));
+  useEffect(load, []);
+  const banAccount = async () => {
+    try {
+      await api("/bans/accounts", { method: "POST", body: JSON.stringify({ username, reason: accountReason }) });
+      setUsername("");
+      setAccountReason("");
+      setError("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not ban that account.");
+    }
+  };
+  const unbanAccount = async (value: string) => {
+    if (!window.confirm(`Unban ${value}?`)) return;
+    try {
+      await api(`/bans/accounts/${encodeURIComponent(value)}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not unban that account.");
+    }
+  };
+  const banIp = async () => {
+    try {
+      await api("/bans/ips", { method: "POST", body: JSON.stringify({ ip, reason: ipReason }) });
+      setIp("");
+      setIpReason("");
+      setError("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not ban that IP.");
+    }
+  };
+  const unbanIp = async (value: string) => {
+    if (!window.confirm(`Unban ${value}?`)) return;
+    try {
+      await api(`/bans/ips?ip=${encodeURIComponent(value)}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not unban that IP.");
+    }
+  };
+  return (
+    <section className="space-y-10">
+      {error && <p className="text-xs text-red-300">{error}</p>}
+      <div>
+        <SectionTitle icon={ShieldOff} title={t("admin.bansAccountsTitle")} description={t("admin.bansAccountsDesc")} />
+        <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_1fr_auto]">
+          <TextInput value={username} onChange={setUsername} placeholder={t("admin.bansUsername")} />
+          <TextInput value={accountReason} onChange={setAccountReason} placeholder={t("admin.bansReason")} />
+          <Button variant="accent" onClick={() => void banAccount()}>{t("admin.bansAccountAdd")}</Button>
+        </div>
+        <div className="surface divide-y divide-white/[.06] rounded-2xl">
+          {accounts.map((item) => (
+            <div key={item.user_id} className="flex items-center gap-3 p-4">
+              <span className="flex-1 text-sm text-zinc-200">
+                @{item.username || "unclaimed"}
+                <span className="ms-3 text-xs text-zinc-600">{item.reason || t("admin.bansNoReason")}</span>
+                <span className="ms-3 font-mono text-[11px] text-zinc-500">{item.signup_ip || t("admin.bansNoIp")}</span>
+              </span>
+              <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void unbanAccount(item.username || item.user_id)}>{t("common.remove")}</Button>
+            </div>
+          ))}
+          {!accounts.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.bansAccountsEmpty")}</p>}
+        </div>
+      </div>
+      <div>
+        <SectionTitle icon={ShieldOff} title={t("admin.bansIpsTitle")} description={t("admin.bansIpsDesc")} />
+        <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_1fr_auto]">
+          <TextInput value={ip} onChange={setIp} placeholder={t("admin.bansIp")} />
+          <TextInput value={ipReason} onChange={setIpReason} placeholder={t("admin.bansReason")} />
+          <Button variant="accent" onClick={() => void banIp()}>{t("admin.bansIpAdd")}</Button>
+        </div>
+        <div className="surface divide-y divide-white/[.06] rounded-2xl">
+          {ips.map((item) => (
+            <div key={item.ip} className="flex items-center gap-3 p-4">
+              <span className="flex-1 text-sm text-zinc-200">
+                <span className="font-mono">{item.ip}</span>
+                <span className="ms-3 text-xs text-zinc-600">{item.reason || t("admin.bansNoReason")}</span>
+                <span className="ms-3 text-xs text-zinc-500">{item.usernames?.length ? item.usernames.map((name: string) => `@${name}`).join(", ") : t("admin.bansNoAccounts")}</span>
+              </span>
+              <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void unbanIp(item.ip)}>{t("common.remove")}</Button>
+            </div>
+          ))}
+          {!ips.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.bansIpsEmpty")}</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BannedPanel() {
+  const t = useT();
+  const [items, setItems] = useState<any[]>([]);
+  const [word, setWord] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const load = () => void api("/banned-words").then((r) => setItems(r.words || [])).catch((e) => setError(e.message));
+  useEffect(load, []);
+  const add = async () => {
+    try {
+      await api("/banned-words", { method: "POST", body: JSON.stringify({ word, reason }) });
+      setWord("");
+      setReason("");
+      setError("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not ban that word.");
+    }
+  };
+  const remove = async (value: string) => {
+    if (!window.confirm(`Remove ${value}?`)) return;
+    try {
+      await api(`/banned-words/${encodeURIComponent(value)}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove that word.");
+    }
+  };
+  return (
+    <section>
+      <SectionTitle icon={Ban} title={t("admin.bannedTitle")} description={t("admin.bannedDesc")} />
+      <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_1fr_auto]">
+        <TextInput value={word} onChange={setWord} placeholder={t("admin.bannedWord")} />
+        <TextInput value={reason} onChange={setReason} placeholder={t("admin.bannedReason")} />
+        <Button variant="accent" onClick={() => void add()}>{t("admin.bannedAdd")}</Button>
+      </div>
+      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
+      <div className="surface divide-y divide-white/[.06] rounded-2xl">
+        {items.map((item) => (
+          <div key={item.word} className="flex items-center gap-3 p-4">
+            <span className="flex-1 text-sm text-zinc-200">{item.word}<span className="ms-3 text-xs text-zinc-600">{item.reason || t("admin.bannedNoReason")}</span></span>
+            <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item.word)}>{t("common.remove")}</Button>
+          </div>
+        ))}
+        {!items.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.bannedEmpty")}</p>}
+      </div>
+    </section>
+  );
 }
 
 function BadgesPanel() {
-  const empty = { id: "", name: "", description: "", color: "#9b87f5", badge_type: "custom", icon_url: "" }; const [items, setItems] = useState<Badge[]>([]); const [form, setForm] = useState(empty); const [error, setError] = useState("");
-  const load = () => void adminApi("/badges").then((r) => setItems((r.badges || []) as Badge[])).catch((e) => setError(e instanceof Error ? e.message : "Could not load badges.")); useEffect(load, []);
-  const create = async () => { try { await adminApi("/badges", { method: "POST", body: JSON.stringify({ ...form, icon_url: form.icon_url || null }) }); setForm(empty); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not create badge."); } };
-  const edit = async (badge: Badge) => { try { await adminApi(`/badges/${badge.id}`, { method: "PATCH", body: JSON.stringify(badge) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update badge."); } };
-  return <section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={BadgeCheck} title="Badge definitions" description="Create, update, enable, and safely retire real database badges." />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"><TextInput value={form.id} onChange={(value) => setForm({ ...form, id: value })} placeholder="id e.g. verified" /><TextInput value={form.name} onChange={(value) => setForm({ ...form, name: value })} placeholder="Name" /><TextInput value={form.description} onChange={(value) => setForm({ ...form, description: value })} placeholder="Description" /><select value={form.badge_type} onChange={(event) => setForm({ ...form, badge_type: event.target.value })} className="h-11 rounded-[11px] border border-white/[.08] bg-white/[.025] px-3 text-sm text-white"><option value="official">Official</option><option value="verification">Verification</option><option value="custom">Custom</option><option value="purchased">Purchased</option></select><Button variant="accent" disabled={!form.id || !form.name} onClick={() => void create()}><Plus size={15} />Create badge</Button></div><div className="space-y-3">{items.map((badge) => <div key={badge.id} className="rounded-xl border border-white/[.06] p-4"><div className="flex flex-wrap items-center gap-3"><span className="h-4 w-4 rounded-full" style={{ background: badge.color }} /><span className="font-medium text-zinc-200">{badge.name}</span><span className="rounded-full bg-white/[.06] px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500">{badge.badge_type}</span><span className="text-xs text-zinc-600">{badge.recipient_count} recipients</span><span className="ml-auto flex items-center gap-3"><Toggle label={`Enable ${badge.name}`} checked={badge.active} onChange={() => void edit({ ...badge, active: !badge.active })} />{badge.recipient_count === 0 && <button type="button" aria-label={`Delete ${badge.name}`} onClick={() => { if (window.confirm("Delete this badge definition?")) void adminApi(`/badges/${badge.id}`, { method: "DELETE" }).then(load).catch((e) => setError(e instanceof Error ? e.message : "Could not delete badge.")); }} className="text-zinc-600 hover:text-red-300"><Trash2 size={15} /></button>}</span></div><p className="mt-2 text-xs text-zinc-500">{badge.description || "No description"}</p></div>)}{!items.length && <p className="text-xs text-zinc-600">No badge definitions yet.</p>}</div></section>;
+  const t = useT();
+  const official = new Set(BADGE_CATALOG.map((item) => item.id));
+  const [items, setItems] = useState<any[]>([]);
+  const [queue, setQueue] = useState<any[]>([]);
+  const [form, setForm] = useState({ id: "", name: "", description: "", color: "#e11d48", icon: "" });
+  const [iconName, setIconName] = useState("");
+  const [grant, setGrant] = useState<{ id: string; name: string; granted: boolean } | null>(null);
+  const [target, setTarget] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const iconInput = useRef<HTMLInputElement>(null);
+  const canCreate = /^[a-z0-9-]{2,64}$/.test(form.id) && form.name.trim().length > 0 && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(form.color) && Boolean(form.icon);
+  const load = () => {
+    void api("/badges").then((result) => setItems(result.badges || [])).catch((err) => setError(err.message));
+    void api("/verification?status=pending").then((result) => setQueue(result.requests || [])).catch((err) => setError(err.message));
+  };
+  useEffect(load, []);
+  const add = async () => {
+    setError("");
+    setNotice("");
+    try {
+      await api("/badges", { method: "POST", body: JSON.stringify(form) });
+      setForm({ id: "", name: "", description: "", color: "#e11d48", icon: "" });
+      setIconName("");
+      setNotice("Custom badge created.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create badge.");
+    }
+  };
+  const submitGrant = async () => {
+    if (!grant) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      await api(`/badges/${grant.id}/grants`, { method: "PUT", body: JSON.stringify({ user: target.trim(), granted: grant.granted }) });
+      setNotice(grant.granted ? `Granted ${grant.name} to that user.` : `Revoked ${grant.name} from that user.`);
+      setGrant(null);
+      setTarget("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update that badge grant.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (id: string) => {
+    if (!window.confirm(`Delete ${id}? Anyone who has it will lose it.`)) return;
+    setError("");
+    setNotice("");
+    try {
+      await api(`/badges/${id}`, { method: "DELETE" });
+      setNotice("Custom badge deleted.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete badge.");
+    }
+  };
+  const review = async (id: string, status: "approved" | "rejected") => {
+    setError("");
+    setNotice("");
+    try {
+      await api(`/verification/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      setNotice(status === "approved" ? "Verification approved." : "Verification rejected.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not review that request.");
+    }
+  };
+  return (
+    <section>
+      <SectionTitle icon={ShieldCheck} title={t("admin.badgesTitle")} description={t("admin.badgesDesc")} />
+      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
+      {notice && <p className="mb-3 text-xs text-emerald-300">{notice}</p>}
+      <div className="surface mb-8 space-y-4 rounded-2xl p-4">
+        <FieldLabel>Verification queue</FieldLabel>
+        {queue.length === 0 && <p className="text-xs text-zinc-600">No pending requests.</p>}
+        {queue.map((item) => (
+          <div key={item.id} className="rounded-xl border border-white/[.06] p-3">
+            <p className="text-sm text-zinc-200">@{item.username || "unknown"} <span className="text-xs text-zinc-600">{item.display_name || ""}</span></p>
+            <p className="mt-1 text-xs text-zinc-400">{item.reason}</p>
+            {item.proof_url && <a href={item.proof_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-[#b6aaff] underline">{item.proof_url}</a>}
+            <div className="mt-3 flex gap-2">
+              <Button variant="accent" className="h-8 min-h-0 px-3 text-xs" onClick={() => void review(item.id, "approved")}>Approve</Button>
+              <Button variant="ghost" className="h-8 min-h-0 px-3 text-xs" onClick={() => void review(item.id, "rejected")}>Reject</Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="surface mb-5 space-y-4 rounded-2xl p-4">
+        <FieldLabel>New custom badge</FieldLabel>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <FieldLabel>Badge id</FieldLabel>
+            <TextInput value={form.id} onChange={(value) => setForm({ ...form, id: value.trim().toLowerCase() })} placeholder="custom-badge-id" />
+          </div>
+          <div>
+            <FieldLabel>Name</FieldLabel>
+            <TextInput value={form.name} onChange={(value) => setForm({ ...form, name: value })} placeholder="My badge" />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>Description</FieldLabel>
+            <TextInput value={form.description} onChange={(value) => setForm({ ...form, description: value })} placeholder="Shown on the badges page" />
+          </div>
+          <div>
+            <FieldLabel>Color</FieldLabel>
+            <div className="flex gap-2">
+              <input aria-label="Badge color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(form.color) ? form.color : "#e11d48"} onChange={(event) => setForm({ ...form, color: event.target.value })} className="h-11 w-12 cursor-pointer rounded-xl border-0 bg-transparent p-0" />
+              <TextInput value={form.color} onChange={(value) => setForm({ ...form, color: value })} placeholder="#e11d48" />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>Icon</FieldLabel>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[.08] bg-white/[.025] p-3">
+              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl" style={{ color: form.color, background: `${form.color}16` }}>
+                {form.icon ? <img src={form.icon} alt="" className="h-6 w-6 object-contain" /> : <ShieldCheck size={16} />}
+              </span>
+              <p className="min-w-0 flex-1 text-xs text-zinc-400">{iconName || "PNG, JPG, WebP, or GIF. 512KB max."}</p>
+              <input ref={iconInput} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                void iconFromFile(file).then((asset) => {
+                  setForm((current) => ({ ...current, icon: asset.url || "" }));
+                  setIconName(asset.name || file.name);
+                  setError("");
+                }).catch((err) => setError(err instanceof Error ? err.message : "That icon could not be used."));
+                event.target.value = "";
+              }} />
+              <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => iconInput.current?.click()}><Upload size={13} />{form.icon ? "Replace" : "Upload"}</Button>
+            </div>
+          </div>
+        </div>
+        <Button variant="accent" onClick={() => void add()} disabled={!canCreate}>Create custom badge</Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item) => (
+          <div key={item.id} className="surface rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl" style={{ color: item.color, background: `${item.color || "#e11d48"}16` }}>
+                {item.has_icon ? <img src={`/api/v1/badges/${item.id}/icon`} alt="" className="h-6 w-6 object-contain" /> : <ShieldCheck size={18} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-zinc-200">{item.name}</p>
+                <p className="mt-1 text-xs text-zinc-500">{item.description || item.id}</p>
+                <p className="mt-1 font-mono text-[10px] text-zinc-600">{item.id}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="subtle" className="h-8 min-h-0 px-2 text-xs" onClick={() => { setGrant({ id: item.id, name: item.name, granted: true }); setTarget(""); setError(""); }}>Grant</Button>
+              <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => { setGrant({ id: item.id, name: item.name, granted: false }); setTarget(""); setError(""); }}>Revoke</Button>
+              {!official.has(item.id) && <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item.id)}>Delete</Button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <Modal
+        open={Boolean(grant)}
+        title={grant?.granted ? `Grant ${grant?.name}` : `Revoke ${grant?.name}`}
+        description="Enter the user ID from Admin → Users. Username also works."
+        onClose={() => { if (!busy) { setGrant(null); setTarget(""); } }}
+      >
+        <div className="space-y-4">
+          <div>
+            <FieldLabel>User ID</FieldLabel>
+            <TextInput value={target} onChange={setTarget} placeholder="user id or @username" />
+          </div>
+          {error && <p className="text-xs text-red-300">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => { setGrant(null); setTarget(""); }} disabled={busy}>Cancel</Button>
+            <Button variant="accent" onClick={() => void submitGrant()} disabled={busy || target.trim().length < 3}>{busy ? "Saving…" : grant?.granted ? "Grant badge" : "Revoke badge"}</Button>
+          </div>
+        </div>
+      </Modal>
+    </section>
+  );
 }
 
-function ReportsPanel() { const [items, setItems] = useState<RecordItem[]>([]); const [error, setError] = useState(""); const load = () => void adminApi("/reports").then((r) => setItems((r.reports || []) as RecordItem[])).catch((e) => setError(e instanceof Error ? e.message : "Could not load reports.")); useEffect(load, []); return <section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={Flag} title="Reports & moderation" description="Shared moderation queue from real reports." />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="space-y-2">{items.map((item, index) => <div key={String(item.id || index)} className="rounded-xl border border-white/[.06] p-3 text-xs"><div className="flex flex-wrap items-center gap-2"><span className="text-zinc-200">{String(item.reason || "Report")}</span><span className="text-zinc-600">{String(item.status || "open")}</span><span className="ml-auto text-zinc-600">{prettyDate(item.created_at)}</span></div><p className="mt-1 text-zinc-500">{String(item.details || "No details")}</p>{item.status === "open" && <Button variant="ghost" className="mt-2 h-8 min-h-0 px-2 text-xs" onClick={() => void adminApi(`/reports/${String(item.id)}`, { method: "PATCH", body: JSON.stringify({ status: "reviewed" }) }).then(load).catch((e) => setError(e instanceof Error ? e.message : "Could not update report."))}>Mark reviewed</Button>}</div>)}{!items.length && <p className="text-xs text-zinc-600">No reports.</p>}</div></section>; }
-function AuditPanel() { const [items, setItems] = useState<RecordItem[]>([]); useEffect(() => { void adminApi("/audit-logs").then((r) => setItems((r.logs || []) as RecordItem[])); }, []); return <section className="surface rounded-2xl p-5 sm:p-6"><SectionTitle icon={Database} title="Audit logs" description="Sensitive actions recorded server-side." /><div className="space-y-2">{items.map((item, index) => <div key={String(item.id || index)} className="rounded-xl border border-white/[.06] p-3 text-xs"><p className="font-mono text-[#b8acff]">{String(item.action || "unknown")}</p><p className="mt-1 text-zinc-500">{String(item.target_type || "—")}: {String(item.target_id || "—")} · {prettyDate(item.created_at)}</p><p className="mt-1 text-zinc-600">{JSON.stringify(item.metadata || {})}</p></div>)}{!items.length && <p className="text-xs text-zinc-600">No audit records.</p>}</div></section>; }
-function ComingSoon({ title }: { title: string }) { return <section className="surface rounded-2xl border-dashed p-5"><p className="text-xs uppercase tracking-[.18em] text-zinc-600">{title}</p><p className="mt-2 text-lg font-medium text-zinc-300">COMING SOON</p><p className="mt-1 text-xs text-zinc-600">This area is intentionally not enabled yet.</p></section>; }
+function PremiumPanel() {
+  const t = useT();
+  const [ranks, setRanks] = useState<any[]>([]);
+  const [name, setName] = useState("");
+  const [open, setOpen] = useState<any | null>(null);
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const load = () => void api("/entitlements").then((r) => setRanks(r.ranks || [])).catch((e) => setError(e.message));
+  const loadRank = (id: string) => void api(`/entitlements/ranks/${id}`).then((r) => setOpen(r.rank)).catch((e) => setError(e.message));
+  useEffect(load, []);
+  const create = async () => {
+    try {
+      await api("/entitlements/ranks", { method: "POST", body: JSON.stringify({ name }) });
+      setName("");
+      setError("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create that rank.");
+    }
+  };
+  const grant = async () => {
+    if (!open) return;
+    try {
+      await api(`/entitlements/ranks/${open.id}/grants`, { method: "POST", body: JSON.stringify({ username }) });
+      setUsername("");
+      setError("");
+      loadRank(open.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not grant that rank.");
+    }
+  };
+  const revoke = async (handle: string) => {
+    if (!open || !window.confirm(`Revoke ${open.name} from @${handle}?`)) return;
+    try {
+      await api(`/entitlements/ranks/${open.id}/grants/${encodeURIComponent(handle)}`, { method: "DELETE" });
+      loadRank(open.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not revoke that rank.");
+    }
+  };
+  return (
+    <section>
+      <SectionTitle icon={ShieldCheck} title={t("admin.premiumTitle")} description={t("admin.premiumDesc")} />
+      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
+      {open ? (
+        <div>
+          <button type="button" onClick={() => { setOpen(null); setError(""); }} className="mb-4 text-xs text-[#b6aaff] hover:text-white">{t("admin.premiumBack")}</button>
+          <h3 className="mb-4 text-lg font-medium text-white">{open.name}</h3>
+          <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_auto]">
+            <TextInput value={username} onChange={setUsername} placeholder={t("admin.premiumUsername")} />
+            <Button variant="accent" onClick={() => void grant()}>{t("admin.premiumGrant")}</Button>
+          </div>
+          <div className="surface divide-y divide-white/[.06] rounded-2xl">
+            {(open.holders || []).map((item: any) => (
+              <div key={item.id} className="flex items-center gap-3 p-4">
+                <span className="flex-1 text-sm text-zinc-200">@{item.username || "unclaimed"}</span>
+                <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void revoke(item.username || item.user_id)}>{t("admin.premiumRevoke")}</Button>
+              </div>
+            ))}
+            {!(open.holders || []).length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.premiumNoHolders")}</p>}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="surface mb-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_auto]">
+            <TextInput value={name} onChange={setName} placeholder={t("admin.premiumRank")} />
+            <Button variant="accent" onClick={() => void create()}>{t("admin.premiumCreate")}</Button>
+          </div>
+          <div className="surface divide-y divide-white/[.06] rounded-2xl">
+            {ranks.map((item) => (
+              <button key={item.id} type="button" onClick={() => { setError(""); loadRank(item.id); }} className="flex w-full items-center gap-3 p-4 text-start hover:bg-white/[.03]">
+                <span className="flex-1 text-sm text-zinc-200">{item.name}</span>
+                <span className="text-xs text-zinc-500">{item.holders || 0}</span>
+              </button>
+            ))}
+            {!ranks.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.premiumEmpty")}</p>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReportsPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState(""); const load = () => void api("/reports").then((r) => setItems(r.reports || [])).catch((e) => setError(e.message)); useEffect(load, []); const update = async (id: string, status: string) => { try { await api(`/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update report."); } }; return <section><SectionTitle icon={Flag} title={t("admin.reportsTitle")} description={t("admin.reportsDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.id} className="p-4"><div className="flex gap-3"><div className="flex-1"><p className="text-sm text-zinc-200">{item.reason} <span className="ml-2 text-xs text-zinc-600">{item.target_username || item.target_user_id || "unknown target"}</span></p><p className="mt-1 text-xs text-zinc-500">{item.details || "No details"}</p></div><span className="text-xs text-zinc-500">{item.status}</span></div><div className="mt-3 flex gap-2"><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void update(item.id, "reviewed")}>Review</Button><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void update(item.id, "resolved")}>Resolve</Button><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void update(item.id, "dismissed")}>Dismiss</Button></div></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No reports.</p>}</div></section>; }
+
+function FlagsPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState(""); const load = () => void api("/feature-flags").then((r) => setItems(r.flags || [])).catch((e) => setError(e.message)); useEffect(load, []); const toggle = async (item: any) => { try { await api(`/feature-flags/${encodeURIComponent(item.key)}`, { method: "PUT", body: JSON.stringify({ enabled: !item.enabled, description: item.description }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update flag."); } }; return <section><SectionTitle icon={Flag} title={t("admin.flagsTitle")} description={t("admin.flagsDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.key} className="flex items-center gap-3 p-4"><div className="flex-1"><p className="font-mono text-sm text-zinc-200">{item.key}</p><p className="mt-1 text-xs text-zinc-600">{item.description}</p></div><Button variant={item.enabled ? "accent" : "ghost"} className="h-8 min-h-0 px-3 text-xs" onClick={() => void toggle(item)}>{item.enabled ? "Enabled" : "Disabled"}</Button></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No feature flags yet.</p>}</div></section>; }
+
+function AuditPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState(""); useEffect(() => { void api("/audit-logs").then((r) => setItems(r.logs || [])).catch((e) => setError(e.message)); }, []); return <section><SectionTitle icon={Database} title={t("admin.auditTitle")} description={t("admin.auditDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.id} className="grid gap-1 p-4 text-xs sm:grid-cols-[180px_1fr_1fr]"><span className="text-zinc-600">{new Date(item.created_at).toLocaleString()}</span><span className="font-mono text-[#fda4af]">{item.action}</span><span className="text-zinc-500">{item.target_type || "—"}: {item.target_id || "—"}</span></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.noAudit")}</p>}</div></section>; }
+
+function BakaBoostPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState(""); useEffect(() => { void api("/bakaboost").then((r) => setItems(r.connections || [])).catch((e) => setError(e.message)); }, []); return <section><SectionTitle icon={Database} title={t("admin.bakaTitle")} description={t("admin.bakaDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.user_id} className="flex items-center gap-3 p-4 text-xs"><span className="flex-1 font-mono text-zinc-400">{item.user_id}</span><span className="text-zinc-500">{item.provider}</span><span className={item.status === "connected" ? "text-emerald-400" : "text-amber-300"}>{item.status}</span></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">{t("admin.noBaka")}</p>}</div></section>; }
+
+function ThemesPanel() { const t = useT(); const [items, setItems] = useState<any[]>([]); const [name, setName] = useState(""); const [error, setError] = useState(""); const load = () => void api("/themes").then((r) => setItems(r.themes || [])).catch((e) => setError(e.message)); useEffect(load, []); const add = async () => { try { await api("/themes", { method: "POST", body: JSON.stringify({ name, config: {}, active: true }) }); setName(""); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save theme."); } }; return <section><SectionTitle icon={Database} title={t("admin.themesTitle")} description={t("admin.themesDesc")} /><div className="surface mb-5 flex gap-2 rounded-2xl p-4"><TextInput value={name} onChange={setName} placeholder="Preset name" /><Button variant="accent" onClick={() => void add()}>Save preset</Button></div>{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.id} className="flex items-center gap-3 p-4 text-sm"><span className="flex-1 text-zinc-300">{item.name}</span><span className={item.active ? "text-emerald-400" : "text-zinc-600"}>{item.active ? "Active" : "Inactive"}</span></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No presets yet.</p>}</div></section>; }
+
+function DefaultFontsPanel() {
+  const [items, setItems] = useState<any[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(0);
+  const inputs = useRef<Record<number, HTMLInputElement | null>>({});
+  const load = async () => { try { const response = await api("/fonts"); setItems(response.fonts || []); } catch (e) { setError(e instanceof Error ? e.message : "Could not load default fonts."); } };
+  useEffect(() => { void load(); }, []);
+  const upload = async (slot: number, file: File) => {
+    if (file.size > 2_000_000) { setError("Font must be smaller than 2 MB."); return; }
+    try {
+      setBusy(slot);
+      const asset = await assetFromFile(file);
+      if (!asset.url) throw new Error("Could not read that font.");
+      await api(`/fonts/${slot}`, { method: "PUT", body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, ""), data_url: asset.url, mime_type: asset.type || "font/woff2" }) });
+      setError("");
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not upload that font."); }
+    finally { setBusy(0); }
+  };
+  const remove = async (slot: number) => { try { setBusy(slot); await api(`/fonts/${slot}`, { method: "DELETE" }); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not remove that font."); } finally { setBusy(0); } };
+  return <section><SectionTitle icon={Type} title="Default fonts" description="Manage ten uploaded fonts plus Inter in the profile font selector." />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl"><div className="flex items-center gap-3 p-4"><div className="flex-1"><p className="text-sm text-zinc-200">Inter</p><p className="text-xs text-zinc-600">Built-in default font</p></div><span className="text-xs text-emerald-400">Default</span></div>{[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((slot) => { const item = items.find((entry) => entry.slot === slot); return <div key={slot} className="flex items-center gap-3 p-4"><div className="flex-1"><p className="text-sm text-zinc-200">Font {slot - 1}</p><p className="text-xs text-zinc-600">{item?.name || "Empty slot"}</p></div><input ref={(node) => { inputs.current[slot] = node; }} className="hidden" type="file" accept={FONT_ACCEPT} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(slot, file); event.target.value = ""; }} /><Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" disabled={busy === slot} onClick={() => inputs.current[slot]?.click()}><Upload size={13} />{item ? "Replace" : "Upload"}</Button>{item ? <Button variant="ghost" className="h-9 min-h-0 px-3 text-xs" disabled={busy === slot} onClick={() => void remove(slot)}>Remove</Button> : null}</div>; })}</div></section>;
+}
+
+function TemplatesPanel() {
+  const t = useT();
+  const [items, setItems] = useState<any[]>([]);
+  const [error, setError] = useState("");
+  const load = () => void api("/templates").then((r) => setItems(r.templates || [])).catch((e) => setError(e.message));
+  useEffect(load, []);
+  const toggle = async (item: any) => { try { await api(`/templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ published: !item.published }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update template."); } };
+  const remove = async (item: any) => { if (!window.confirm(`Delete ${item.name}?`)) return; try { await api(`/templates/${item.id}`, { method: "DELETE" }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not delete template."); } };
+  return <section><SectionTitle icon={Database} title={t("admin.templatesTitle")} description={t("admin.templatesDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"><div className="flex-1"><p className="text-sm text-zinc-200">{item.name}</p><p className="mt-1 text-xs text-zinc-500">{item.slug} · {item.creator_username ? `@${item.creator_username}` : "system"} · {item.published ? "Published" : "Unpublished"}</p></div><div className="flex gap-2"><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void toggle(item)}>{item.published ? "Unpublish" : "Publish"}</Button><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item)}>Delete</Button></div></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No templates yet.</p>}</div></section>;
+}

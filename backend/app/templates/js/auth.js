@@ -157,9 +157,11 @@ function bindLoginForm() {
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (form.dataset.busy) return; // v3.97: a second Enter while it sends does nothing
     const submit = form.querySelector('[type="submit"]');
     const original = submit ? submit.textContent : "";
-    if (submit) submit.textContent = "Signing in…";
+    form.dataset.busy = "1";
+    if (submit) { submit.textContent = "Signing in…"; submit.setAttribute("aria-busy", "true"); }
     try {
       const token = currentTurnstileToken();
       if (!token) {
@@ -181,7 +183,8 @@ function bindLoginForm() {
     } catch {
       showAuthMessage("Could not reach the server.", "error");
     } finally {
-      if (submit) submit.textContent = original;
+      delete form.dataset.busy;
+      if (submit) { submit.textContent = original; submit.removeAttribute("aria-busy"); }
     }
   });
 }
@@ -191,9 +194,11 @@ function bindSignupForm() {
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (form.dataset.busy) return; // v3.97: a second Enter while it sends does nothing
     const submit = form.querySelector('[type="submit"]');
     const original = submit ? submit.textContent : "";
-    if (submit) submit.textContent = "Creating account…";
+    form.dataset.busy = "1";
+    if (submit) { submit.textContent = "Creating account…"; submit.setAttribute("aria-busy", "true"); }
     try {
       const token = currentTurnstileToken();
       if (!token) {
@@ -205,6 +210,7 @@ function bindSignupForm() {
         password: form.password.value,
         confirm_password: form["confirm-password"].value,
         tos: Boolean(form.tos?.checked),
+        username: form.username?.value?.trim().toLowerCase() || null,
         turnstile_token: token,
       });
       if (!response.ok) {
@@ -216,7 +222,8 @@ function bindSignupForm() {
     } catch {
       showAuthMessage("Could not reach the server.", "error");
     } finally {
-      if (submit) submit.textContent = original;
+      delete form.dataset.busy;
+      if (submit) { submit.textContent = original; submit.removeAttribute("aria-busy"); }
     }
   });
 }
@@ -229,6 +236,40 @@ function bindSocialAuth() {
       event.preventDefault();
       showAuthMessage("Complete the human verification first.", "error");
     });
+  });
+}
+
+async function configureSocialAuth() {
+  const links = document.querySelectorAll(".social-auth__button");
+  if (!links.length) return;
+  let providers;
+  try {
+    const response = await fetch("/api/v1/auth/providers", {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    providers = response.ok ? await response.json() : null;
+  } catch {
+    providers = null;
+  }
+  const routes = {
+    google: "/api/v1/auth/google?next=/dashboard",
+    discord: "/api/v1/auth/discord?next=/dashboard",
+    telegram: "/api/v1/auth/telegram",
+  };
+  links.forEach((link) => {
+    const provider = ["google", "discord", "telegram"].find((name) =>
+      link.classList.contains(`social-auth__button--${name}`),
+    );
+    if (!provider) return;
+    const enabled = providers?.[provider] !== false;
+    if (enabled) {
+      link.href = routes[provider];
+      link.removeAttribute("tabindex");
+    } else {
+      link.href = "#";
+      link.setAttribute("aria-disabled", "true");
+    }
   });
 }
 
@@ -265,6 +306,9 @@ function setProviderState(name, connected, extra) {
   toggle.classList.toggle("connection-row__toggle--connect", !connected);
   if (toggle.tagName === "A") {
     toggle.textContent = connected ? "Connected" : "Connect";
+    // v3.84: three "Connect" links read the same to a screen reader — carry the provider in the name
+    const who = row.querySelector(".connection-row__info b");
+    if (who) toggle.setAttribute("aria-label", (connected ? "Connected: " : "Connect ") + who.textContent.trim());
   } else {
     toggle.textContent = connected ? "Connected" : "Password";
   }
@@ -284,7 +328,7 @@ function renderDashboard(user) {
   const accountId = document.getElementById("account-id");
   if (email) email.textContent = user.email || "No email on this account";
   if (accountName) accountName.textContent = name;
-  if (accountId) accountId.textContent = user.id;
+  if (accountId) accountId.textContent = user.account_id || "Generating...";
   const usernameInput = document.getElementById("username");
   if (usernameInput && user.username) usernameInput.value = user.username;
   setProviderState("email", Boolean(user.providers?.email), user.email || "Password login enabled");
@@ -295,7 +339,15 @@ function renderDashboard(user) {
 
 async function loadDashboard() {
   if (!document.querySelector(".dashboard")) return;
-  const response = await fetch("/api/v1/me", { credentials: "include", headers: { Accept: "application/json" } });
+  let response;
+  try {
+    response = await fetch("/api/v1/me", { credentials: "include", headers: { Accept: "application/json" } });
+  } catch {
+    // v3.68: a dead network used to leave "loading…" in the nav and an unhandled rejection in the console; v2.js shows the message
+    const name = document.getElementById("nav-name");
+    if (name) name.textContent = "—";
+    return;
+  }
   if (response.status === 401) {
     window.location.href = "/login";
     return;
@@ -307,14 +359,32 @@ async function loadDashboard() {
   renderDashboard(await response.json());
 }
 
+function bindAccountCopy() {
+  const button = document.getElementById("account-copy");
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    const value = document.getElementById("account-id")?.textContent?.trim();
+    if (!value || value === "—" || value === "Generating...") return;
+    try {
+      await navigator.clipboard.writeText(value);
+      button.textContent = "Copied";
+      window.setTimeout(() => { button.textContent = "Copy"; }, 1400);
+    } catch {
+      button.textContent = "Copy unavailable";
+    }
+  });
+}
+
 function bindUsernameForm() {
   const form = document.getElementById("username-form");
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (form.dataset.busy) return; // v3.96: a second Enter while it saves sends nothing
     const submit = form.querySelector('[type="submit"]');
     const original = submit ? submit.textContent : "";
-    if (submit) submit.textContent = "Saving…";
+    form.dataset.busy = "1";
+    if (submit) { submit.textContent = "Saving…"; submit.setAttribute("aria-busy", "true"); }
     try {
       const response = await fetch("/api/v1/me/username", {
         method: "PATCH",
@@ -332,7 +402,8 @@ function bindUsernameForm() {
     } catch {
       showAuthMessage("Could not save username.", "error");
     } finally {
-      if (submit) submit.textContent = original;
+      delete form.dataset.busy;
+      if (submit) { submit.textContent = original; submit.removeAttribute("aria-busy"); }
     }
   });
 }
@@ -342,9 +413,17 @@ async function markLoggedInNav() {
   try {
     const response = await fetch("/api/v1/me", { credentials: "include", headers: { Accept: "application/json" } });
     if (!response.ok) return;
+    document.documentElement.classList.add("is-signed-in"); // v3.33: lets the phone nav drop "Claim" for members
     document.querySelectorAll('a[href="/login"]').forEach((link) => {
       link.href = "/dashboard";
       if (link.textContent.trim().toLowerCase() === "login") link.textContent = "Dashboard";
+    });
+    // v3.107: a member has an account — the nav's “Claim username” button becomes “Dashboard” (the text link hides on
+    // wide screens, css); the phone menu's claim button hides (its Login entry already reads Dashboard)
+    document.querySelectorAll(".nav__actions [data-claim]").forEach((btn) => {
+      btn.href = "/dashboard";
+      const label = btn.querySelector("span");
+      if (label) label.textContent = "Dashboard";
     });
   } catch {
     /* public pages still work offline from the API */
@@ -381,10 +460,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   bindLoginForm();
   bindSignupForm();
+  configureSocialAuth();
   bindSocialAuth();
   bindForgotPassword();
   bindLogout();
   bindUsernameForm();
+  bindAccountCopy();
   loadDashboard();
   markLoggedInNav();
 });

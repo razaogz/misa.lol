@@ -1,19 +1,18 @@
-FROM node:22-bookworm-slim AS dependencies
+FROM node:22-alpine
+
 WORKDIR /app
-COPY package.json package-lock.json ./
+
+COPY package*.json ./
 RUN npm ci
 
-FROM node:22-bookworm-slim AS build
-WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
+ARG API_PROXY_TARGET=https://misa.lol
+ARG NEXT_PUBLIC_AUTH_ORIGIN=https://misa.lol
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
+ENV NEXT_PUBLIC_AUTH_ORIGIN=$NEXT_PUBLIC_AUTH_ORIGIN
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=build /app ./
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+
+CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]

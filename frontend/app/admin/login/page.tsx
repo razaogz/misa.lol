@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/auth/providers", { cache: "no-store" })
+    void fetch("/api/v1/auth/providers", { cache: "no-store" })
       .then((response) => response.json())
       .then((value: { turnstile_site_key?: string }) => setTurnstileSiteKey(value.turnstile_site_key || ""))
       .catch(() => setTurnstileSiteKey(""));
@@ -56,13 +56,8 @@ export default function AdminLoginPage() {
       const response = await fetch("/api/v1/admin-auth/verify-otp", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email, code, turnstile_token: turnstileToken }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) { resetTurnstile(); throw new Error(result.detail || "Invalid or expired verification code."); }
-      let session: Response | null = null;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        session = await fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store", headers: { "Cache-Control": "no-store" } });
-        if (session.ok) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 100));
-      }
-      if (!session?.ok) throw new Error(`The admin session was not persisted (server returned ${session?.status || "no response"}). Please try again.`);
+      const session = await fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store", headers: { "Cache-Control": "no-store" } });
+      if (!session.ok) throw new Error(`The admin session was not persisted (server returned ${session.status}). Please try again.`);
       window.location.replace("/admin");
     } catch (e) { setError(e instanceof Error ? e.message : "Invalid or expired verification code."); }
     finally { setBusy(false); }
