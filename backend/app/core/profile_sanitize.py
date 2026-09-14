@@ -119,6 +119,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     cleaned["bannerShape"] = cleaned.get("bannerShape") if cleaned.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
     cleaned["buttonStyle"] = cleaned.get("buttonStyle") if cleaned.get("buttonStyle") in {"glass", "solid", "outline"} else "glass"
     cleaned["profileFont"] = cleaned.get("profileFont") if cleaned.get("profileFont") in PROFILE_FONTS else "Inter"
+    cleaned["profileFontScope"] = cleaned.get("profileFontScope") if cleaned.get("profileFontScope") in {"all", "name"} else "all"
     cleaned["pageEnter"] = cleaned.get("pageEnter") if cleaned.get("pageEnter") in PAGE_ENTERS else "Fade"
     for key, default in (
         ("accentColor", "#9b87f5"),

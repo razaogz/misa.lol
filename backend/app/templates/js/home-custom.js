@@ -263,57 +263,207 @@
   syncToTheme(false);
 })();
 
-// Background video: ensure playback on all viewports including mobile.
-// Handles tab visibility changes robustly so the video resumes correctly
-// when the user returns — no frozen frames, no duplicate loops.
+// Background video lifecycle & resume manager:
+// Ensures the background video automatically resumes playback when the page
+// becomes active/visible after being minimized, backgrounded, tab-switched,
+// or suspended by mobile OS/power management, without requiring a page refresh.
 (function () {
   "use strict";
+  if (window.__misaBgVideoInit) return;
+  window.__misaBgVideoInit = true;
+
   var video = document.querySelector(".landing-hero-stack__video");
   if (!video) return;
 
-  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduce) { video.pause(); return; }
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (reduceMotion.matches) {
+    try { video.pause(); } catch (_) {}
+    return;
+  }
   if (navigator.connection && navigator.connection.saveData) return;
 
-  var resuming = false; // guard against duplicate play() calls
+  var isResuming = false;
+  var interactionBound = false;
+  var retryTimer = null;
 
-  function play() {
-    if (resuming) return;
-    if (!video.paused) return;
-    resuming = true;
-    video.play().catch(function () {}).finally(function () { resuming = false; });
+  // Preserve & guarantee background video configuration
+  function ensureSettings() {
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.loop = true;
+    video.autoplay = true;
   }
 
-  // Ensure autoplay fires even if the browser blocked it initially.
-  video.addEventListener("canplay", play, { once: true });
-  play();
+  ensureSettings();
 
-  // Core handler: pause when hidden, resume when visible.
+  function isPageActive() {
+    return !document.hidden && document.visibilityState !== "hidden";
+  }
+
+  function resumePlayback() {
+    if (!isPageActive()) return;
+    if (reduceMotion.matches) return;
+    if (isResuming) return;
+
+    ensureSettings();
+
+    // If media pipeline errored or stalled without readyState, properly reinitialize
+    if (video.error || video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+      try {
+        var currentSrc = video.currentSrc || video.src;
+        if (currentSrc) {
+          video.src = currentSrc;
+        }
+        video.load();
+      } catch (_) {}
+    } else if (video.readyState === 0) {
+      try {
+        video.load();
+      } catch (_) {}
+    }
+
+    isResuming = true;
+    clearTimeout(retryTimer);
+
+    var playPromise;
+    try {
+      playPromise = video.play();
+    } catch (err) {
+      isResuming = false;
+      bindInteractionFallback();
+      return;
+    }
+
+    if (playPromise !== undefined && typeof playPromise.then === "function") {
+      playPromise
+        .then(function () {
+          isResuming = false;
+          removeInteractionFallback();
+        })
+        .catch(function (err) {
+          isResuming = false;
+          // Autoplay restriction or system suspend: resume on first user interaction
+          if (err && (err.name === "NotAllowedError" || err.name === "AbortError")) {
+            bindInteractionFallback();
+          }
+          // If decoder was not ready, listen for canplay to resume
+          if (video.readyState < 2) {
+            var onCanPlay = function () {
+              video.removeEventListener("canplay", onCanPlay);
+              if (isPageActive()) resumePlayback();
+            };
+            video.addEventListener("canplay", onCanPlay, { once: true });
+          }
+        });
+    } else {
+      isResuming = false;
+    }
+  }
+
+  // Graceful fallback for strict autoplay / mobile suspend restrictions:
+  // Automatically resumes on first user touch/scroll/click/key without requiring a page refresh.
+  function bindInteractionFallback() {
+    if (interactionBound) return;
+    interactionBound = true;
+    var events = ["pointerdown", "touchstart", "scroll", "keydown", "click"];
+    function onInteract() {
+      removeInteractionFallback();
+      if (isPageActive()) resumePlayback();
+    }
+    events.forEach(function (evt) {
+      window.addEventListener(evt, onInteract, { capture: true, once: true, passive: true });
+    });
+    window.__misaBgInteractCleanup = function () {
+      events.forEach(function (evt) {
+        window.removeEventListener(evt, onInteract, { capture: true });
+      });
+      interactionBound = false;
+    };
+  }
+
+  function removeInteractionFallback() {
+    if (typeof window.__misaBgInteractCleanup === "function") {
+      window.__misaBgInteractCleanup();
+      window.__misaBgInteractCleanup = null;
+    }
+    interactionBound = false;
+  }
+
+  // Lifecycle Event 1: visibilitychange (tab hidden / visible)
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
-      video.pause();
+      try { video.pause(); } catch (_) {}
     } else {
-      play();
+      // Brief delay to allow browser compositor to restore before play()
+      setTimeout(resumePlayback, 60);
     }
   });
 
-  // Some browsers throttle background tabs and the video can stall even
-  // without a visibilitychange event (e.g. returning via Alt-Tab on
-  // desktop). Listening to window focus catches those cases.
+  // Lifecycle Event 2: pageshow (bfcache restore, tab re-activation)
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted || isPageActive()) {
+      ensureSettings();
+      setTimeout(resumePlayback, 100);
+    }
+  });
+
+  // Lifecycle Event 3: focus (window / tab regaining focus)
   window.addEventListener("focus", function () {
-    if (!document.hidden) play();
-  });
-
-  // If the video ends up paused for any reason while the page is visible
-  // (browser power-saving, etc.), resume it.
-  video.addEventListener("pause", function () {
-    if (!document.hidden) {
-      // Small delay so we don't fight the browser's own pause logic
-      setTimeout(function () {
-        if (video.paused && !document.hidden) play();
-      }, 200);
+    if (isPageActive() && video.paused) {
+      setTimeout(resumePlayback, 80);
     }
   });
+
+  // Lifecycle Event 4: resume (W3C Page Lifecycle API for frozen/discarded tabs)
+  document.addEventListener("resume", function () {
+    if (isPageActive()) {
+      setTimeout(resumePlayback, 100);
+    }
+  });
+
+  // Lifecycle Event 5: online (device waking from sleep and reconnecting)
+  window.addEventListener("online", function () {
+    if (isPageActive() && (video.paused || video.readyState < 2)) {
+      setTimeout(resumePlayback, 150);
+    }
+  });
+
+  // Monitor pause while page is active (e.g. browser power-saving or OS throttling)
+  video.addEventListener("pause", function () {
+    if (isPageActive() && !reduceMotion.matches) {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(function () {
+        if (isPageActive() && video.paused) {
+          resumePlayback();
+        }
+      }, 250);
+    }
+  });
+
+  // Monitor stalled decoder
+  video.addEventListener("stalled", function () {
+    if (isPageActive() && !reduceMotion.matches) {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(function () {
+        if (isPageActive() && (video.paused || video.readyState < 2)) {
+          try { video.load(); } catch (_) {}
+          resumePlayback();
+        }
+      }, 300);
+    }
+  });
+
+  video.addEventListener("canplay", function () {
+    if (isPageActive() && video.paused) {
+      resumePlayback();
+    }
+  }, { once: true });
+
+  // Initial playback start
+  resumePlayback();
 })();
 
 // When desktop and mobile forms coexist, navbar Claim uses the visible form.

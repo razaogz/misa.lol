@@ -105,6 +105,7 @@
 .landing-hero-stack {
   position: relative;
   isolation: isolate;
+  z-index: 0;
   background: transparent;
 }
 
@@ -783,3 +784,77 @@
   background: var(--crimson-2);
   border-color: var(--crimson-2);
 }
+
+/* ==========================================================================
+   Fix faded text / content visibility & background layering
+   - Headings, descriptions, labels, buttons, and other text are clearly
+     visible with normal opacity.
+   - Background effects stay strictly behind the content (z-index / layering).
+   - Typography, layout, spacing, and background effect design are preserved.
+   ========================================================================== */
+
+/* Ensure all page content sections sit in front of the background video */
+.section,
+.manifesto,
+.cta,
+.footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* Ensure #features content is fully visible and not overlaid by video effects */
+#features {
+  position: relative;
+  z-index: 2;
+  opacity: 1;
+  filter: none;
+}
+
+#features .section__head,
+#features .spec,
+#features .spec__row {
+  position: relative;
+  z-index: 2;
+  filter: none;
+}
+
+/* When reveal animation triggers or is active, maintain full normal opacity */
+#features .section__head.reveal.in,
+#features .spec__row.reveal.in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+#features .title,
+#features .title em,
+#features .eyebrow,
+#features .lede,
+#features .spec__name,
+#features .spec__name em,
+#features .spec__body,
+#features .spec__body p,
+#features .spec__demo,
+#features .tier,
+#features .chip,
+#features .tw,
+#features .hand,
+#features .name,
+#features .refs,
+#features .odo-demo,
+#features .slip-demo,
+#features .mark,
+#features .chalk-demo,
+#features .draw-demo,
+#features .back-demo,
+#features .wax-demo,
+#features .moon-demo,
+#features .nbd,
+#features .vigil-demo,
+#features button,
+#features a {
+  position: relative;
+  z-index: 2;
+  filter: none;
+}
+

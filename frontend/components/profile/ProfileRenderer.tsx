@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileIdentity, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
 import { resolvedAudioSource } from "@/lib/audio";
@@ -37,6 +37,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     : selectedDefaultFont?.url
       ? `"MisaDefaultFont", "Inter", ui-sans-serif, system-ui, sans-serif`
       : profileFont(s.profileFont);
+  const pageFamily = s.profileFontScope === "name" ? "Inter, ui-sans-serif, system-ui, sans-serif" : family;
   const particles = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ left: `${(i * 37) % 100}%`, top: `${(i * 61) % 100}%`, delay: `${(i % 7) * .5}s`, size: 2 + (i % 3) })), []);
   const [entered, setEntered] = useState(!s.entryScreen);
   const [quiet, setQuiet] = useState(false);
@@ -108,7 +109,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   };
 
   return (
-    <div className={`relative isolate ${screenshot ? "h-full" : "min-h-[100svh]"} overflow-hidden bg-[#07070a] ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: family, fontSize: typeSize(s.fontSize) }}>
+    <div className={`relative isolate ${screenshot ? "h-full" : "min-h-[100svh]"} overflow-hidden bg-[#07070a] ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
       {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
       {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:url("${selectedDefaultFont.url}");font-display:swap}`}</style> : null}
       <ProfileBackground config={config} videoRef={videoRef} particles={particles} />

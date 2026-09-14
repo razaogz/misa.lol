@@ -42,7 +42,7 @@ export function SettingsView() {
   return <main className="mx-auto min-h-screen max-w-[1050px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
     <PageHeader eyebrow={t("settings.eyebrow")} title={t("settings.title")} description={t("settings.description")} action={<div className="flex flex-wrap gap-2"><Link href="/help?article=change-username"><Button variant="ghost"><CircleHelp size={15} />{t("common.help")}</Button></Link><Button variant="accent" onClick={save} disabled={saveState === "saving"}>{saved ? <><Check size={15} />{t("common.saved")}</> : saveState === "saving" ? t("common.saving") : t("common.save")}</Button></div>} />
     <div className="space-y-8">
-      <section>
+      <section className="relative z-20">
         <SectionTitle icon={UserRound} title={t("settings.generalTitle")} description={t("settings.generalDesc")} />
         <div className="surface grid gap-5 rounded-2xl p-5 sm:grid-cols-2 sm:p-6">
           <div><FieldLabel>{t("settings.username")}</FieldLabel><div className="flex gap-2"><TextInput value={username} onChange={(value) => { setUsername(value); setConfirmChange(false); }} placeholder="yourname" /><Button variant={confirmChange ? "accent" : "subtle"} className="shrink-0" disabled={usernameBusy} onClick={() => void claimUsername()}>{usernameBusy ? t("common.saving") : user?.username ? (confirmChange ? t("common.confirm") : t("common.change")) : t("common.claim")}</Button></div><p className="mt-2 text-xs text-zinc-600">{t("settings.usernameHelp")} <Link href="/help?article=change-username" className="text-[#fda4af] hover:text-white">{t("settings.usernameHow")}</Link></p>{usernameMessage && <p className={`mt-2 text-xs ${usernameError ? "text-red-300" : "text-zinc-500"}`}>{usernameMessage}</p>}</div>

@@ -455,6 +455,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     banner_shape = settings.get("bannerShape") if settings.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
     button_style = settings.get("buttonStyle") if settings.get("buttonStyle") in {"glass", "solid", "outline"} else "glass"
     profile_font = settings.get("profileFont") if settings.get("profileFont") in PROFILE_FONTS else "Inter"
+    profile_font_scope = settings.get("profileFontScope") if settings.get("profileFontScope") in {"all", "name"} else "all"
     font_size = _clamp(settings.get("fontSize"), 16, 12, 22)
     letter_spacing = _clamp(settings.get("letterSpacing"), 0, -2, 8)
     bio_typewriter = bool(settings.get("bioTypewriter")) and bool(bio_lines)
@@ -489,6 +490,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     has_font = has_public_asset(assets, "customFont", "font")
     if has_font:
         font_stack = f"MisaProfile,{font_stack}"
+    page_font_stack = font_stack if profile_font_scope == "all" else "Inter,system-ui,sans-serif"
     page_place = {"left": "flex-start", "right": "flex-end"}.get(card_align, "center")
     has_banner = has_public_asset(assets, "banner", "image")
     username_glow = bool(settings.get("usernameGlow")) or username_effect == "Glow"
@@ -516,6 +518,8 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     elif username_effect == "Shadow":
         name_class += " name-shadow"
     name_style = f"font-size:{font_size + 8}px;letter-spacing:{letter_spacing}px;color:{username_color};"
+    if profile_font_scope == "name":
+        name_style += f"font-family:{font_stack};"
     if username_effect in {"Gradient", "Typewriter", "Shimmer"}:
         name_style += f"background:linear-gradient(90deg,{username_color},{username_effect_color},{username_color});-webkit-background-clip:text;background-clip:text;color:transparent;"
     if username_effect == "Outline":
@@ -702,7 +706,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
 <meta name="twitter:image" content="{og_image_url}">
 <style>
 {font_face}
-*{{box-sizing:border-box}}html,body{{margin:0;min-height:100vh;min-height:100dvh;background:{background};color:{text_color};font-family:{font_stack};font-size:{font_size}px;scrollbar-width:none;-ms-overflow-style:none}}
+*{{box-sizing:border-box}}html,body{{margin:0;min-height:100vh;min-height:100dvh;background:{background};color:{text_color};font-family:{page_font_stack};font-size:{font_size}px;scrollbar-width:none;-ms-overflow-style:none}}
 html::-webkit-scrollbar,body::-webkit-scrollbar,.lyrics::-webkit-scrollbar{{display:none}}
 {cursor_css}
 .has-cursor,.has-cursor *{{cursor:var(--cursor, auto)}}

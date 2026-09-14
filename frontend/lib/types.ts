@@ -129,6 +129,7 @@ export interface ProfileConfig {
     bannerShape?: BannerShape;
     buttonStyle?: ButtonStyle;
     profileFont?: ProfileFont;
+    profileFontScope?: "all" | "name";
     fontSize?: number;
     letterSpacing?: number;
     bioTypewriter?: boolean;

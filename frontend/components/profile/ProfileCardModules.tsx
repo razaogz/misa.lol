@@ -104,6 +104,7 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
       style={{
         fontSize: typeSize(s.fontSize) + 8,
         letterSpacing: nameTracking(s.letterSpacing),
+        fontFamily: s.profileFontScope === "name" ? "var(--misa-profile-font)" : undefined,
         color: gradientEffect ? undefined : effect === "Outline" ? "transparent" : usernameColor,
         textShadow: outlineShadow || (s.usernameGlow || effect === "Glow" || effect === "Neon" ? "0 0 24px " + effectColor + "aa" : undefined),
         ["--username-color" as string]: usernameColor,

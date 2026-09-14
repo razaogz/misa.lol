@@ -48,6 +48,7 @@ def default_public_profile(user: User) -> dict[str, Any]:
             "bannerShape": "rounded",
             "buttonStyle": "glass",
             "profileFont": "Inter",
+            "profileFontScope": "all",
             "fontSize": 16,
             "letterSpacing": 0,
             "bioTypewriter": False,
