@@ -23,6 +23,7 @@ class User:
     discord_id: str | None = None
     telegram_id: str | None = None
     telegram_username: str | None = None
+    apple_id: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     last_login_at: str | None = None
@@ -58,6 +59,7 @@ class User:
             discord_id=data.get("discord_id"),
             telegram_id=data.get("telegram_id"),
             telegram_username=data.get("telegram_username"),
+            apple_id=data.get("apple_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             last_login_at=data.get("last_login_at"),
@@ -82,6 +84,7 @@ class User:
                 "google": bool(self.google_id),
                 "discord": bool(self.discord_id),
                 "telegram": bool(self.telegram_id),
+                "apple": bool(self.apple_id),
             },
             "created_at": self.created_at,
             "last_login_at": self.last_login_at,

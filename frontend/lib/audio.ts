@@ -9,8 +9,8 @@ const MAX_SAVE_CHARS = 60_000_000;
 export type AudioSource = "video" | "standalone" | "tracks";
 
 export function resolvedAudioSource(assets: ProfileConfig["assets"]): AudioSource {
+  if (Array.isArray(assets.tracks) && assets.tracks.some((track) => track?.audio?.url)) return "tracks";
   if (assets.audioSource === "video" || assets.audioSource === "standalone" || assets.audioSource === "tracks") return assets.audioSource;
-  if (Array.isArray(assets.tracks) && assets.tracks.length > 0) return "tracks";
   if (assets.audio?.url) return "standalone";
   return "video";
 }
@@ -19,6 +19,10 @@ export function resolvedAudioSource(assets: ProfileConfig["assets"]): AudioSourc
  * Compatibility helper for profile/player consumers that need to know whether
  * the profile is using uploaded audio instead of the background video's audio.
  */
+export function usesBackgroundVideoAudio(assets: ProfileConfig["assets"]): boolean {
+  return resolvedAudioSource(assets) === "video" && Boolean(assets.audioEnabled && assets.backgroundVideo?.url);
+}
+
 export function usesUploadedProfileAudio(assets: ProfileConfig["assets"]): boolean {
   const source = resolvedAudioSource(assets);
   return source === "standalone" || source === "tracks";

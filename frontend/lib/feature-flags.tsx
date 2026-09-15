@@ -13,7 +13,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   "profile.socials": true, "profile.widgets": true, "profile.badges": true, "profile.audio": true,
   "profile.views": true, "profile.joinDate": true, "integrations.discord": true,
   "feature.usernameEffects.glitch": true, "feature.usernameEffects.pulse": true, "feature.usernameEffects.outline": true,
-  "feature.usernameEffects.neon": true, "feature.usernameEffects.wave": true, "feature.usernameEffects.shadow": true,
+  "feature.usernameEffects.wave": true, "feature.usernameEffects.shadow": true,
 };
 
 const FeatureFlagsContext = createContext<Record<string, boolean>>(DEFAULT_FEATURE_FLAGS);

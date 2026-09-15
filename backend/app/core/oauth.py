@@ -1,5 +1,6 @@
 import json
 import secrets
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -18,8 +19,12 @@ DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
 DISCORD_REVOKE_URL = "https://discord.com/api/oauth2/token/revoke"
 DISCORD_USER_URL = "https://discord.com/api/users/@me"
 TELEGRAM_AUTH_URL = "https://oauth.telegram.org/auth"
+APPLE_AUTH_URL = "https://appleid.apple.com/auth/authorize"
+APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token"
+APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 
 _google_jwk_client = PyJWKClient(GOOGLE_JWKS_URL)
+_apple_jwk_client = PyJWKClient(APPLE_JWKS_URL)
 
 
 def _state_key(state: str) -> str:
@@ -92,17 +97,36 @@ def discord_authorize_url(settings: Settings, state: str) -> str:
     return f"{DISCORD_AUTH_URL}?{query}"
 
 
-def telegram_authorize_url(settings: Settings) -> str:
+def telegram_authorize_url(settings: Settings, state: str) -> str:
     origin = settings.public_base_url.rstrip("/")
     query = urlencode(
         {
             "bot_id": settings.telegram_bot_id,
             "origin": origin,
             "request_access": "write",
-            "return_to": telegram_redirect_uri(settings),
+            "return_to": f"{telegram_redirect_uri(settings)}?{urlencode({'state': state})}",
         }
     )
     return f"{TELEGRAM_AUTH_URL}?{query}"
+
+
+def apple_redirect_uri(settings: Settings) -> str:
+    return f"{settings.public_base_url.rstrip('/')}/api/v1/auth/apple/callback"
+
+
+def apple_authorize_url(settings: Settings, state: str, nonce: str) -> str:
+    query = urlencode(
+        {
+            "client_id": settings.apple_client_id,
+            "redirect_uri": apple_redirect_uri(settings),
+            "response_type": "code id_token",
+            "response_mode": "form_post",
+            "scope": "name email",
+            "state": state,
+            "nonce": nonce,
+        }
+    )
+    return f"{APPLE_AUTH_URL}?{query}"
 
 
 async def exchange_google_code(settings: Settings, code: str) -> dict[str, Any]:
@@ -189,3 +213,59 @@ def discord_avatar_url(user: dict[str, Any]) -> str | None:
     if user_id and avatar:
         return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar}.png"
     return None
+
+
+def generate_apple_client_secret(settings: Settings) -> str:
+    if settings.apple_client_secret:
+        return settings.apple_client_secret
+    if not (settings.apple_private_key and settings.apple_key_id and settings.apple_team_id):
+        return ""
+    now = int(time.time())
+    headers = {
+        "kid": settings.apple_key_id,
+        "alg": "ES256",
+    }
+    payload = {
+        "iss": settings.apple_team_id,
+        "iat": now,
+        "exp": now + 86400 * 30,
+        "aud": "https://appleid.apple.com",
+        "sub": settings.apple_client_id,
+    }
+    private_key = settings.apple_private_key
+    if "\\n" in private_key:
+        private_key = private_key.replace("\\n", "\n")
+    return jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+
+
+def verify_apple_id_token(settings: Settings, id_token: str) -> dict[str, Any]:
+    signing_key = _apple_jwk_client.get_signing_key_from_jwt(id_token)
+    return jwt.decode(
+        id_token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=settings.apple_client_id,
+        issuer="https://appleid.apple.com",
+        options={"verify_exp": True},
+    )
+
+
+async def exchange_apple_code(settings: Settings, code: str) -> dict[str, Any]:
+    client_secret = generate_apple_client_secret(settings)
+    if not client_secret:
+        raise ValueError("Apple client secret is not configured")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            APPLE_TOKEN_URL,
+            data={
+                "client_id": settings.apple_client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": apple_redirect_uri(settings),
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response.raise_for_status()
+        return response.json()
+

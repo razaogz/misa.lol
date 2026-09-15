@@ -6,8 +6,8 @@ from app.db import admin_db
 from app.db.dragonfly import get_dragonfly
 
 RANGES = {"7D": 7, "30D": 30, "ALL": None}
-METRICS = {"views", "clicks"}
-SORTS = {"latest", "popular"}
+METRICS = {"views"}
+SORTS = {"popular"}
 LIMIT = 50
 CACHE_TTL = 45
 
@@ -24,16 +24,15 @@ def _public_row(rank: int, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def leaderboard(range_key: str, metric: str, sort_key: str = "popular", viewer_id: str | None = None) -> dict[str, Any]:
+async def leaderboard(range_key: str, metric: str = "views", sort_key: str = "popular", viewer_id: str | None = None) -> dict[str, Any]:
     window = range_key.upper() if range_key.upper() in RANGES else "7D"
-    kind = metric if metric in METRICS else "views"
-    ordering = sort_key if sort_key in SORTS else "popular"
+    kind = "views"
     days = RANGES[window]
     start = None if days is None else datetime.now(timezone.utc) - timedelta(days=days)
-    rows = await _cached_latest_rows() if ordering == "latest" else await _cached_rows(window, kind, start)
+    rows = await _cached_rows(window, kind, start)
     entries = [_public_row(index + 1, row) for index, row in enumerate(rows)]
     you = None
-    if viewer_id and ordering == "popular":
+    if viewer_id:
         index = next((i for i, row in enumerate(rows) if str(row.get("user_id")) == viewer_id), None)
         if index is not None:
             you = entries[index]
@@ -48,25 +47,7 @@ async def leaderboard(range_key: str, metric: str, sort_key: str = "popular", vi
                     "clicks": score["clicks"],
                     "avatar": f"/api/v1/profile/{score['username']}/assets/avatar",
                 }
-    return {"range": window, "metric": kind, "sort": ordering, "entries": entries, "you": you}
-
-
-async def _cached_latest_rows() -> list[dict[str, Any]]:
-    key = "leaderboard:latest"
-    try:
-        raw = await get_dragonfly().get(key)
-        if raw:
-            data = json.loads(raw)
-            if isinstance(data, list):
-                return data
-    except (RuntimeError, OSError, json.JSONDecodeError):
-        pass
-    rows = await admin_db.latest_profile_rows(LIMIT)
-    try:
-        await get_dragonfly().set(key, json.dumps(rows), ex=CACHE_TTL)
-    except (RuntimeError, OSError, TypeError):
-        pass
-    return rows
+    return {"range": window, "metric": kind, "sort": "popular", "entries": entries, "you": you}
 
 
 async def _cached_rows(window: str, kind: str, start: datetime | None) -> list[dict[str, Any]]:

@@ -6,8 +6,8 @@ export type SocialPlatform =
   | "Patreon" | "Bitcoin" | "Ethereum" | "Litecoin" | "Solana" | "Email" | "Custom URL";
 
 export type BadgeName = "Verified" | "Premium" | "Staff" | "Helper" | "Donor" | "Gifter" | "OG" | "Server Booster" | "Bug Hunter" | "Winner" | "Second Place" | "Third Place";
-export type BackgroundEffect = "None" | "Particles" | "Stars" | "Glow" | "Aurora" | "Waves" | "Embers" | "Rain";
-export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Neon" | "Wave" | "Shadow";
+export type BackgroundEffect = "None" | "Rain" | "Raindrops" | "Snow" | "Snowflakes" | "Stars" | "Ocean waves" | "Old TV" | "Sun effect" | "Paper texture";
+export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Wave" | "Shadow";
 export type SocialAlign = "left" | "center" | "right";
 export type SocialAction = "open" | "copy";
 export type ProfileLayout = "Modern" | "Simplistic" | "Sleek";
@@ -115,6 +115,7 @@ export interface ProfileConfig {
     showBadges: boolean;
     showSocials: boolean;
     showJoinDate?: boolean;
+    showDiscordStatus?: boolean;
     socialAlign?: SocialAlign;
     cardAlign?: SocialAlign;
     showProfileFrame?: boolean;
@@ -181,8 +182,11 @@ export interface ProfileConfig {
   sections: ProfileSection[];
   discord?: {
     avatar?: string | null;
+    accountAvatar?: string | null;
+    username?: string | null;
+    globalName?: string | null;
     decoration?: string | null;
     guildTag?: { tag: string; badge: string } | null;
-    status?: string | null;
+    status?: "online" | "idle" | "dnd" | "offline" | null;
   };
 }

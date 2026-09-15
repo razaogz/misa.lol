@@ -14,7 +14,7 @@ async def public_leaderboard(
     request: Request,
     range: Annotated[str, Query(min_length=2, max_length=8)] = "7D",
     metric: Annotated[str, Query(min_length=5, max_length=6)] = "views",
-    sort: Annotated[str, Query(min_length=6, max_length=7)] = "popular",
+    sort: Annotated[str, Query(min_length=7, max_length=7)] = "popular",
 ) -> dict[str, Any]:
     try:
         await rate_limit(f"rl:leaderboard:{client_ip(request)}", 30, 60)

@@ -2,24 +2,43 @@
 
 import { AtSign, BadgeCheck, Sparkles, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ProfileMusicPlayer } from "@/components/profile/ProfileMusicPlayer";
+import { ProfileMusicPlayer, ProfileVideoAudioControl } from "@/components/profile/ProfileMusicPlayer";
 import { ProfileSections } from "@/components/profile/ProfileSections";
 import { ProfileWidgets } from "@/components/profile/ProfileWidgets";
 import { SocialLinks } from "@/components/socials/SocialLinks";
 import { badgePaint, hasVerifiedBadge } from "@/lib/badges";
 import { avatarRadius, formatJoinDate } from "@/lib/profile-layout";
 import { useAuth } from "@/lib/auth-store";
-import { playlistTracks, resolvedAudioSource } from "@/lib/audio";
-import { useDiscordLive } from "@/lib/discord-live";
+import { usesBackgroundVideoAudio, usesUploadedProfileAudio } from "@/lib/audio";
+import { DISCORD_STATUS_COLORS, DISCORD_STATUS_LABELS, DiscordStatusGlyph, type DiscordPresence, useDiscordLive } from "@/lib/discord-live";
 import type { ProfileConfig } from "@/lib/types";
 import { bioLines, nameTracking, typeMs, typeSize, usernameEffectClass } from "@/lib/typography";
 
 function useCardDiscord(config: ProfileConfig) {
-  const live = useDiscordLive()?.state?.card;
+  const live = useDiscordLive();
   const username = useAuth().user?.username;
-  if (config.discord?.avatar || config.discord?.decoration || config.discord?.guildTag) return config.discord;
-  if (username && username === config.profile.username) return live;
+  const fromConfig = config.discord;
+  if (fromConfig?.avatar || fromConfig?.accountAvatar || fromConfig?.decoration || fromConfig?.guildTag || fromConfig?.status || fromConfig?.username || fromConfig?.globalName) return fromConfig;
+  if (username && username === config.profile.username && live?.state) {
+    return {
+      ...live.state.card,
+      username: live.state.card.username || live.state.username,
+      status: live.state.prefs.showStatus === false ? undefined : live.state.status,
+    };
+  }
   return undefined;
+}
+function DiscordStatusBadge({ status }: { status?: string | null }) {
+  if (!status || !(status in DISCORD_STATUS_COLORS)) return null;
+  return (
+    <span
+      className="absolute bottom-0.5 right-0.5 z-[4] h-[22%] w-[22%] min-h-3 min-w-3"
+      title={`Discord ${status}`}
+      aria-label={`Discord ${status}`}
+    >
+      <DiscordStatusGlyph status={status as DiscordPresence} className="block h-full w-full" />
+    </span>
+  );
 }
 
 export function ProfileAvatar({ config, className = "" }: { config: ProfileConfig; className?: string }) {
@@ -35,6 +54,7 @@ export function ProfileAvatar({ config, className = "" }: { config: ProfileConfi
         {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : config.profile.displayName.slice(0, 1)}
       </div>
       {discord?.decoration && <img src={discord.decoration} alt="" className="pointer-events-none absolute inset-[-18%] z-[3] h-[136%] w-[136%] max-w-none" />}
+      <DiscordStatusBadge status={discord?.status} />
     </div>
   );
 }
@@ -65,9 +85,9 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   const s = config.settings;
   const name = config.profile.displayName;
   const effect = s.usernameEffect;
-  const [typed, setTyped] = useState(effect === "Typewriter" ? "" : name);
+  const [typed, setTyped] = useState(effect === "Typewriter" || effect === "Shuffle" ? "" : name);
   useEffect(() => {
-    if (effect !== "Typewriter") { setTyped(name); return; }
+    if (effect !== "Typewriter" && effect !== "Shuffle") { setTyped(name); return; }
     setTyped("");
     if (effect === "Typewriter") {
       let index = 0;
@@ -94,7 +114,7 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   const effectColor = s.usernameEffectColor || s.accentColor || "#e11d48";
   const gradientEffect = effect === "Gradient" || effect === "Typewriter" || effect === "Shimmer" || effect === "Rainbow";
   const effectClass = usernameEffectClass(effect);
-  const rainbow = effect === "Rainbow" ? { backgroundImage: "linear-gradient(90deg, " + usernameColor + ", " + effectColor + ", #ffd166, " + usernameColor + ")", backgroundSize: "200% 100%" } : {};
+  const rainbow = effect === "Rainbow" ? { backgroundImage: "linear-gradient(90deg, #ff3b6b, #ffcf4a, #61e294, #55b8ff, #b887ff, #ff3b6b)", backgroundSize: "200% 100%" } : {};
   const outlineShadow = effect === "Outline"
     ? "-1px -1px 0 " + effectColor + ", 1px -1px 0 " + effectColor + ", -1px 1px 0 " + effectColor + ", 1px 1px 0 " + effectColor
     : undefined;
@@ -104,9 +124,9 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
       style={{
         fontSize: typeSize(s.fontSize) + 8,
         letterSpacing: nameTracking(s.letterSpacing),
-        fontFamily: s.profileFontScope === "name" ? "var(--misa-profile-font)" : undefined,
+        fontFamily: "var(--misa-profile-font)",
         color: gradientEffect ? undefined : effect === "Outline" ? "transparent" : usernameColor,
-        textShadow: outlineShadow || (s.usernameGlow || effect === "Glow" || effect === "Neon" ? "0 0 24px " + effectColor + "aa" : undefined),
+        textShadow: outlineShadow || (s.usernameGlow || effect === "Glow" ? "0 0 24px " + effectColor + "aa" : undefined),
         ["--username-color" as string]: usernameColor,
         ["--effect-color" as string]: effectColor,
         ...rainbow,
@@ -201,10 +221,55 @@ export function ProfileMeta({ config, align = "center" }: { config: ProfileConfi
   );
 }
 
+function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
+  const discord = useCardDiscord(config);
+  const src = discord?.accountAvatar || undefined;
+  if (!src && !discord?.status) return null;
+  const swap = Boolean(config.settings.widgetColorSwap);
+  const ink = config.settings.backgroundColor;
+  const accent = config.settings.accentColor;
+  const status = discord?.status && discord.status in DISCORD_STATUS_COLORS ? discord.status as DiscordPresence : null;
+  const discordName = (discord?.globalName || discord?.username || "").trim();
+  const statusLabel = status ? DISCORD_STATUS_LABELS[status] : "";
+  return (
+    <div
+      className={`relative flex min-h-0 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl border px-2 pb-3 pt-8 ${swap ? "" : "border-white/[.1] bg-black/25"}`}
+      style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}
+    >
+      <p className={`absolute left-1 right-1 top-2.5 text-center text-[10px] font-semibold leading-tight tracking-wide ${swap ? "" : "text-white/80"}`}>Discord Status</p>
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="relative h-11 w-11 shrink-0">
+          {src ? (
+            <img src={src} alt="" className="h-full w-full rounded-full object-cover" />
+          ) : (
+            <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
+              {(discordName || config.profile.displayName).slice(0, 1)}
+            </div>
+          )}
+          {status && (
+            <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4">
+              <DiscordStatusGlyph status={status} className="block h-full w-full" />
+            </span>
+          )}
+        </div>
+        {discordName ? <p className={`max-w-full truncate text-center text-[11px] font-semibold leading-tight ${swap ? "" : "text-white"}`}>{discordName}</p> : null}
+        {statusLabel ? <p className={`max-w-full text-center text-[9px] leading-tight ${swap ? "opacity-70" : "text-white/55"}`}>{statusLabel}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
-  // Enabled selects the background video's audio; disabled selects the
-  // separately uploaded profile audio.
-  const hasPlaylist = playlistTracks(config.assets).length > 0 && resolvedAudioSource(config.assets) !== "video";
+  const discord = useCardDiscord(config);
+  const showDiscordTile = config.settings.showDiscordStatus !== false && Boolean(discord?.accountAvatar || discord?.status);
+  const hasVideoAudio = usesBackgroundVideoAudio(config.assets);
+  const hasPlaylist = usesUploadedProfileAudio(config.assets);
+  const audio = (
+    <>
+      {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
+      {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} />}
+    </>
+  );
   return (
     <div style={{ textAlign: align }}>
       <ProfileBio config={config} align={align} />
@@ -212,7 +277,18 @@ export function ProfileModules({ config, preview, align = "center" }: { config: 
       <SocialLinks config={config} />
       <ProfileWidgets config={config} preview={preview} />
       <ProfileSections config={config} preview={preview} />
-      {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} />}
+      {showDiscordTile && (hasPlaylist || hasVideoAudio) ? (
+        <div className="mt-6 flex items-stretch gap-2.5">
+          <DiscordPresenceTile config={config} />
+          <div className="min-w-0 flex-1 [&>div]:mt-0">{audio}</div>
+        </div>
+      ) : showDiscordTile ? (
+        <div className="mt-6 flex items-stretch gap-2.5">
+          <DiscordPresenceTile config={config} />
+        </div>
+      ) : (
+        audio
+      )}
       <ProfileMeta config={config} align={align} />
     </div>
   );

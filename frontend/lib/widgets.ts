@@ -1,4 +1,4 @@
-import type { ProfileWidget, ResolvedWidget, WidgetType } from "./types";
+﻿import type { ProfileWidget, ResolvedWidget, WidgetType } from "./types";
 
 export const MAX_WIDGETS = 8;
 
@@ -72,6 +72,19 @@ export function emptyResolvedWidget(widget: ProfileWidget, status: ResolvedWidge
     status,
     title: widgetLabel(widget.type),
     subtitle: status === "error" ? "Could not load this widget." : "Add a value in Customize.",
+    image: null,
+    href: null,
+  };
+}
+
+export function previewResolvedWidget(widget: ProfileWidget): ResolvedWidget {
+  const value = widget.value.trim();
+  return {
+    id: widget.id,
+    type: widget.type,
+    status: value ? "ok" : "empty",
+    title: widgetLabel(widget.type),
+    subtitle: value || "Add a value in Customize.",
     image: null,
     href: null,
   };

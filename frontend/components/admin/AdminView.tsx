@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { Ban, Database, Flag, KeyRound, Search, ShieldCheck, ShieldOff, Type, Upload, Users } from "lucide-react";
 import { Button, FieldLabel, Modal, PageHeader, SectionTitle, TextInput } from "@/components/ui";
 import { BADGE_CATALOG } from "@/lib/badges";
@@ -16,6 +16,10 @@ type AdminSession = { id: string; email: string; name: string; role: string; per
 const SECTION_TABS: Tab[] = ["users", "bans", "reserved", "banned", "badges", "premium", "reports", "flags", "bakaboost", "themes", "templates", "fonts", "audit"];
 const tabs: Array<[Tab, string]> = [["users", "Users"], ["bans", "Bans"], ["reserved", "Reserved names"], ["banned", "Banned words"], ["badges", "Badges"], ["premium", "Premium"], ["reports", "Reports"], ["flags", "Feature flags"], ["bakaboost", "BakaBoost"], ["themes", "Themes"], ["templates", "Templates"], ["fonts", "Default fonts"], ["audit", "Audit logs"], ["staff", "Staff"], ["roles", "Roles"]];
 
+function adminLoginPath(): string {
+  const host = window.location.hostname;
+  return host === "misa.lol" || host === "www.misa.lol" ? "/login" : "/m/login";
+}
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`/api/v1/admin${path}`, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
   const body = await response.json().catch(() => ({})) as { detail?: string; error?: string };
@@ -25,7 +29,7 @@ async function api(path: string, init?: RequestInit) {
 
 export function AdminView() {
   const t = useT();
-  const router = useRouter();
+
   const [admin, setAdmin] = useState<AdminSession | null>(null);
   const [adminReady, setAdminReady] = useState(false);
   const [tab, setTab] = useState<Tab>("users");
@@ -44,16 +48,16 @@ export function AdminView() {
       .then((currentAdmin) => {
         if (cancelled) return;
         if (!currentAdmin) {
-          router.replace("/admin/login");
+          window.location.replace(adminLoginPath());
           return;
         }
         setAdmin(currentAdmin);
         setAdminReady(true);
       })
-      .catch(() => { if (!cancelled) router.replace("/admin/login"); })
+      .catch(() => { if (!cancelled) window.location.replace(adminLoginPath()); })
       .finally(() => { if (!cancelled) setAdminReady(true); });
     return () => { cancelled = true; };
-  }, [router]);
+  }, []);
   useEffect(() => {
     if (!adminReady || !admin) return;
     void api("/access").then((r) => {

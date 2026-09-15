@@ -19,6 +19,8 @@ DISCORD_CDN = "https://cdn.discordapp.com"
 SNOWFLAKE = re.compile(r"^\d{16,22}$")
 ASSET = re.compile(r"^[a-zA-Z0-9_]{8,80}$")
 CACHE_TTL = 60
+PRESENCE_KEY_PREFIX = "discord:presence:"
+PRESENCE_STATUSES = {"online", "idle", "dnd", "offline"}
 
 
 def _fernet(settings: Settings | None = None) -> Fernet:
@@ -46,10 +48,16 @@ def can_unlink_discord(user: User) -> bool:
 
 
 def discord_avatar_cdn(user_id: str, avatar: str) -> str | None:
-    if not SNOWFLAKE.fullmatch(user_id) or not ASSET.fullmatch(avatar):
+    if not SNOWFLAKE.fullmatch(user_id):
         return None
-    ext = "gif" if avatar.startswith("a_") else "png"
-    return f"{DISCORD_CDN}/avatars/{user_id}/{avatar}.{ext}?size=256"
+    if avatar and ASSET.fullmatch(avatar):
+        ext = "gif" if avatar.startswith("a_") else "png"
+        return f"{DISCORD_CDN}/avatars/{user_id}/{avatar}.{ext}?size=256"
+    try:
+        index = (int(user_id) >> 22) % 6
+    except ValueError:
+        return None
+    return f"{DISCORD_CDN}/embed/avatars/{index}.png"
 
 
 def discord_decoration_cdn(asset: str) -> str | None:
@@ -78,6 +86,7 @@ def parse_discord_card(user: dict[str, Any]) -> dict[str, Any]:
         guild = {"tag": tag, "badge": badge}
     return {
         "username": str(user.get("username") or "")[:32],
+        "globalName": str(user.get("global_name") or "")[:32],
         "avatar": avatar,
         "decoration": decoration,
         "guildTag": guild,
@@ -86,10 +95,27 @@ def parse_discord_card(user: dict[str, Any]) -> dict[str, Any]:
 
 def apply_discord_prefs(card: dict[str, Any], prefs: dict[str, Any]) -> dict[str, Any]:
     return {
+        "username": card.get("username") or "",
+        "globalName": card.get("globalName") or "",
         "avatar": card.get("avatar") if prefs.get("show_avatar") else None,
+        "accountAvatar": card.get("avatar"),
         "decoration": card.get("decoration") if prefs.get("show_decoration") else None,
         "guildTag": card.get("guildTag") if prefs.get("show_guild_tag") else None,
     }
+
+
+def normalize_presence_status(value: object) -> str | None:
+    status = str(value or "").strip().lower()
+    if status == "invisible":
+        status = "offline"
+    return status if status in PRESENCE_STATUSES else None
+
+
+def discord_server_invite_url(settings: Settings | None = None) -> str:
+    text = str((settings or get_settings()).discord_server_invite or "").strip()
+    if text.startswith("https://discord.gg/") or text.startswith("https://discord.com/invite/"):
+        return text[:160]
+    return ""
 
 
 def empty_discord_state(user: User) -> dict[str, Any]:
@@ -98,9 +124,46 @@ def empty_discord_state(user: User) -> dict[str, Any]:
         "needsReconnect": False,
         "canDisconnect": False,
         "username": "",
-        "prefs": {"showAvatar": False, "showDecoration": False, "showGuildTag": False},
-        "card": {"avatar": None, "decoration": None, "guildTag": None},
+        "status": None,
+        "serverInvite": discord_server_invite_url(),
+        "prefs": {"showAvatar": False, "showDecoration": False, "showGuildTag": False, "showStatus": False},
+        "card": {"username": "", "globalName": "", "avatar": None, "accountAvatar": None, "decoration": None, "guildTag": None, "status": None},
     }
+
+
+async def get_discord_presence(discord_id: str | None) -> str | None:
+    user_id = str(discord_id or "").strip()
+    if not SNOWFLAKE.fullmatch(user_id):
+        return None
+    try:
+        raw = await get_dragonfly().get(f"{PRESENCE_KEY_PREFIX}{user_id}")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return normalize_presence_status(data.get("status"))
+
+
+async def _with_presence(user: User, state: dict[str, Any]) -> dict[str, Any]:
+    prefs = state.get("prefs") if isinstance(state.get("prefs"), dict) else {}
+    show = bool(prefs.get("showStatus", True))
+    presence = await get_discord_presence(user.discord_id) if show else None
+    next_state = dict(state)
+    next_state["status"] = presence
+    next_state["serverInvite"] = discord_server_invite_url()
+    card = dict(next_state.get("card") or {})
+    if presence:
+        card["status"] = presence
+    else:
+        card.pop("status", None)
+    next_state["card"] = card
+    return next_state
 
 
 async def _cache_get(user_id: str) -> dict[str, Any] | None:
@@ -182,14 +245,18 @@ async def live_discord_state(user: User) -> dict[str, Any]:
     if not user.discord_id:
         return empty_discord_state(user)
     cached = await _cache_get(user.id)
+    cached_card = cached.get("card") if isinstance(cached, dict) else None
+    if cached and not cached.get("needsReconnect") and isinstance(cached_card, dict) and ("username" not in cached_card or not cached_card.get("accountAvatar")):
+        cached = None
     if cached:
         cached["canDisconnect"] = can_unlink_discord(user)
-        return cached
+        return await _with_presence(user, cached)
     link = await data_api.get_discord_link(user.id)
     prefs = {
         "showAvatar": True if not link else bool(link.get("show_avatar", True)),
         "showDecoration": True if not link else bool(link.get("show_decoration", True)),
         "showGuildTag": True if not link else bool(link.get("show_guild_tag", True)),
+        "showStatus": True if not link else bool(link.get("show_status", True)),
     }
     if link is None:
         state = {
@@ -198,10 +265,10 @@ async def live_discord_state(user: User) -> dict[str, Any]:
             "canDisconnect": can_unlink_discord(user),
             "username": "",
             "prefs": prefs,
-            "card": {"avatar": None, "decoration": None, "guildTag": None},
+            "card": {"username": "", "globalName": "", "avatar": None, "accountAvatar": None, "decoration": None, "guildTag": None},
         }
         await _cache_set(user.id, state)
-        return state
+        return await _with_presence(user, state)
     settings = get_settings()
     refresh = decrypt_secret(str(link.get("refresh_token") or ""), settings)
     access = decrypt_secret(str(link.get("access_token") or ""), settings) if _access_valid(link) else None
@@ -224,6 +291,7 @@ async def live_discord_state(user: User) -> dict[str, Any]:
                 show_avatar=bool(link.get("show_avatar", True)),
                 show_decoration=bool(link.get("show_decoration", True)),
                 show_guild_tag=bool(link.get("show_guild_tag", True)),
+                show_status=bool(link.get("show_status", True)),
             )
     me = await _fetch_me(access) if access else None
     if me is None:
@@ -233,10 +301,10 @@ async def live_discord_state(user: User) -> dict[str, Any]:
             "canDisconnect": can_unlink_discord(user),
             "username": "",
             "prefs": prefs,
-            "card": {"avatar": None, "decoration": None, "guildTag": None},
+            "card": {"username": "", "globalName": "", "avatar": None, "accountAvatar": None, "decoration": None, "guildTag": None},
         }
         await _cache_set(user.id, state)
-        return state
+        return await _with_presence(user, state)
     card = parse_discord_card(me)
     state = {
         "connected": True,
@@ -251,7 +319,7 @@ async def live_discord_state(user: User) -> dict[str, Any]:
         }),
     }
     await _cache_set(user.id, state)
-    return state
+    return await _with_presence(user, state)
 
 
 async def store_discord_session(user_id: str, discord_id: str, tokens: dict[str, Any], settings: Settings | None = None) -> None:
@@ -271,17 +339,29 @@ async def store_discord_session(user_id: str, discord_id: str, tokens: dict[str,
         show_avatar=False if existing is None else bool(existing.get("show_avatar", True)),
         show_decoration=False if existing is None else bool(existing.get("show_decoration", True)),
         show_guild_tag=False if existing is None else bool(existing.get("show_guild_tag", True)),
+        show_status=True if existing is None else bool(existing.get("show_status", True)),
     )
     await invalidate_discord_cache(user_id)
 
 
 async def public_card_discord(user: User) -> dict[str, Any]:
     state = await live_discord_state(user)
-    if not state.get("connected") or state.get("needsReconnect"):
+    if not state.get("connected"):
         return {}
     card = state.get("card") if isinstance(state.get("card"), dict) else {}
     payload = {key: value for key, value in card.items() if value}
     return payload
+
+
+async def public_presence_for_user(user: User) -> str | None:
+    if not user.discord_id:
+        user.discord_id = await data_api.get_user_discord_id(user.id)
+    if not user.discord_id:
+        return None
+    link = await data_api.get_discord_link(user.id)
+    if link is not None and not bool(link.get("show_status", True)):
+        return None
+    return await get_discord_presence(user.discord_id)
 
 
 def safe_discord_img(url: object) -> str:

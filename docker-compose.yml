@@ -51,7 +51,8 @@ services:
       MISA_DEBUG: "false"
       MISA_DOMAIN: "${MISA_DOMAIN:-misa.lol}"
       MISA_PUBLIC_BASE_URL: "${MISA_PUBLIC_BASE_URL:-https://misa.lol}"
-      MISA_CORS_ORIGINS: "${MISA_CORS_ORIGINS:-https://misa.lol,https://www.misa.lol}"
+      MISA_ADMIN_PUBLIC_URL: "${MISA_ADMIN_PUBLIC_URL:-https://ukvhq.dev/m}"
+      MISA_CORS_ORIGINS: "${MISA_CORS_ORIGINS:-https://misa.lol,https://www.misa.lol,https://ukvhq.dev}"
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
       MISA_ADMIN_USER_IDS: "${MISA_ADMIN_USER_IDS:-}"
       SUPER_ADMIN_EMAIL: "${SUPER_ADMIN_EMAIL:?Set SUPER_ADMIN_EMAIL in .env}"
@@ -67,6 +68,7 @@ services:
       MISA_GOOGLE_CLIENT_SECRET: "${MISA_GOOGLE_CLIENT_SECRET:-}"
       MISA_DISCORD_CLIENT_ID: "${MISA_DISCORD_CLIENT_ID:-}"
       MISA_DISCORD_CLIENT_SECRET: "${MISA_DISCORD_CLIENT_SECRET:-}"
+      MISA_DISCORD_SERVER_INVITE: "${MISA_DISCORD_SERVER_INVITE:-}"
       MISA_TELEGRAM_BOT_TOKEN: "${MISA_TELEGRAM_BOT_TOKEN:-}"
       MISA_TELEGRAM_BOT_USERNAME: "${MISA_TELEGRAM_BOT_USERNAME:-}"
       MISA_TURNSTILE_SITE_KEY: "${MISA_TURNSTILE_SITE_KEY:-}"
@@ -112,6 +114,22 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  discord-bot:
+    build:
+      context: ./backend/discord-bot
+    restart: unless-stopped
+    environment:
+      MISA_DISCORD_BOT_TOKEN: "${MISA_DISCORD_BOT_TOKEN:-}"
+      MISA_DISCORD_GUILD_ID: "${MISA_DISCORD_GUILD_ID:-}"
+      DRAGONFLY_URL: redis://dragonfly:6379/0
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    depends_on:
+      dragonfly:
+        condition: service_started
+    networks:
+      - data
+      - egress
 
   dragonfly:
     image: docker.dragonflydb.io/dragonflydb/dragonfly

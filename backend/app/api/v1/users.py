@@ -193,11 +193,13 @@ async def change_email(
     _require_current_password(user, payload.password)
     await rate_limit(f"rl:email-change:{user.id}", 5, 86400)
     email = normalize_email(str(payload.email))
-    if email == normalize_email(user.email or ""):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That is already this account's email.")
-    existing = await data_api.find_user(email=email)
-    if existing and existing.id != user.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already used.")
+    same_email = email == normalize_email(user.email or "")
+    if same_email and user.email_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is already confirmed.")
+    if not same_email:
+        existing = await data_api.find_user(email=email)
+        if existing and existing.id != user.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already used.")
     if not mailer_configured(settings):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Email confirmation is not configured.")
     token = await put_email_change(user.id, email)

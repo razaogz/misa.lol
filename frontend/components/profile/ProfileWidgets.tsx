@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProfileConfig, ProfileWidget, ResolvedWidget } from "@/lib/types";
-import { emptyResolvedWidget, widgetLabel } from "@/lib/widgets";
+import { emptyResolvedWidget, previewResolvedWidget, widgetLabel } from "@/lib/widgets";
 
 export function ProfileWidgets({ config, preview = false }: { config: ProfileConfig; preview?: boolean }) {
   const widgets = useMemo(() => (config.widgets || []).filter((item) => item.enabled), [config.widgets]);
@@ -31,8 +31,18 @@ export function ProfileWidgets({ config, preview = false }: { config: ProfileCon
               body: JSON.stringify({ widgets }),
             })
           : await fetch(`/api/v1/profile/${encodeURIComponent(config.profile.username)}/widgets`, { cache: "no-store" });
+        if (!response.ok) {
+          // Local preview can run without a signed-in API session. Keep the
+          // cards visible there; live profiles still use the backend resolver.
+          if (preview) {
+            if (!cancelled) setResolved(widgets.map(previewResolvedWidget));
+            return;
+          }
+          throw new Error(`Widget request failed (${response.status})`);
+        }
         const data = await response.json() as { widgets?: ResolvedWidget[] };
-        if (!cancelled) setResolved(Array.isArray(data.widgets) ? data.widgets : []);
+        if (!Array.isArray(data.widgets)) throw new Error("Widget response was invalid");
+        if (!cancelled) setResolved(data.widgets);
       } catch {
         if (!cancelled) setResolved(widgets.map((item) => emptyResolvedWidget(item, "error")));
       } finally {

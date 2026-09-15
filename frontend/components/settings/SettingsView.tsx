@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, CircleHelp, LockKeyhole, UserRound } from "lucide-react";
+import { Check, CircleHelp, LockKeyhole, UserRound, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LanguageSelect } from "@/components/dashboard/LanguageSelect";
 import { useAuth } from "@/lib/auth-store";
@@ -48,6 +48,17 @@ export function SettingsView() {
           <div><FieldLabel>{t("settings.username")}</FieldLabel><div className="flex gap-2"><TextInput value={username} onChange={(value) => { setUsername(value); setConfirmChange(false); }} placeholder="yourname" /><Button variant={confirmChange ? "accent" : "subtle"} className="shrink-0" disabled={usernameBusy} onClick={() => void claimUsername()}>{usernameBusy ? t("common.saving") : user?.username ? (confirmChange ? t("common.confirm") : t("common.change")) : t("common.claim")}</Button></div><p className="mt-2 text-xs text-zinc-600">{t("settings.usernameHelp")} <Link href="/help?article=change-username" className="text-[#fda4af] hover:text-white">{t("settings.usernameHow")}</Link></p>{usernameMessage && <p className={`mt-2 text-xs ${usernameError ? "text-red-300" : "text-zinc-500"}`}>{usernameMessage}</p>}</div>
           <div><FieldLabel>{t("settings.displayName")}</FieldLabel><TextInput value={displayName} onChange={setDisplayName} /></div>
           <div><FieldLabel>{t("language.label")}</FieldLabel><LanguageSelect /><p className="mt-2 text-xs text-zinc-600">{t("language.hint")}</p></div>
+        </div>
+      </section>
+      <section id="aliases" className="scroll-mt-8">
+        <SectionTitle icon={UsersRound} title={t("settings.aliasesTitle", undefined, "Aliases")} description={t("settings.aliasesDesc", undefined, "Manage additional names that redirect to your profile.")} />
+        <div className="surface flex items-center gap-4 rounded-2xl p-5 sm:p-6">
+          <span className="icon-glass flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-zinc-400"><UsersRound size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-zinc-200">{t("settings.aliasesComingSoon", undefined, "Alias management is coming soon.")}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-600">{t("settings.aliasesComingSoonHint", undefined, "Your main username remains active; additional aliases are not available yet.")}</p>
+          </div>
+          <Button variant="subtle" disabled className="shrink-0">{t("common.comingSoon", undefined, "Coming soon")}</Button>
         </div>
       </section>
       <section>

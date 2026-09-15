@@ -10,14 +10,17 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.core.config import Settings, get_settings
 from app.core.oauth import (
+    apple_authorize_url,
     discord_authorize_url,
     discord_avatar_url,
+    exchange_apple_code,
     exchange_google_code,
     fetch_discord_user,
     google_authorize_url,
     pop_oauth_state,
     save_oauth_state,
     telegram_authorize_url,
+    verify_apple_id_token,
 )
 from app.core.rate_limit import limit_auth
 from app.core.turnstile import verify_turnstile
@@ -141,6 +144,7 @@ async def providers(settings: SettingsDep) -> dict:
         "google": settings.google_enabled,
         "discord": settings.discord_enabled,
         "telegram": settings.telegram_enabled,
+        "apple": settings.apple_enabled,
         "turnstile_site_key": settings.turnstile_site_key,
     }
 
@@ -397,3 +401,112 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
         telegram_username=payload.get("username"),
         next_path="/dashboard",
     )
+
+
+@router.get("/apple")
+async def apple_start(
+    request: Request,
+    settings: SettingsDep,
+    next_path: str = Query("/dashboard", alias="next"),
+    mode: str = Query("login"),
+) -> RedirectResponse:
+    await limit_auth(request, "oauth", limit=20, window_seconds=60)
+    if not settings.apple_enabled:
+        return _oauth_error("/login", "apple_not_configured")
+    nonce = secrets.token_urlsafe(24)
+    link = mode == "link"
+    if link and await get_user_from_request(request) is None:
+        return _oauth_error("/login", "not_authenticated")
+    state = await save_oauth_state("apple", safe_next_path(next_path), nonce=nonce)
+    return RedirectResponse(apple_authorize_url(settings, state, nonce), status_code=302)
+
+
+@router.post("/apple/callback")
+@router.get("/apple/callback")
+async def apple_callback(
+    request: Request,
+    settings: SettingsDep,
+) -> RedirectResponse:
+    code = None
+    id_token = None
+    state = None
+    user_json = None
+    error = None
+
+    if request.method == "POST":
+        try:
+            form = await request.form()
+            code = form.get("code")
+            id_token = form.get("id_token")
+            state = form.get("state")
+            user_json = form.get("user")
+            error = form.get("error")
+        except Exception:
+            return _oauth_error("/login", "oauth_failed")
+    else:
+        code = request.query_params.get("code")
+        id_token = request.query_params.get("id_token")
+        state = request.query_params.get("state")
+        error = request.query_params.get("error")
+
+    if error or (not code and not id_token):
+        return _oauth_error("/login", "oauth_denied")
+
+    saved = await pop_oauth_state(state, "apple")
+    if not saved:
+        return _oauth_error("/login", "oauth_failed")
+
+    claims = None
+    if id_token:
+        try:
+            claims = verify_apple_id_token(settings, str(id_token))
+        except Exception:
+            claims = None
+
+    if claims is None and code:
+        try:
+            tokens = await exchange_apple_code(settings, str(code))
+            if tokens.get("id_token"):
+                claims = verify_apple_id_token(settings, str(tokens["id_token"]))
+        except Exception:
+            claims = None
+
+    if not claims:
+        return _oauth_error("/login", "oauth_failed")
+
+    if saved.get("nonce") and claims.get("nonce") and claims.get("nonce") != saved["nonce"]:
+        return _oauth_error("/login", "oauth_failed")
+
+    sub = claims.get("sub")
+    if not sub:
+        return _oauth_error("/login", "oauth_failed")
+
+    email = normalize_email(claims["email"]) if claims.get("email") else None
+    email_verified = bool(claims.get("email_verified")) if email else False
+
+    display_name = None
+    if user_json:
+        try:
+            import json as _json
+            user_data = _json.loads(user_json) if isinstance(user_json, str) else user_json
+            name_obj = user_data.get("name") or {}
+            first = name_obj.get("firstName") or ""
+            last = name_obj.get("lastName") or ""
+            display_name = f"{first} {last}".strip() or None
+        except Exception:
+            pass
+    if not display_name and email:
+        display_name = email.split("@", 1)[0]
+
+    return await _finish_oauth(
+        request,
+        settings,
+        provider="apple",
+        provider_id=str(sub),
+        email=email,
+        email_verified=email_verified,
+        display_name=display_name,
+        avatar_url=None,
+        next_path=safe_next_path(saved.get("next")),
+    )
+

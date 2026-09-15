@@ -134,6 +134,15 @@ async def clear_user_discord_id(user_id: str) -> None:
         return
 
 
+async def clear_user_provider(user_id: str, provider: str) -> User | None:
+    from app.db.admin_db import clear_user_provider as db_clear_user_provider, has_pool
+    if has_pool():
+        await db_clear_user_provider(user_id, provider)
+        return await get_user(user_id)
+    payload = await _request("POST", f"/v1/users/{user_id}/providers/{provider}")
+    return User.from_api(payload) if payload else None
+
+
 async def get_user_id_by_username(username: str) -> str | None:
     from app.db.admin_db import get_user_id_by_username as db_get_user_id_by_username, has_pool
     try:

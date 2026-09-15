@@ -43,6 +43,7 @@ pub struct UserQuery {
     pub google_id: Option<String>,
     pub discord_id: Option<String>,
     pub telegram_id: Option<String>,
+    pub apple_id: Option<String>,
 }
 
 pub async fn find_user(State(state): State<AppState>, Query(query): Query<UserQuery>) -> Response {
@@ -56,6 +57,8 @@ pub async fn find_user(State(state): State<AppState>, Query(query): Query<UserQu
         db::find_by_provider(&state.pool, "discord", id).await
     } else if let Some(id) = query.telegram_id.as_deref() {
         db::find_by_provider(&state.pool, "telegram", id).await
+    } else if let Some(id) = query.apple_id.as_deref() {
+        db::find_by_provider(&state.pool, "apple", id).await
     } else {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "missing_lookup"}))).into_response();
     };
@@ -112,6 +115,17 @@ pub async fn delete_user(State(state): State<AppState>, Path(id): Path<Uuid>) ->
     match db::delete_user(&state.pool, id).await {
         Ok(true) => StatusCode::NO_CONTENT.into_response(),
         Ok(false) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
+        Err(error) => db_error(error),
+    }
+}
+
+pub async fn unlink_provider(State(state): State<AppState>, Path((id, provider)): Path<(Uuid, String)>) -> Response {
+    if !matches!(provider.as_str(), "google" | "telegram") {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "unsupported_provider"}))).into_response();
+    }
+    match db::unlink_provider(&state.pool, id, &provider).await {
+        Ok(Some(user)) => (StatusCode::OK, Json(user_json(&user))).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
         Err(error) => db_error(error),
     }
 }

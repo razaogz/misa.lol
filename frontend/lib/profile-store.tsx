@@ -64,13 +64,24 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     if (!authReady) return;
     let cancelled = false;
     const load = async () => {
-      const next = user ? await loadProfileForUser(user) : cloneMockProfile();
-      if (cancelled) return;
-      const normalized = normalizeProfileSocials(next);
-      setConfig(normalized);
-      lastSavedRef.current = user?.username ? JSON.stringify(normalized) : "";
-      setSaveState("idle");
-      setSaveError("");
+      try {
+        const next = user ? await loadProfileForUser(user) : cloneMockProfile();
+        if (cancelled) return;
+        const normalized = normalizeProfileSocials(next);
+        setConfig(normalized);
+        lastSavedRef.current = user?.username ? JSON.stringify(normalized) : "";
+        setSaveState("idle");
+        setSaveError("");
+      } catch (error) {
+        if (cancelled) return;
+        // A temporary profile/API failure must not tear down the dashboard tree.
+        console.error("Profile hydration failed", error);
+        const fallback = user ? profileForUser(user) : cloneMockProfile();
+        setConfig(normalizeProfileSocials(fallback));
+        lastSavedRef.current = "";
+        setSaveState("error");
+        setSaveError("Your profile could not be loaded. You can keep editing and try saving again.");
+      }
     };
     void load();
     return () => { cancelled = true; };
@@ -133,19 +144,36 @@ const MIME_BY_EXT: Record<string, string> = {
   otf: "font/otf",
 };
 
+export function mimeTypeForFile(file: Pick<File, "name" | "type">) {
+  return file.type || MIME_BY_EXT[file.name.split(".").pop()?.toLowerCase() || ""] || "";
+}
+
 export function assetFromFile(file: File): Promise<ProfileAsset> {
   return new Promise((resolve, reject) => {
+    if (!file || typeof file.size !== "number" || file.size <= 0) {
+      reject(new Error("That file is empty or unavailable. Please choose it again."));
+      return;
+    }
     const reader = new FileReader();
+    const type = mimeTypeForFile(file);
     reader.onload = () => {
       const raw = typeof reader.result === "string" ? reader.result : "";
-      const type = file.type || MIME_BY_EXT[file.name.split(".").pop()?.toLowerCase() || ""] || "";
-      let url = raw || null;
-      if (url?.startsWith("data:") && type.startsWith("font/")) url = url.replace(/^data:[^;,]*/, `data:${type}`);
-      else if (url?.startsWith("data:application/octet-stream") && type) url = url.replace("data:application/octet-stream", `data:${type}`);
+      if (!raw) {
+        reject(new Error("The selected file could not be read. Please try again."));
+        return;
+      }
+      let url: string | null = raw;
+      if (url.startsWith("data:") && type.startsWith("font/")) url = url.replace(/^data:[^;,]*/, `data:${type}`);
+      else if (url.startsWith("data:application/octet-stream") && type) url = url.replace("data:application/octet-stream", `data:${type}`);
       resolve({ url, name: file.name, type });
     };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    reader.onerror = () => reject(reader.error || new Error("The selected file could not be read."));
+    reader.onabort = () => reject(new Error("Reading the selected file was cancelled."));
+    try {
+      reader.readAsDataURL(file);
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error("The selected file could not be read."));
+    }
   });
 }
 
@@ -154,15 +182,20 @@ function profileForUser(user: AuthUser) {
   profile.profile.username = user.username || "choose-username";
   profile.profile.displayName = user.displayName;
   profile.profile.uid = user.id;
-  profile.socials = profile.socials.map((social) => ({ ...social, value: social.value.replaceAll("demo", user.username || "user") }));
+  profile.socials = [];
   return profile;
 }
 
 async function loadProfileForUser(user: AuthUser) {
-  const response = await fetch("/api/v1/profile/me", { credentials: "include", cache: "no-store" });
-  if (response.ok) {
-    const result = await response.json() as { profile?: ProfileConfig };
-    if (result.profile) return normalizeProfileSocials(result.profile);
+  try {
+    const response = await fetch("/api/v1/profile/me", { credentials: "include", cache: "no-store" });
+    if (response.ok) {
+      const result = await response.json() as { profile?: ProfileConfig };
+      if (result.profile) return normalizeProfileSocials(result.profile);
+    }
+  } catch (error) {
+    // Keep the dashboard usable while the API or proxy is restarting.
+    console.warn("Profile API unavailable; using the local profile fallback", error);
   }
   return profileForUser(user);
 }

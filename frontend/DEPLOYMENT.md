@@ -64,11 +64,15 @@ Discord:  https://misa.lol/api/v1/auth/discord/callback
 Telegram: https://misa.lol/api/v1/auth/telegram/callback
 ```
 
-For Turnstile, add `misa.lol` and `www.misa.lol` as allowed hostnames. For Google, register `https://misa.lol` as an authorized JavaScript origin. For Discord, add the callback under OAuth2 redirect URLs. For Telegram, create the bot with BotFather, use `/setdomain` for `misa.lol`, and use the resulting bot username and token in the backend environment.
+For Turnstile, add `misa.lol`, `www.misa.lol`, and `ukvhq.dev` as allowed hostnames. For Google, register `https://misa.lol` as an authorized JavaScript origin. For Discord, add the callback under OAuth2 redirect URLs. For Telegram, create the bot with BotFather, use `/setdomain` for `misa.lol`, and use the resulting bot username and token in the backend environment.
 
 Keep `MISA_PUBLIC_BASE_URL=https://misa.lol` even when the API is hosted at `api.misa.lol`: the frontend proxy receives the callback and the session cookie must be issued for the main site.
 
 After restarting the backend, check `/api/v1/auth/providers`. Its `google`, `discord`, and `telegram` fields should be `true`; it should return the Turnstile site key, but never return any secret key.
+
+## Admin host separation
+
+The public site remains at `https://misa.lol`. The admin UI is served at `https://ukvhq.dev/m` through the same Caddy/API/Next deployment. Set `MISA_ADMIN_PUBLIC_URL=https://ukvhq.dev/m`, keep `MISA_PUBLIC_BASE_URL=https://misa.lol`, and include `https://ukvhq.dev` in `MISA_CORS_ORIGINS`. The admin session cookie remains host-only, so it is not sent to the public site.
 
 ## Before launch
 
@@ -76,6 +80,6 @@ After restarting the backend, check `/api/v1/auth/providers`. Its `google`, `dis
 - Configure DNS for `misa.lol`, `www`, and `api.misa.lol`.
 - Configure Turnstile hostnames and OAuth callback URLs for the production domain.
 - Back up Supabase before schema or deployment changes.
-- Verify `/api/v1/auth/providers`, signup, login, username claiming, profile save, public profiles, logout, and `/admin`.
+- Verify `/api/v1/auth/providers`, signup, login, username claiming, profile save, public profiles, logout, and admin access at `https://ukvhq.dev/m` (the old `misa.lol/admin` path must redirect).
 
 The supplied backend currently provides real Postgres-backed application data and Dragonfly sessions. Password reset, analytics, object storage, premium checkout, templates, and connected-account management still require their backend endpoints before those UI areas can be considered production-complete.

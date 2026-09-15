@@ -55,7 +55,7 @@ MAX_FONT = 2_800_000
 KEEP_ASSET_URL = "misa:keep"
 ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
 ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
-USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Sparkle", "Glitch", "Pulse", "Outline", "Neon", "Wave", "Shadow"}
+USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave", "Shadow"}
 PROFILE_FONTS = {"Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"}
 PAGE_ENTERS = {"None", "Fade", "Unfold", "Pop"}
 ASSET_KIND_TYPES = {
@@ -119,7 +119,8 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     cleaned["bannerShape"] = cleaned.get("bannerShape") if cleaned.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
     cleaned["buttonStyle"] = cleaned.get("buttonStyle") if cleaned.get("buttonStyle") in {"glass", "solid", "outline"} else "glass"
     cleaned["profileFont"] = cleaned.get("profileFont") if cleaned.get("profileFont") in PROFILE_FONTS else "Inter"
-    cleaned["profileFontScope"] = cleaned.get("profileFontScope") if cleaned.get("profileFontScope") in {"all", "name"} else "all"
+    # Kept for backwards-compatible stored data, but custom/default fonts are now display-name only.
+    cleaned["profileFontScope"] = "name"
     cleaned["pageEnter"] = cleaned.get("pageEnter") if cleaned.get("pageEnter") in PAGE_ENTERS else "Fade"
     for key, default in (
         ("accentColor", "#9b87f5"),
@@ -132,7 +133,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     ):
         value = cleaned.get(key)
         cleaned[key] = value if isinstance(value, str) and HEX_COLOR.match(value) else default
-    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora", "Waves", "Embers", "Rain"} else "Glow"
+    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in {"None", "Rain", "Raindrops", "Snow", "Snowflakes", "Stars", "Ocean waves", "Old TV", "Sun effect", "Paper texture"} else "None"
     cleaned["usernameEffect"] = cleaned.get("usernameEffect") if cleaned.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
     for key, default in (
         ("usernameGlow", True),
@@ -143,6 +144,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
         ("showBadges", True),
         ("showSocials", True),
         ("showJoinDate", False),
+        ("showDiscordStatus", True),
         ("showProfileFrame", True),
         ("showAvatar", True),
         ("showAvatarBorder", True),
@@ -237,28 +239,38 @@ def merge_kept_profile(incoming: dict[str, Any], stored: dict[str, Any] | None) 
     merged = dict(incoming)
     incoming_assets = incoming.get("assets") if isinstance(incoming.get("assets"), dict) else {}
     stored_assets = stored.get("assets") if isinstance(stored.get("assets"), dict) else {}
-    assets = dict(incoming_assets)
+    # A partial save may omit an asset key entirely. Start from the stored
+    # assets so an omitted key cannot accidentally delete previously uploaded media.
+    assets = dict(stored_assets)
+    assets.update(incoming_assets)
     for key in ASSET_KEYS:
-        assets[key] = _merge_asset(incoming_assets.get(key), stored_assets.get(key))
+        if key in incoming_assets:
+            assets[key] = _merge_asset(incoming_assets.get(key), stored_assets.get(key))
     stored_tracks = {
         str(track.get("id")): track
         for track in stored_assets.get("tracks") or []
         if isinstance(track, dict) and track.get("id")
     }
-    tracks: list[dict[str, Any]] = []
-    for track in incoming_assets.get("tracks") or []:
-        if not isinstance(track, dict):
-            continue
-        previous = stored_tracks.get(str(track.get("id") or ""))
-        if previous is None and not stored_tracks:
-            previous = {"audio": stored_assets.get("audio"), "artwork": stored_assets.get("audioArtwork")}
-        item = dict(track)
-        item["audio"] = _merge_asset(track.get("audio"), (previous or {}).get("audio"))
-        item["artwork"] = _merge_asset(track.get("artwork"), (previous or {}).get("artwork"))
-        tracks.append(item)
-    if tracks:
+    if "tracks" in incoming_assets:
+        tracks: list[dict[str, Any]] = []
+        for track in incoming_assets.get("tracks") or []:
+            if not isinstance(track, dict):
+                continue
+            previous = stored_tracks.get(str(track.get("id") or ""))
+            if previous is None and not stored_tracks:
+                previous = {"audio": stored_assets.get("audio"), "artwork": stored_assets.get("audioArtwork")}
+            item = dict(track)
+            item["audio"] = _merge_asset(track.get("audio"), (previous or {}).get("audio"))
+            item["artwork"] = _merge_asset(track.get("artwork"), (previous or {}).get("artwork"))
+            tracks.append(item)
         assets["tracks"] = tracks
+    elif "tracks" in stored_assets:
+        assets["tracks"] = list(stored_assets.get("tracks") or [])
     merged["assets"] = assets
+
+    if "sections" not in incoming:
+        merged["sections"] = list(stored.get("sections") or [])
+        return merged
     stored_sections = {
         str(item.get("id")): item
         for item in stored.get("sections") or []
@@ -274,7 +286,6 @@ def merge_kept_profile(incoming: dict[str, Any], stored: dict[str, Any] | None) 
         sections.append(next_item)
     merged["sections"] = sections
     return merged
-
 
 def _merge_asset(incoming: Any, stored: Any) -> dict[str, Any]:
     current = dict(incoming) if isinstance(incoming, dict) else {"url": None}

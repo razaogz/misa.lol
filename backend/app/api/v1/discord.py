@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.core.config import Settings, get_settings
-from app.core.discord_live import can_unlink_discord, invalidate_discord_cache, live_discord_state
+from app.core.discord_live import can_unlink_discord, invalidate_discord_cache, live_discord_state, public_presence_for_user
 from app.core.oauth import revoke_discord_token
 from app.core.rate_limit import limit_auth
 from app.core.sessions import get_user_from_request
@@ -19,6 +19,7 @@ class DiscordPrefsRequest(BaseModel):
     showAvatar: bool | None = None
     showDecoration: bool | None = None
     showGuildTag: bool | None = None
+    showStatus: bool | None = None
 
 
 async def require_user(request: Request) -> User:
@@ -31,6 +32,11 @@ async def require_user(request: Request) -> User:
 @router.get("")
 async def discord_state(user: Annotated[User, Depends(require_user)]) -> dict:
     return await live_discord_state(user)
+
+
+@router.get("/status")
+async def discord_presence(user: Annotated[User, Depends(require_user)]) -> dict:
+    return {"status": await public_presence_for_user(user)}
 
 
 @router.patch("")
@@ -47,6 +53,8 @@ async def update_discord_prefs(
         prefs["show_decoration"] = payload.showDecoration
     if payload.showGuildTag is not None:
         prefs["show_guild_tag"] = payload.showGuildTag
+    if payload.showStatus is not None:
+        prefs["show_status"] = payload.showStatus
     if prefs:
         updated = await data_api.update_discord_prefs(user.id, **prefs)
         if updated is None:

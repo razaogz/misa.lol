@@ -2,7 +2,7 @@
 
 import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { audioArtworkUrl, playlistTracks, publicTrackUrls, trackTitle } from "@/lib/audio";
+import { audioArtworkUrl, playlistTracks, publicTrackUrls, trackTitle, usesUploadedProfileAudio } from "@/lib/audio";
 import { usePreviewPlayer } from "@/lib/preview-player";
 import type { ProfileConfig } from "@/lib/types";
 
@@ -143,7 +143,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
     event.stopPropagation();
   };
 
-  if (config.assets.audioEnabled || !track) return null;
+  if (!usesUploadedProfileAudio(config.assets) || !track) return null;
 
   const swap = Boolean(config.settings.widgetColorSwap);
   const ink = config.settings.backgroundColor;
@@ -193,25 +193,23 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
         <span>{formatTime(currentTime)}</span>
         <span>{formatTime(duration)}</span>
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <IconButton label={shuffle ? "Disable shuffle" : "Shuffle"} active={shuffle} ink={swap ? ink : undefined} onClick={() => setShuffle((value) => !value)}><Shuffle size={14} /></IconButton>
-          <IconButton label="Previous track" ink={swap ? ink : undefined} onClick={() => step(-1)}><SkipBack size={15} /></IconButton>
-          <button type="button" onClick={toggle} className={`mx-1 flex h-10 w-10 items-center justify-center rounded-full ${swap ? "" : "bg-white/[.12] text-white hover:bg-white/[.18]"}`} style={swap ? { backgroundColor: `${ink}22`, color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
-            {playing ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
-          </button>
-          <IconButton label="Next track" ink={swap ? ink : undefined} onClick={() => step(1)}><SkipForward size={15} /></IconButton>
-          <IconButton label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"} active={repeat !== "off"} ink={swap ? ink : undefined} onClick={() => setRepeat((value) => value === "off" ? "all" : value === "all" ? "one" : "off")}>
-            <Repeat size={14} />
-            {repeat === "one" && <span className="absolute -right-0.5 -top-0.5 text-[8px]">1</span>}
-          </IconButton>
-        </div>
-        <div className="flex min-w-[120px] flex-1 items-center gap-1 sm:max-w-[160px]">
-          <button type="button" onClick={() => setMuted((value) => !value)} className={`rounded-lg p-1.5 ${swap ? "" : "text-white/60 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={muted ? "Unmute" : "Mute"}>
-            {muted || level === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
-          </button>
-          <input aria-label="Volume" type="range" min={0} max={100} value={level} onChange={(event) => setLevel(Number(event.target.value))} className={`h-1.5 w-full cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`} style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }} />
-        </div>
+      <div className="mt-2 flex flex-nowrap items-center justify-between gap-1">
+        <IconButton label={shuffle ? "Disable shuffle" : "Shuffle"} active={shuffle} ink={swap ? ink : undefined} onClick={() => setShuffle((value) => !value)}><Shuffle size={12} /></IconButton>
+        <IconButton label="Previous track" ink={swap ? ink : undefined} onClick={() => step(-1)}><SkipBack size={13} /></IconButton>
+        <button type="button" onClick={toggle} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${swap ? "" : "bg-white/[.12] text-white hover:bg-white/[.18]"}`} style={swap ? { backgroundColor: `${ink}22`, color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
+          {playing ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
+        </button>
+        <IconButton label="Next track" ink={swap ? ink : undefined} onClick={() => step(1)}><SkipForward size={13} /></IconButton>
+        <IconButton label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"} active={repeat !== "off"} ink={swap ? ink : undefined} onClick={() => setRepeat((value) => value === "off" ? "all" : value === "all" ? "one" : "off")}>
+          <Repeat size={12} />
+          {repeat === "one" && <span className="absolute -right-0.5 -top-0.5 text-[8px]">1</span>}
+        </IconButton>
+      </div>
+      <div className="mt-2 flex items-center gap-1">
+        <button type="button" onClick={() => setMuted((value) => !value)} className={`rounded-lg p-1.5 ${swap ? "" : "text-white/60 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={muted ? "Unmute" : "Mute"}>
+          {muted || level === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        </button>
+        <input aria-label="Volume" type="range" min={0} max={100} value={level} onChange={(event) => setLevel(Number(event.target.value))} className={`h-1.5 w-full cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`} style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }} />
       </div>
     </div>
   );
@@ -223,11 +221,107 @@ function IconButton({ children, label, onClick, active = false, ink }: { childre
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`relative flex h-8 w-8 items-center justify-center rounded-lg ${ink ? "" : active ? "bg-[#e11d48]/20 text-[#fecdd3]" : "text-white/60 hover:bg-white/[.08] hover:text-white"}`}
+      className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${ink ? "" : active ? "bg-[#e11d48]/20 text-[#fecdd3]" : "bg-white/[.08] text-white/70 hover:bg-white/[.14] hover:text-white"}`}
       style={ink ? { color: ink, backgroundColor: active ? `${ink}22` : "transparent" } : undefined}
     >
       {children}
     </button>
+  );
+}
+
+export function ProfileVideoAudioControl({ config }: { config: ProfileConfig }) {
+  const videoEl = () => document.querySelector<HTMLVideoElement>("[data-bg-video]");
+  const [muted, setMuted] = useState(true);
+  const [level, setLevel] = useState(config.assets.volume);
+
+  useEffect(() => {
+    setLevel(config.assets.volume);
+  }, [config.assets.volume]);
+
+  useEffect(() => {
+    const video = videoEl();
+    if (!video) return;
+    video.volume = Math.min(1, Math.max(0, level / 100));
+    const sync = () => setMuted(video.muted);
+    sync();
+    video.addEventListener("volumechange", sync);
+    return () => video.removeEventListener("volumechange", sync);
+  }, [config.assets.audioEnabled, config.assets.backgroundVideo.url, level]);
+
+  const toggle = (event: React.SyntheticEvent) => {
+    event.stopPropagation();
+    const video = videoEl();
+    if (!video) return;
+    video.volume = Math.min(1, Math.max(0, level / 100));
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    if (!nextMuted) {
+      void video.play().catch(() => {
+        video.muted = true;
+        setMuted(true);
+      });
+    }
+    setMuted(video.muted);
+  };
+
+  const swap = Boolean(config.settings.widgetColorSwap);
+  const ink = config.settings.backgroundColor;
+  const accent = config.settings.accentColor;
+  const sliderAccent = swap ? ink : "#e11d48";
+
+  return (
+    <div
+      className={`relative z-20 mt-6 rounded-2xl border p-3 text-left ${swap ? "" : "border-white/[.1] bg-black/25"}`}
+      style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
+          {muted || level === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-sm font-medium ${swap ? "" : "text-white"}`}>Background video</p>
+          <p className={`mt-0.5 text-[11px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.66 } : undefined}>
+            {muted ? "Audio off" : "Using video audio"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggle}
+          className={`rounded-lg p-1.5 ${swap ? "" : "text-white/70 hover:bg-white/[.08] hover:text-white"}`}
+          style={swap ? { color: ink } : undefined}
+          aria-pressed={!muted}
+          aria-label={muted ? "Enable background video audio" : "Mute background video audio"}
+        >
+          {muted || level === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+        </button>
+        <input
+          aria-label="Volume"
+          type="range"
+          min={0}
+          max={100}
+          value={level}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            setLevel(next);
+            const video = videoEl();
+            if (video) {
+              video.volume = next / 100;
+              if (next > 0 && video.muted) {
+                video.muted = false;
+                void video.play().catch(() => { video.muted = true; });
+              }
+              setMuted(video.muted);
+            }
+          }}
+          className={`h-1.5 w-full cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`}
+          style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }}
+        />
+      </div>
+    </div>
   );
 }
 

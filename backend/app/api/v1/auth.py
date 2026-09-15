@@ -28,14 +28,17 @@ from app.core.config import Settings, get_settings
 from app.core.discord_live import store_discord_session
 from app.core.mailer import mailer_configured, send_password_reset
 from app.core.oauth import (
+    apple_authorize_url,
     discord_authorize_url,
     discord_avatar_url,
+    exchange_apple_code,
     exchange_discord_code,
     exchange_google_code,
     google_authorize_url,
     pop_oauth_state,
     save_oauth_state,
     telegram_authorize_url,
+    verify_apple_id_token,
 )
 from app.core.public_origin import public_origin_for
 from app.core.rate_limit import client_ip, limit_auth, rate_limit
@@ -112,6 +115,10 @@ def _oauth_destination(settings: Settings, signed_in: bool, next_path: str) -> s
         if dashboard.startswith("http"):
             return f"{dashboard}{extra}"
         return next_path
+    # Provider linking starts from the authenticated Security page. Preserve that
+    # safe local destination instead of collapsing it back to the dashboard.
+    if signed_in and next_path in {"/security", "/settings"}:
+        return next_path
     return dashboard if signed_in else next_path
 
 
@@ -126,6 +133,10 @@ def _settings_url(settings: Settings) -> str:
         return f"{dashboard}/settings"
     return f"{dashboard}/settings" if dashboard else "/dashboard/settings"
 
+
+def _trusted_email_claim(value: object) -> bool:
+    """Accept only an actual true provider claim, never a truthy string like false."""
+    return value is True or (isinstance(value, str) and value.strip().lower() == "true")
 
 async def _consume_backup_code(user_id: str, code: str) -> bool:
     if not admin_db.has_pool():
@@ -233,8 +244,46 @@ async def providers(settings: SettingsDep) -> dict:
         "google": settings.google_enabled,
         "discord": settings.discord_enabled,
         "telegram": settings.telegram_enabled,
+        "apple": settings.apple_enabled,
         "turnstile_site_key": settings.turnstile_site_key if TURNSTILE_ENABLED else "",
     }
+
+
+async def require_authenticated_user(request: Request) -> User:
+    user = await get_user_from_request(request)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated.")
+    return user
+
+
+def _can_disconnect_provider(user: User, provider: str) -> bool:
+    if user.password_hash:
+        return True
+    return any(
+        bool(getattr(user, f"{other}_id", None))
+        for other in ("google", "discord", "telegram", "apple")
+        if other != provider
+    )
+
+
+@router.post("/{provider}/disconnect")
+async def disconnect_provider(
+    provider: str,
+    request: Request,
+    user: User = Depends(require_authenticated_user),
+) -> dict[str, bool]:
+    if provider not in {"google", "telegram"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported provider.")
+    if not getattr(user, f"{provider}_id", None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{provider.title()} is not connected.")
+    if not _can_disconnect_provider(user, provider):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add a password or another login method before disconnecting this provider.",
+        )
+    await limit_auth(request, f"{provider}-disconnect", limit=8, window_seconds=60)
+    await data_api.clear_user_provider(user.id, provider)
+    return {"ok": True, "connected": False}
 
 
 @router.post("/signup")
@@ -461,7 +510,7 @@ async def google_callback(
         provider="google",
         provider_id=str(sub),
         email=email,
-        email_verified=bool(claims.get("email_verified")) if email else False,
+        email_verified=_trusted_email_claim(claims.get("email_verified")) if email else False,
         display_name=claims.get("name"),
         avatar_url=claims.get("picture"),
         next_path=safe_next_path(saved.get("next")),
@@ -526,11 +575,13 @@ async def discord_callback(
 async def telegram_start(
     request: Request,
     settings: SettingsDep,
+    next_path: str = Query("/dashboard", alias="next"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
     if not settings.telegram_enabled:
         return _oauth_error("/login", "telegram_not_configured")
-    return RedirectResponse(telegram_authorize_url(settings), status_code=302)
+    state = await save_oauth_state("telegram", safe_next_path(next_path))
+    return RedirectResponse(telegram_authorize_url(settings, state), status_code=302)
 
 
 TELEGRAM_RESULT_BRIDGE = """<!DOCTYPE html>
@@ -556,6 +607,8 @@ TELEGRAM_RESULT_BRIDGE = """<!DOCTYPE html>
     var value = data[key];
     if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
   });
+  var queryState = new URLSearchParams(location.search).get("state");
+  if (queryState) params.set("state", queryState);
   if (!params.get("id") || !params.get("hash")) {
     location.replace("/login?error=oauth_failed");
     return;
@@ -578,6 +631,9 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
     telegram_id = payload.get("id")
     if not telegram_id:
         return _oauth_error("/login", "oauth_failed")
+    saved = await pop_oauth_state(request.query_params.get("state"), "telegram")
+    if not saved:
+        return _oauth_error("/login", "oauth_failed")
     first_name = payload.get("first_name") or ""
     last_name = payload.get("last_name") or ""
     display_name = f"{first_name} {last_name}".strip() or payload.get("username")
@@ -591,6 +647,116 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
         display_name=display_name,
         avatar_url=payload.get("photo_url"),
         telegram_username=payload.get("username"),
-        next_path="/dashboard",
+        next_path=safe_next_path(saved.get("next")),
     )
     return response
+
+
+@router.get("/apple")
+async def apple_start(
+    request: Request,
+    settings: SettingsDep,
+    next_path: str = Query("/dashboard", alias="next"),
+    mode: str = Query("login"),
+) -> RedirectResponse:
+    await limit_auth(request, "oauth", limit=20, window_seconds=60)
+    if not settings.apple_enabled:
+        return _oauth_error("/login", "apple_not_configured")
+    nonce = secrets.token_urlsafe(24)
+    link = mode == "link"
+    if link and await get_user_from_request(request) is None:
+        return _oauth_error("/login", "not_authenticated")
+    state = await save_oauth_state("apple", safe_next_path(next_path), nonce=nonce)
+    return RedirectResponse(apple_authorize_url(settings, state, nonce), status_code=302)
+
+
+@router.post("/apple/callback")
+@router.get("/apple/callback")
+async def apple_callback(
+    request: Request,
+    settings: SettingsDep,
+) -> RedirectResponse:
+    code = None
+    id_token = None
+    state = None
+    user_json = None
+    error = None
+
+    if request.method == "POST":
+        try:
+            form = await request.form()
+            code = form.get("code")
+            id_token = form.get("id_token")
+            state = form.get("state")
+            user_json = form.get("user")
+            error = form.get("error")
+        except Exception:
+            return _oauth_error("/login", "oauth_failed")
+    else:
+        code = request.query_params.get("code")
+        id_token = request.query_params.get("id_token")
+        state = request.query_params.get("state")
+        error = request.query_params.get("error")
+
+    if error or (not code and not id_token):
+        return _oauth_error("/login", "oauth_denied")
+
+    saved = await pop_oauth_state(state, "apple")
+    if not saved:
+        return _oauth_error("/login", "oauth_failed")
+
+    claims = None
+    if id_token:
+        try:
+            claims = verify_apple_id_token(settings, str(id_token))
+        except Exception:
+            claims = None
+
+    if claims is None and code:
+        try:
+            tokens = await exchange_apple_code(settings, str(code))
+            if tokens.get("id_token"):
+                claims = verify_apple_id_token(settings, str(tokens["id_token"]))
+        except Exception:
+            claims = None
+
+    if not claims:
+        return _oauth_error("/login", "oauth_failed")
+
+    if saved.get("nonce") and claims.get("nonce") and claims.get("nonce") != saved["nonce"]:
+        return _oauth_error("/login", "oauth_failed")
+
+    sub = claims.get("sub")
+    if not sub:
+        return _oauth_error("/login", "oauth_failed")
+
+    email = normalize_email(claims["email"]) if claims.get("email") else None
+    email_verified = _trusted_email_claim(claims.get("email_verified")) if email else False
+
+    display_name = None
+    if user_json:
+        try:
+            import json as _json
+            user_data = _json.loads(user_json) if isinstance(user_json, str) else user_json
+            name_obj = user_data.get("name") or {}
+            first = name_obj.get("firstName") or ""
+            last = name_obj.get("lastName") or ""
+            display_name = f"{first} {last}".strip() or None
+        except Exception:
+            pass
+    if not display_name and email:
+        display_name = email.split("@", 1)[0]
+
+    response, _user = await _finish_oauth(
+        request,
+        settings,
+        provider="apple",
+        provider_id=str(sub),
+        email=email,
+        email_verified=email_verified,
+        display_name=display_name,
+        avatar_url=None,
+        next_path=safe_next_path(saved.get("next")),
+    )
+    return response
+

@@ -5,6 +5,19 @@ import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, TextInput } from "@/components/ui";
 
+function formatAdminError(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value;
+  if (Array.isArray(value)) {
+    const messages = value.map((item) => formatAdminError(item, "")).filter(Boolean);
+    if (messages.length) return messages.join(" ");
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) return record.message;
+    if (typeof record.msg === "string" && record.msg.trim()) return record.msg;
+  }
+  return fallback;
+}
 declare global {
   interface Window {
     turnstile?: {
@@ -42,7 +55,7 @@ export default function AdminLoginPage() {
     try {
       const response = await fetch("/api/v1/admin-auth/request-otp", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email, turnstile_token: turnstileToken }) });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) { resetTurnstile(); throw new Error(result.detail || result.error || "Could not send the verification code."); }
+      if (!response.ok) { resetTurnstile(); throw new Error(formatAdminError(result.detail || result.error, "Could not send the verification code.")); }
       resetTurnstile();
       setStep("otp");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not send the verification code."); }
@@ -55,15 +68,15 @@ export default function AdminLoginPage() {
     try {
       const response = await fetch("/api/v1/admin-auth/verify-otp", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email, code, turnstile_token: turnstileToken }) });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) { resetTurnstile(); throw new Error(result.detail || "Invalid or expired verification code."); }
+      if (!response.ok) { resetTurnstile(); throw new Error(formatAdminError(result.detail || result.error, "Invalid or expired verification code.")); }
       const session = await fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store", headers: { "Cache-Control": "no-store" } });
       if (!session.ok) throw new Error(`The admin session was not persisted (server returned ${session.status}). Please try again.`);
-      window.location.replace("/admin");
+      window.location.replace("/m");
     } catch (e) { setError(e instanceof Error ? e.message : "Invalid or expired verification code."); }
     finally { setBusy(false); }
   };
 
-  return <main className="grid min-h-[100svh] place-items-center bg-[#07070a] px-5 text-white"><section className="surface w-full max-w-[430px] rounded-2xl p-6 sm:p-8"><div className="mb-8 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#c5b8ff] via-[#8c75eb] to-[#5946b8]"><ShieldCheck size={19} /></span><div><p className="font-semibold">Misa<span className="text-[#a899ff]">.lol</span></p><p className="text-xs text-zinc-600">Administrator access</p></div></div><p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-[#a899ff]">Secure sign in</p><h1 className="text-2xl font-semibold tracking-[-.04em]">{step === "email" ? "Verify your admin email" : "Enter your code"}</h1><p className="mt-2 text-sm leading-6 text-zinc-500">{step === "email" ? "Every administrator login requires a fresh one-time code." : `A six-digit code was sent to ${email}. It expires in 5 minutes.`}</p><div className="mt-7 space-y-4">{step === "email" ? <TextInput value={email} onChange={setEmail} type="email" placeholder="Administrator email" autoComplete="email" /> : <><div className="relative"><KeyRound size={15} className="absolute left-3 top-3.5 text-zinc-600" /><TextInput value={code} onChange={(value) => setCode(value.replace(/[^0-9]/g, "").slice(0, 6))} placeholder="000000" className="pl-9 text-center font-mono tracking-[.35em]" /></div><button type="button" onClick={() => { resetTurnstile(); setStep("email"); setCode(""); setError(""); }} className="text-xs text-[#b1a5ff] hover:text-white">Use a different email</button></>}{turnstileSiteKey && <div className="flex justify-center"><TurnstileWidget key={`${step}-${turnstileNonce}`} siteKey={turnstileSiteKey} onToken={setTurnstileToken} /></div>}{error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/[.06] px-3 py-2.5 text-xs leading-5 text-red-200">{error}</p>}<Button variant="accent" className="h-12 w-full" disabled={busy || !turnstileSiteKey || !turnstileToken || (step === "email" ? !email.trim() : code.length !== 6)} onClick={() => void (step === "email" ? requestCode() : verifyCode())}>{busy ? "Please wait…" : step === "email" ? "Send verification code" : "Verify and continue"}<ArrowRight size={16} /></Button></div><Link href="/" className="mt-7 block text-center text-xs text-zinc-600 hover:text-zinc-300">Back to misa.lol</Link></section></main>;
+  return <main className="grid min-h-[100svh] place-items-center bg-[#07070a] px-5 text-white"><section className="surface w-full max-w-[430px] rounded-2xl p-6 sm:p-8"><div className="mb-8 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#c5b8ff] via-[#8c75eb] to-[#5946b8]"><ShieldCheck size={19} /></span><div><p className="font-semibold">Misa<span className="text-[#a899ff]">.lol</span></p><p className="text-xs text-zinc-600">Administrator access</p></div></div><p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-[#a899ff]">Secure sign in</p><h1 className="text-2xl font-semibold tracking-[-.04em]">{step === "email" ? "Verify your admin email" : "Enter your code"}</h1><p className="mt-2 text-sm leading-6 text-zinc-500">{step === "email" ? "Every administrator login requires a fresh one-time code." : `A six-digit code was sent to ${email}. It expires in 5 minutes.`}</p><div className="mt-7 space-y-4">{step === "email" ? <TextInput value={email} onChange={setEmail} type="email" placeholder="Administrator email" autoComplete="email" /> : <><div className="relative"><KeyRound size={15} className="absolute left-3 top-3.5 text-zinc-600" /><TextInput value={code} onChange={(value) => setCode(value.replace(/[^0-9]/g, "").slice(0, 6))} placeholder="000000" className="pl-9 text-center font-mono tracking-[.35em]" /></div><button type="button" onClick={() => { resetTurnstile(); setStep("email"); setCode(""); setError(""); }} className="text-xs text-[#b1a5ff] hover:text-white">Use a different email</button></>}{turnstileSiteKey && <div className="flex justify-center"><TurnstileWidget key={`${step}-${turnstileNonce}`} siteKey={turnstileSiteKey} onToken={setTurnstileToken} /></div>}{error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/[.06] px-3 py-2.5 text-xs leading-5 text-red-200">{error}</p>}<Button variant="accent" className="h-12 w-full" disabled={busy || !turnstileSiteKey || !turnstileToken || (step === "email" ? !email.trim() : code.length !== 6)} onClick={() => void (step === "email" ? requestCode() : verifyCode())}>{busy ? "Please wait…" : step === "email" ? "Send verification code" : "Verify and continue"}<ArrowRight size={16} /></Button></div><a href="https://misa.lol" className="mt-7 block text-center text-xs text-zinc-600 hover:text-zinc-300">Back to misa.lol</a></section></main>;
 }
 
 function TurnstileWidget({ siteKey, onToken }: { siteKey: string; onToken: (token: string) => void }) {

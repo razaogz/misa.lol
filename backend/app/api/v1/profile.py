@@ -1,4 +1,4 @@
-from typing import Any, Annotated
+﻿from typing import Any, Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from httpx import HTTPError
 
 from app.core.config import get_settings
+from app.core.discord_live import public_presence_for_user
 from app.core.og_card import fallback_favicon_png, render_og_png
 from app.core.profile_sanitize import ASSET_KIND_TYPES, ASSET_KINDS, SECTION_ID, apply_badge_ownership, decode_data_url, merge_kept_profile, safe_asset_url, sanitize_profile_config
 from app.core.profiles import default_public_profile, resolve_public_profile, stamp_join_date, unwrap_profile_config
@@ -79,6 +80,21 @@ async def public_profile_widgets(username: str, request: Request) -> dict[str, A
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
     return {"widgets": await resolve_profile_widgets(profile)}
+
+
+@router.get("/{username}/discord-status")
+async def public_discord_status(username: str, response: Response) -> dict[str, str | None]:
+    response.headers["Cache-Control"] = "no-store"
+    handle = username.strip().lower()
+    if not USERNAME_RE.fullmatch(handle):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    alias = await current_handle_for(handle)
+    if alias:
+        return username_redirect(f"/api/v1/profile/{alias}/discord-status")
+    user = await data_api.find_user(username=handle)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    return {"status": await public_presence_for_user(user)}
 
 
 @router.get("/{username}/sections/{section_id}/cover")

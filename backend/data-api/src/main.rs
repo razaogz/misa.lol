@@ -39,6 +39,7 @@ async fn main() -> Result<()> {
     let protected = Router::new()
         .route("/v1/users", post(api::create_user).get(api::find_user))
         .route("/v1/users/oauth", post(api::oauth_upsert))
+        .route("/v1/users/{id}/providers/{provider}", post(api::unlink_provider))
         .route("/v1/users/{id}", get(api::get_user).patch(api::update_user).delete(api::delete_user))
         .route("/v1/profiles/{id}", get(api::get_profile).put(api::save_profile))
         .layer(middleware::from_fn_with_state(state.clone(), api::require_key));

@@ -22,7 +22,7 @@ function colorWithAlpha(value: string | undefined, alpha: number) {
 
 type FramePositionPatch = { profileFrameScale?: number; profileFrameX?: number; profileFrameY?: number };
 
-export function ProfileRenderer({ config, preview = false, screenshot = false, className = "", manualPositioning = false, onFramePositionChange }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onFramePositionChange?: (patch: FramePositionPatch) => void }) {
+export function ProfileRenderer({ config, preview = false, screenshot = false, className = "", manualPositioning = false, onFramePositionChange, fitViewport = false }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onFramePositionChange?: (patch: FramePositionPatch) => void; fitViewport?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const s = config.settings;
@@ -37,7 +37,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     : selectedDefaultFont?.url
       ? `"MisaDefaultFont", "Inter", ui-sans-serif, system-ui, sans-serif`
       : profileFont(s.profileFont);
-  const pageFamily = s.profileFontScope === "name" ? "Inter, ui-sans-serif, system-ui, sans-serif" : family;
+  const pageFamily = "Inter, ui-sans-serif, system-ui, sans-serif";
   const particles = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ left: `${(i * 37) % 100}%`, top: `${(i * 61) % 100}%`, delay: `${(i % 7) * .5}s`, size: 2 + (i % 3) })), []);
   const [entered, setEntered] = useState(!s.entryScreen);
   const [quiet, setQuiet] = useState(false);
@@ -109,12 +109,12 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   };
 
   return (
-    <div className={`relative isolate ${screenshot ? "h-full" : "min-h-[100svh]"} overflow-hidden bg-[#07070a] ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
+    <div className={`relative isolate ${fitViewport || screenshot ? "h-full min-h-0" : "min-h-[100svh]"} overflow-hidden bg-[#07070a] ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
       {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
       {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:url("${selectedDefaultFont.url}");font-display:swap}`}</style> : null}
       <ProfileBackground config={config} videoRef={videoRef} particles={particles} />
       <div className="pointer-events-none absolute inset-0 bg-black/35" />
-      <div className={"relative z-10 " + (screenshot ? "h-full" : "min-h-[100svh]") + " px-4 py-10 sm:px-8"} style={{ perspective: s.cardTilt ? 900 : undefined }}>
+      <div className={"relative z-10 " + (fitViewport || screenshot ? "h-full" : "min-h-[100svh]") + " px-4 py-10 sm:px-8"} style={{ perspective: s.cardTilt ? 900 : undefined }}>
         {s.entryScreen && !entered && (
           <button type="button" className="absolute inset-0 z-20 grid place-items-center bg-black/60 text-white" onClick={openPage}>
             <span className="flex flex-col items-center gap-3">
@@ -205,18 +205,14 @@ function ProfileBackground({ config, videoRef, particles }: { config: ProfileCon
     <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ backgroundColor: config.settings.backgroundColor }}>
       <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: background?.url ? "url(" + background.url + ")" : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
       {backgroundVideo.url && <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ opacity: config.settings.backgroundOpacity / 100 }} src={backgroundVideo.url} autoPlay loop muted={resolvedAudioSource(config.assets) !== "video"} playsInline preload="metadata" />}
-      {effect === "Glow" && <div className="absolute inset-0 animate-background-glow bg-[radial-gradient(ellipse_at_center,transparent_15%,rgba(0,0,0,.45)_78%)]" />}
-      {effect === "Aurora" && (
-        <div className="absolute inset-0 overflow-hidden">
-          <span className="animate-aurora absolute -left-1/4 top-[-10%] h-[60%] w-[70%] rounded-full blur-3xl" style={{ background: accent + "55" }} />
-          <span className="animate-aurora absolute -right-1/4 bottom-[-8%] h-[55%] w-[65%] rounded-full blur-3xl" style={{ background: "#5eead455", animationDelay: "-2.4s" }} />
-        </div>
-      )}
-      {effect === "Particles" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute rounded-full bg-white/35" style={{ left: particle.left, top: particle.top, width: particle.size, height: particle.size, animation: "background-particle " + (7 + i % 5) + "s ease-in-out " + particle.delay + " infinite" }} />)}</div>}
-      {effect === "Stars" && <div className="absolute inset-0 animate-background-stars opacity-60" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "67px 67px" }} />}
-      {effect === "Waves" && <div className="absolute -inset-[20%] animate-background-waves" style={{ opacity: 0.35, backgroundImage: "repeating-linear-gradient(115deg, transparent 0 46px, " + accent + "22 47px 49px, transparent 50px 94px)" }} />}
-      {effect === "Embers" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute rounded-full" style={{ left: particle.left, top: particle.top, width: particle.size + 1, height: particle.size + 1, background: accent, boxShadow: "0 0 12px " + accent, animation: "background-ember " + (5 + i % 4) + "s ease-in-out " + particle.delay + " infinite" }} />)}</div>}
       {effect === "Rain" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute top-[-15%] h-24 w-px bg-white/25" style={{ left: particle.left, height: 70 + (i % 5) * 24, animation: "background-rain " + (2.6 + i % 4 * .4) + "s linear " + particle.delay + " infinite" }} />)}</div>}
+      {effect === "Raindrops" && <div className="absolute inset-0">{particles.map((particle, i) => <span key={i} className="absolute top-[-8%] rounded-full bg-sky-200/45" style={{ left: particle.left, width: particle.size + 2, height: particle.size + 8, transform: "rotate(24deg)", animation: "background-rain " + (3.2 + i % 5 * .35) + "s linear " + particle.delay + " infinite" }} />)}</div>}
+      {(effect === "Snow" || effect === "Snowflakes") && <div className="absolute inset-0">{particles.map((particle, i) => effect === "Snowflakes" ? <span key={i} className="absolute top-[-10%] text-white/65" style={{ left: particle.left, fontSize: 10 + particle.size * 2, animation: "background-snow " + (7 + i % 5) + "s linear " + particle.delay + " infinite" }}>❄</span> : <span key={i} className="absolute top-[-8%] rounded-full bg-white/65" style={{ left: particle.left, width: particle.size + 2, height: particle.size + 2, animation: "background-snow " + (7 + i % 5) + "s linear " + particle.delay + " infinite" }} />)}</div>}
+      {effect === "Stars" && <div className="absolute inset-0 animate-background-stars opacity-60" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "67px 67px" }} />}
+      {effect === "Ocean waves" && <div className="absolute -inset-[20%] animate-background-waves" style={{ opacity: 0.35, backgroundImage: "repeating-linear-gradient(115deg, transparent 0 46px, " + accent + "22 47px 49px, transparent 50px 94px)" }} />}
+      {effect === "Old TV" && <div className="absolute inset-0 opacity-35" style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.08) 4px, transparent 5px), radial-gradient(circle at 50% 50%, transparent 35%, rgba(0,0,0,.46) 100%)", mixBlendMode: "screen" }} />}
+      {effect === "Sun effect" && <div className="absolute inset-[-20%] opacity-70" style={{ background: "radial-gradient(circle at 72% 18%, #fbbf24aa 0, #f9731644 16%, transparent 48%)", animation: "background-glow 7s ease-in-out infinite" }} />}
+      {effect === "Paper texture" && <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,.12) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, transparent 1px 5px)" }} />}
     </div>
   );
 }

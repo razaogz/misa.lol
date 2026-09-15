@@ -386,6 +386,45 @@ PUBLIC_WIDGET_SCRIPT = """<script>
 })();
 </script>"""
 
+PUBLIC_DISCORD_STATUS_SCRIPT = """<script>
+(() => {
+  const dots = document.querySelectorAll("[data-discord-status]");
+  const labels = document.querySelectorAll("[data-discord-status-label]");
+  const username = document.body.dataset.profileUser || "";
+  if ((!dots.length && !labels.length) || !username) return;
+  const allowed = { online: "Online", idle: "Idle", dnd: "Do Not Disturb", offline: "Offline" };
+  const paint = (status) => {
+    const label = allowed[status];
+    if (!label) return;
+    dots.forEach((dot) => {
+      dot.className = "status-dot status-" + status;
+      dot.setAttribute("data-discord-status", status);
+      dot.setAttribute("aria-label", "Discord " + status);
+    });
+    labels.forEach((el) => { el.textContent = label; });
+  };
+  const pull = () => {
+    fetch("/api/v1/profile/" + encodeURIComponent(username) + "/discord-status", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data && data.status) paint(data.status); })
+      .catch(() => {});
+  };
+  setInterval(pull, 15000);
+})();
+</script>
+"""
+
+# Discord web-client status masks (`svg-mask-status-*`).
+DISCORD_STATUS_ICON_SVG = """<svg viewBox="0 0 16 16" aria-hidden="true">
+  <circle cx="8" cy="8" r="8" fill="#15151d"/>
+  <g transform="translate(8 8) scale(0.72) translate(-8 -8)">
+    <g class="icon-online"><circle cx="8" cy="8" r="8" fill="#23a55a"/></g>
+    <g class="icon-idle"><circle cx="8" cy="8" r="8" fill="#f0b232"/><circle cx="4" cy="4" r="6" fill="#15151d"/></g>
+    <g class="icon-dnd"><circle cx="8" cy="8" r="8" fill="#f23f43"/><rect x="2" y="6" width="12" height="4" rx="2" fill="#15151d"/></g>
+    <g class="icon-offline"><circle cx="8" cy="8" r="8" fill="#80848e"/><circle cx="8" cy="8" r="4" fill="#15151d"/></g>
+  </g>
+</svg>"""
+
 PUBLIC_LYRICS_SCRIPT = """<script>
 (() => {
   const boxes = document.querySelectorAll("[data-lyrics]");
@@ -449,13 +488,13 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     profile_radius = _clamp(settings.get("profileRadius"), 24, 0, 40)
     profile_frame_opacity = _clamp(settings.get("profileFrameOpacity"), 100, 0, 100) / 100
     username_effect = settings.get("usernameEffect") if settings.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
-    background_effect = settings.get("backgroundEffect") if settings.get("backgroundEffect") in {"None", "Particles", "Stars", "Glow", "Aurora", "Waves", "Embers", "Rain"} else "Glow"
+    background_effect = settings.get("backgroundEffect") if settings.get("backgroundEffect") in {"None", "Rain", "Raindrops", "Snow", "Snowflakes", "Stars", "Ocean waves", "Old TV", "Sun effect", "Paper texture"} else "None"
     layout = settings.get("layout") if settings.get("layout") in {"Modern", "Simplistic", "Sleek"} else "Modern"
     avatar_shape = settings.get("avatarShape") if settings.get("avatarShape") in {"circle", "rounded", "square"} else "circle"
     banner_shape = settings.get("bannerShape") if settings.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
     button_style = settings.get("buttonStyle") if settings.get("buttonStyle") in {"glass", "solid", "outline"} else "glass"
     profile_font = settings.get("profileFont") if settings.get("profileFont") in PROFILE_FONTS else "Inter"
-    profile_font_scope = settings.get("profileFontScope") if settings.get("profileFontScope") in {"all", "name"} else "all"
+    profile_font_scope = "name"
     font_size = _clamp(settings.get("fontSize"), 16, 12, 22)
     letter_spacing = _clamp(settings.get("letterSpacing"), 0, -2, 8)
     bio_typewriter = bool(settings.get("bioTypewriter")) and bool(bio_lines)
@@ -490,7 +529,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     has_font = has_public_asset(assets, "customFont", "font")
     if has_font:
         font_stack = f"MisaProfile,{font_stack}"
-    page_font_stack = font_stack if profile_font_scope == "all" else "Inter,system-ui,sans-serif"
+    page_font_stack = "Inter,system-ui,sans-serif"
     page_place = {"left": "flex-start", "right": "flex-end"}.get(card_align, "center")
     has_banner = has_public_asset(assets, "banner", "image")
     username_glow = bool(settings.get("usernameGlow")) or username_effect == "Glow"
@@ -511,20 +550,18 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         name_class += " name-pulse"
     elif username_effect == "Outline":
         name_class += " name-outline"
-    elif username_effect == "Neon":
-        name_class += " name-neon"
+
     elif username_effect == "Wave":
         name_class += " name-wave"
     elif username_effect == "Shadow":
         name_class += " name-shadow"
     name_style = f"font-size:{font_size + 8}px;letter-spacing:{letter_spacing}px;color:{username_color};"
-    if profile_font_scope == "name":
-        name_style += f"font-family:{font_stack};"
+    name_style += f"font-family:{font_stack};"
     if username_effect in {"Gradient", "Typewriter", "Shimmer"}:
         name_style += f"background:linear-gradient(90deg,{username_color},{username_effect_color},{username_color});-webkit-background-clip:text;background-clip:text;color:transparent;"
     if username_effect == "Outline":
         name_style += f"color:transparent;text-shadow:-1px -1px 0 {username_effect_color},1px -1px 0 {username_effect_color},-1px 1px 0 {username_effect_color},1px 1px 0 {username_effect_color};"
-    elif username_glow or username_effect == "Neon":
+    elif username_glow:
         name_style += f"text-shadow:0 0 24px {username_effect_color}aa;"
     else:
         name_style += "text-shadow:none;"
@@ -545,14 +582,22 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     guild = discord.get("guildTag") if isinstance(discord.get("guildTag"), dict) else {}
     guild_badge = safe_discord_img(guild.get("badge"))
     guild_tag_text = escape(str(guild.get("tag") or "")[:4])
+    discord_status = str(discord.get("status") or "").strip().lower()
+    if discord_status not in {"online", "idle", "dnd", "offline"}:
+        discord_status = ""
     avatar_face = (
         f'<img class="avatar" src="{discord_avatar or asset_src("avatar")}" alt="{display_name}">'
         if discord_avatar or has_avatar
         else f'<div class="avatar avatar-placeholder">{escape((str(profile.get("displayName") or username)[:1]) or "*")}</div>'
     )
     deco_tag = f'<img class="avatar-deco" src="{discord_deco}" alt="" onerror="this.remove()">' if discord_deco else ""
+    status_tag = (
+        f'<span class="status-dot status-{discord_status}" data-discord-status="{discord_status}" aria-label="Discord {discord_status}">{DISCORD_STATUS_ICON_SVG}</span>'
+        if discord_status
+        else ""
+    )
     avatar_border_class = "" if show_avatar_border else " no-border"
-    avatar_tag = f'<div class="avatar-ring{avatar_border_class}"><div class="avatar-inner{avatar_border_class}">{avatar_face}</div>{deco_tag}</div>' if show_avatar else ""
+    avatar_tag = f'<div class="avatar-ring{avatar_border_class}"><div class="avatar-inner{avatar_border_class}">{avatar_face}</div>{deco_tag}{status_tag}</div>' if show_avatar else ""
     guild_img = f'<img src="{guild_badge}" alt="" onerror="this.remove()">' if guild_badge else ""
     guild_tag = f'<span class="guild-tag">{guild_img}{guild_tag_text}</span>' if guild_tag_text else ""
     video_muted = " muted" if audio_source != "video" else ""
@@ -596,6 +641,29 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if playlist
         else ""
     )
+    presence_pfp = safe_discord_img(discord.get("accountAvatar") or discord.get("avatar"))
+    presence_face = (
+        f'<img src="{presence_pfp}" alt="">'
+        if presence_pfp
+        else f'<div class="discord-presence-fallback">{escape((str(profile.get("displayName") or username)[:1]) or "*")}</div>'
+    )
+    presence_status = (
+        f'<span class="status-dot status-{discord_status}" data-discord-status="{discord_status}" aria-label="Discord {discord_status}">{DISCORD_STATUS_ICON_SVG}</span>'
+        if discord_status
+        else ""
+    )
+    discord_handle = escape(str(discord.get("globalName") or discord.get("username") or "").strip()[:32])
+    status_label = {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(discord_status, "")
+    presence_name = f'<p class="discord-presence-name">{discord_handle}</p>' if discord_handle else ""
+    presence_label = f'<p class="discord-presence-status" data-discord-status-label>{status_label}</p>' if status_label else ""
+    discord_tile = (
+        f'<div class="discord-presence"><p class="discord-presence-title">Discord Status</p>'
+        f'<div class="discord-presence-body"><div class="discord-presence-avatar">{presence_face}{presence_status}</div>{presence_name}{presence_label}</div></div>'
+        if settings.get("showDiscordStatus", True) and (presence_pfp or discord_status)
+        else ""
+    )
+    if discord_tile:
+        audio_controls = f'<div class="player-row">{discord_tile}{audio_controls}</div>'
     wash_style = (
         f"background-image:radial-gradient(circle at 19% 10%,{accent}4d,transparent 28%),"
         f"radial-gradient(circle at 80% 75%,{accent}26,transparent 32%),"
@@ -725,7 +793,12 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .fx-glow::after{{width:240px;height:240px;right:10%;bottom:12%;background:{accent}40;animation-delay:-2s}}
 .fx-stars{{opacity:.6;background-image:radial-gradient(circle,rgba(255,255,255,.8) 1px,transparent 1px);background-size:67px 67px}}
 .fx-stars{{animation:background-stars 5s ease-in-out infinite}}
-.fx-waves{{background:repeating-linear-gradient(115deg,transparent 0 46px,{accent}22 47px 49px,transparent 50px 94px);background-size:180px 180px;opacity:.35;animation:background-waves 15s ease-in-out infinite}}
+.fx-ocean-waves{{background:repeating-linear-gradient(115deg,transparent 0 46px,{accent}22 47px 49px,transparent 50px 94px);background-size:180px 180px;opacity:.35;animation:background-waves 15s ease-in-out infinite}}
+.raindrop{{position:absolute;top:-8%;border-radius:50%;background:#bae6fd70;transform:rotate(24deg);animation:background-rain 3.8s linear infinite}}
+.snow,.snowflake{{position:absolute;top:-10%;color:#fff9;animation:background-snow 8s linear infinite}}
+.fx-old-tv{{background-image:repeating-linear-gradient(0deg,transparent 0 3px,#ffffff14 4px,transparent 5px),radial-gradient(circle at 50% 50%,transparent 35%,#00000075 100%);mix-blend-mode:screen;opacity:.35}}
+.fx-sun{{background:radial-gradient(circle at 72% 18%,#fbbf24aa 0,#f9731644 16%,transparent 48%);animation:pulse 7s ease-in-out infinite;opacity:.7}}
+.fx-paper{{background-image:repeating-linear-gradient(0deg,#ffffff1f 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,#ffffff0f 0 1px,transparent 1px 5px);opacity:.2}}
 .ember{{position:absolute;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent};animation:background-ember 6s ease-in-out infinite}}
 .rain{{position:absolute;top:-15%;width:1px;background:#ffffff40;animation:background-rain 3s linear infinite}}
 
@@ -770,7 +843,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .name-glitch{{animation:name-glitch .65s steps(2,end) infinite}}
 .name-pulse{{animation:name-pulse 1.8s ease-in-out infinite}}
 .name-outline{{background:none!important}}
-.name-neon{{animation:name-pulse 1.8s ease-in-out infinite}}
+
 .name-wave{{animation:name-wave 1.4s ease-in-out infinite;transform-origin:center}}
 .name-shadow{{animation:name-shadow 1.8s ease-in-out infinite}}
 @keyframes name-rainbow{{0%{{background-position:0 50%}}100%{{background-position:200% 50%}}}}
@@ -820,11 +893,11 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .audio-btn{{position:relative;z-index:1;width:36px;height:36px;border:0;border-radius:999px;background:#ffffff14;color:#fff;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
 .audio-btn.play{{width:42px;height:42px}}
 .audio-btn::before,.audio-btn::after{{pointer-events:none}}
-#audio-play::before{{content:"▶"}}#audio-play[data-playing="1"]::before{{content:"❚❚"}}
-#audio-prev::before{{content:"⏮"}}#audio-next::before{{content:"⏭"}}
-#audio-shuffle::before{{content:"↝"}}#audio-shuffle[data-on="1"]{{background:#9b87f533}}
-#audio-repeat::before{{content:"🔁"}}#audio-repeat[data-mode="off"]{{opacity:.45}}#audio-repeat[data-mode="one"]::after{{content:"1";font-size:9px}}
-#audio-mute::before{{content:"♪"}}#audio-mute[data-muted="1"]::before{{content:"ø"}}
+#audio-play::before{{content:"â–¶"}}#audio-play[data-playing="1"]::before{{content:"âšâš"}}
+#audio-prev::before{{content:"â®"}}#audio-next::before{{content:"â­"}}
+#audio-shuffle::before{{content:"â†"}}#audio-shuffle[data-on="1"]{{background:#9b87f533}}
+#audio-repeat::before{{content:"ðŸ”"}}#audio-repeat[data-mode="off"]{{opacity:.45}}#audio-repeat[data-mode="one"]::after{{content:"1";font-size:9px}}
+#audio-mute::before{{content:"â™ª"}}#audio-mute[data-muted="1"]::before{{content:"Ã¸"}}
 .widget-swap .player{{background:{accent};color:{background};border-color:{background}33}}
 .widget-swap .player-meta span,.widget-swap .player-times{{color:{background};opacity:.66}}
 .widget-swap .player-art-empty{{background:{background}22;color:{background}}}
@@ -868,6 +941,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 @keyframes background-waves{{0%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:0 0}}50%{{transform:translate3d(4%,2%,0) rotate(3deg);background-position:120px 80px}}100%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:240px 0}}}}
 @keyframes background-ember{{0%,100%{{transform:translate3d(0,18px,0) scale(.65);opacity:.2}}50%{{transform:translate3d(-12px,-28px,0) scale(1.3);opacity:.95}}}}
 @keyframes background-rain{{0%{{transform:translate3d(0,-20vh,0);opacity:0}}15%{{opacity:.7}}100%{{transform:translate3d(18px,130vh,0);opacity:0}}}}
+@keyframes background-snow{{0%{{transform:translate3d(0,-12vh,0) rotate(0deg);opacity:0}}15%{{opacity:.75}}100%{{transform:translate3d(24px,120vh,0) rotate(180deg);opacity:0}}}}
 
 .fx-aurora span{{position:absolute;border-radius:50%;filter:blur(48px);animation:aurora 9s ease-in-out infinite}}
 .fx-aurora span:first-child{{left:-15%;top:-8%;width:70%;height:55%;background:{accent}55}}
@@ -891,6 +965,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 {PUBLIC_COPY_SCRIPT}
 {PUBLIC_ANALYTICS_SCRIPT}
 {PUBLIC_WIDGET_SCRIPT}
+{PUBLIC_DISCORD_STATUS_SCRIPT if status_tag else ""}
 {PUBLIC_LYRICS_SCRIPT}
 </body></html>"""
 
@@ -1056,48 +1131,41 @@ def _badge_icon_markup(name: str) -> str:
 
 
 def _effect_markup(effect: str) -> str:
-    if effect == "Particles":
-        dots = []
-        for index in range(22):
-            left = (index * 37) % 100
-            top = (index * 61) % 100
-            delay = (index % 7) * 0.5
-            size = 2 + (index % 3)
-            dots.append(
-                f'<span class="dot" style="left:{left}%;top:{top}%;width:{size}px;height:{size}px;animation-delay:{delay}s"></span>'
-            )
-        return f'<div class="fx fx-particles">{"".join(dots)}</div>'
     if effect == "Stars":
         return '<div class="fx fx-stars"></div>'
-    if effect == "Glow":
-        return '<div class="fx fx-glow"></div>'
-    if effect == "Aurora":
-        return '<div class="fx fx-aurora"><span></span><span></span></div>'
-    if effect == "Waves":
-        return '<div class="fx fx-waves"></div>'
-    if effect == "Embers":
-        embers = []
-        for index in range(22):
-            left = (index * 37) % 100
-            top = (index * 61) % 100
-            delay = (index % 7) * 0.5
-            size = 3 + (index % 3)
-            embers.append(
-                f'<span class="ember" style="left:{left}%;top:{top}%;width:{size}px;height:{size}px;animation-delay:{delay}s"></span>'
-            )
-        return f'<div class="fx fx-embers">{"".join(embers)}</div>'
-    if effect == "Rain":
-        drops = []
+    if effect == "Ocean waves":
+        return '<div class="fx fx-ocean-waves"></div>'
+    if effect == "Old TV":
+        return '<div class="fx fx-old-tv"></div>'
+    if effect == "Sun effect":
+        return '<div class="fx fx-sun"></div>'
+    if effect == "Paper texture":
+        return '<div class="fx fx-paper"></div>'
+    if effect in {"Rain", "Raindrops", "Snow", "Snowflakes"}:
+        items = []
         for index in range(22):
             left = (index * 37) % 100
             delay = (index % 7) * 0.5
-            height = 70 + (index % 5) * 24
-            drops.append(
-                f'<span class="rain" style="left:{left}%;height:{height}px;animation-delay:{delay}s"></span>'
-            )
-        return f'<div class="fx fx-rain">{"".join(drops)}</div>'
+            size = 2 + (index % 4)
+            if effect == "Rain":
+                height = 70 + (index % 5) * 24
+                items.append(
+                    f'<span class="rain" style="left:{left}%;height:{height}px;animation-delay:{delay}s"></span>'
+                )
+            elif effect == "Raindrops":
+                items.append(
+                    f'<span class="raindrop" style="left:{left}%;width:{size + 2}px;height:{size + 8}px;animation-delay:{delay}s"></span>'
+                )
+            elif effect == "Snowflakes":
+                items.append(
+                    f'<span class="snowflake" style="left:{left}%;font-size:{10 + size * 2}px;animation-delay:{delay}s">❄</span>'
+                )
+            else:
+                items.append(
+                    f'<span class="snow" style="left:{left}%;width:{size + 2}px;height:{size + 2}px;animation-delay:{delay}s"></span>'
+                )
+        return f'<div class="fx fx-{effect.lower().replace(" ", "-")}">{"".join(items)}</div>'
     return ""
-
 
 def _join_label(value: object) -> str:
     text = str(value or "").strip()

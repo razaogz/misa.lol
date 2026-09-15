@@ -38,7 +38,7 @@ FEATURE_FLAG_CATALOG: tuple[tuple[str, str], ...] = (
     ("feature.usernameEffects.glitch", "Glitch username effect"),
     ("feature.usernameEffects.pulse", "Pulse username effect"),
     ("feature.usernameEffects.outline", "Outline username effect"),
-    ("feature.usernameEffects.neon", "Neon username effect"),
+
     ("feature.usernameEffects.wave", "Wave username effect"),
     ("feature.usernameEffects.shadow", "Shadow username effect"),
 )

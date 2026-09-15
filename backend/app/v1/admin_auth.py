@@ -181,7 +181,7 @@ async def invite(payload: InviteRequest, request: Request, admin: AdminAccount =
     invite_id = uuid4()
     expires = datetime.now(timezone.utc) + timedelta(hours=24)
     await admin_db.create_admin_invite(invite_id, email, payload.name, _digest(raw, settings), payload.role, payload.permissions, expires, admin.id)
-    link = f"{settings.public_base_url.rstrip('/')}/admin/invite?token={raw}"
+    link = f"{settings.admin_public_url.rstrip('/')}/invite?token={raw}"
     try:
         await send_transactional_email(settings, to=email, subject="You are invited to misa.lol admin", text=f"You have been invited to misa.lol administration. Accept within 24 hours: {link}")
     except Exception:

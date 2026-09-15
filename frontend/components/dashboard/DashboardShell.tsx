@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Copy, LayoutDashboard, Link2, LockKeyhole, LogOut, Menu, Palette, Search, Settings, Share2, ShieldCheck, Sparkles, Trophy, UsersRound, X } from "lucide-react";
@@ -61,9 +62,9 @@ function SidebarContent({ close }: { close: () => void }) {
     { label: t("nav.links"), items: enabled("nav.links") ? [{ label: t("nav.links"), href: "/links", icon: Link2 }] : [] },
   ].filter((group) => group.items.length), [enabled, t]);
   const moreItems = useMemo(() => [
+    enabled("nav.templates") && { label: t("nav.templates"), href: "/templates", icon: BookOpen },
     enabled("nav.leaderboard") && { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
     enabled("nav.premium") && { label: t("nav.premium"), href: "/premium", icon: Sparkles },
-    enabled("nav.templates") && { label: t("nav.templates"), href: "/templates", icon: BookOpen },
   ].filter((item): item is DashboardNavItem => Boolean(item)), [enabled, t]);
   const searchable = useMemo(() => {
     const items = [
@@ -80,7 +81,7 @@ function SidebarContent({ close }: { close: () => void }) {
     <div className="flex h-full flex-col">
       <div className="flex h-[76px] items-center justify-between px-5">
         <Link href="/" onClick={close} className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#c5b8ff] via-[#e11d48] to-[#881337] text-sm font-bold text-white shadow-[0_0_25px_rgba(155,135,245,.28)]">M</span>
+          <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
           <span className="text-[15px] font-semibold tracking-[-.02em]">Misa<span className="text-[#fb7185]">.lol</span></span>
         </Link>
         <button type="button" className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/[.06] hover:text-white md:hidden" onClick={close} aria-label={t("nav.close")}><X size={18} /></button>
@@ -127,17 +128,22 @@ function SidebarContent({ close }: { close: () => void }) {
             </div>
           </div>
         ))}
-        {(user?.isAdmin || user?.isStaff) && <NavLink href="/admin" label={t("nav.admin")} icon={ShieldCheck} close={close} />}
+        {(user?.isAdmin || user?.isStaff) && <a href="/admin" onClick={close} className="flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"><ShieldCheck size={15} />{t("nav.admin")}</a>}
         <div>
           <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-zinc-600">{t("nav.more")}</div>
           <div className="space-y-1">{moreItems.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div>
         </div>
+        <div className="border-t border-white/[.06] pt-5">
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-zinc-600">{t("language.label")}</p>
+          <div className="rounded-xl border border-white/[.06] bg-white/[.025] p-2.5"><LanguageSelect compact /></div>
+        </div>
+        <div className="space-y-1">
+          <NavLink href="/help" label={t("nav.help")} icon={CircleHelp} close={close} />
+          <a href={`${publicOrigin}/${config.profile.username}`} target="_blank" rel="noreferrer" className="flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"><Share2 size={15} />{t("nav.share")}</a>
+        </div>
       </nav>
-      <div className="space-y-1 border-t border-white/[.06] p-3">
-        <LanguageSelect compact />
-        <NavLink href="/help" label={t("nav.help")} icon={CircleHelp} close={close} />
-        <a href={`${publicOrigin}/${config.profile.username}`} target="_blank" rel="noreferrer" className="flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"><Share2 size={15} />{t("nav.share")}</a>
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-white/[.06] bg-white/[.025] p-2.5">
+      <div className="space-y-3 border-t border-white/[.06] p-3">
+        <div className="flex items-center gap-3 rounded-xl border border-white/[.06] bg-white/[.025] p-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#5d4ea4] to-[#241d45] text-xs font-semibold">{initials}</div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium text-zinc-200">@{config.profile.username}</p>
@@ -158,23 +164,24 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, isReady } = useAuth();
   const { dir, locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const localPreview = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_LOCAL_PREVIEW === "true";
   const isPublicProfile = pathname.startsWith("/p/");
-  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard/admin" || pathname.startsWith("/dashboard/admin/") || pathname === "/m" || pathname.startsWith("/m/");
   useEffect(() => {
-    if (!isPublicProfile && !isAdminRoute && isReady && !user) {
+    if (!localPreview && !isPublicProfile && !isAdminRoute && isReady && !user) {
       window.location.replace(`${process.env.NEXT_PUBLIC_AUTH_ORIGIN || "http://127.0.0.1:8000"}/login`);
     }
-  }, [isAdminRoute, isPublicProfile, isReady, user]);
+  }, [isAdminRoute, isPublicProfile, isReady, localPreview, user]);
   useEffect(() => { setOpen(false); }, [pathname]);
   if (isPublicProfile || isAdminRoute) return <>{children}</>;
-  if (!isReady || !user) {
+  if (!localPreview && (!isReady || !user)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#07070a] text-sm text-zinc-500">
         {isReady ? t("nav.redirecting") : t("nav.loading")}
       </div>
     );
   }
-  if (!user.username) return <UsernameClaimGate />;
+  if (!localPreview && !user?.username) return <UsernameClaimGate />;
   return (
     <div className="app-shell min-h-screen" dir={dir} lang={locale}>
       <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[248px] border-e md:block"><SidebarContent close={() => undefined} /></aside>
@@ -187,7 +194,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="md:ps-[248px]">
         <header className="sticky top-0 z-30 flex h-[68px] items-center border-b border-white/[.06] bg-[#07070a]/70 px-4 backdrop-blur-xl sm:px-8 md:hidden">
           <button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#e11d48]/30 bg-[#e11d48]/10 p-2 text-[#fecdd3] hover:bg-[#e11d48]/20" aria-label={t("nav.open")}><Menu size={19} /></button>
-          <div className="ms-3 flex items-center gap-2 text-sm font-semibold">Misa<span className="text-[#fb7185]">.lol</span></div>
+          <div className="ms-3 flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#fb7185]">.lol</span></div>
         </header>
         {children}
       </div>

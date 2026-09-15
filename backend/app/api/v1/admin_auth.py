@@ -80,12 +80,29 @@ def _digest(value: str, settings: Settings) -> str:
 
 async def require_admin_session(request: Request, settings: SettingsDep) -> AdminAccount:
     raw = request.cookies.get(ADMIN_COOKIE)
-    if not raw:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required.")
-    account = await admin_db.admin_from_session(_digest(raw, settings))
-    if account is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required.")
-    return AdminAccount(**account)
+    if raw:
+        account = await admin_db.admin_from_session(_digest(raw, settings))
+        if account is not None:
+            return AdminAccount(**account)
+
+    # Only owner/admin users assigned in the normal account session may use
+    # misa.lol/admin without a second email OTP. Moderators still use the
+    # dedicated admin-host flow.
+    user = await get_user_from_request(request)
+    if user is not None:
+        role = await admin_db.staff_role(user.id, user.is_admin, settings.admin_user_id_list)
+        if role in {"owner", "admin"}:
+            return AdminAccount(
+                id=UUID(str(user.id)),
+                email=str(user.email or ""),
+                name=str(user.display_name or user.username or user.email or "Administrator"),
+                role="super_admin" if role == "owner" else role,
+                permissions={"*": role == "owner", "admin": True, "users": True, "badges": True, "reports": True},
+                status="active",
+                suspended=False,
+            )
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required.")
 
 
 AdminSession = Annotated[AdminAccount, Depends(require_admin_session)]
@@ -181,7 +198,7 @@ async def invite(payload: InviteRequest, request: Request, admin: AdminAccount =
     invite_id = uuid4()
     expires = datetime.now(timezone.utc) + timedelta(hours=24)
     await admin_db.create_admin_invite(invite_id, email, payload.name, _digest(raw, settings), payload.role, payload.permissions, expires, admin.id)
-    link = f"{settings.public_base_url.rstrip('/')}/admin/invite?token={raw}"
+    link = f"{settings.admin_public_url.rstrip('/')}/invite?token={raw}"
     try:
         await send_transactional_email(settings, to=email, subject="You are invited to misa.lol admin", text=f"You have been invited to misa.lol administration. Accept within 24 hours: {link}")
     except Exception:

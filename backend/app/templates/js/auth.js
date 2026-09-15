@@ -12,6 +12,7 @@ const AUTH_ERRORS = {
   google_not_configured: "Google login is not configured yet.",
   discord_not_configured: "Discord login is not configured yet.",
   telegram_not_configured: "Telegram login is not configured yet.",
+  apple_not_configured: "Apple login is not configured yet.",
   turnstile: "Complete the human verification first.",
   invalid: "Invalid email or password.",
 };
@@ -256,9 +257,10 @@ async function configureSocialAuth() {
     google: "/api/v1/auth/google?next=/dashboard",
     discord: "/api/v1/auth/discord?next=/dashboard",
     telegram: "/api/v1/auth/telegram",
+    apple: "/api/v1/auth/apple?next=/dashboard",
   };
   links.forEach((link) => {
-    const provider = ["google", "discord", "telegram"].find((name) =>
+    const provider = ["google", "discord", "telegram", "apple"].find((name) =>
       link.classList.contains(`social-auth__button--${name}`),
     );
     if (!provider) return;
@@ -277,7 +279,7 @@ function bindForgotPassword() {
   document.querySelectorAll(".forgot-link").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      showAuthMessage("Password reset is not enabled yet. Use Google, Discord, or Telegram, or sign in with your password.", "error");
+      showAuthMessage("Password reset is not enabled yet. Use Google, Discord, Telegram, or Apple, or sign in with your password.", "error");
     });
   });
 }
@@ -335,6 +337,7 @@ function renderDashboard(user) {
   setProviderState("google", Boolean(user.providers?.google));
   setProviderState("discord", Boolean(user.providers?.discord));
   setProviderState("telegram", Boolean(user.providers?.telegram), user.telegram_username ? `@${user.telegram_username}` : "Connected");
+  setProviderState("apple", Boolean(user.providers?.apple));
 }
 
 async function loadDashboard() {

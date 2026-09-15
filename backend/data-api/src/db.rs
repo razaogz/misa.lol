@@ -9,7 +9,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 const USER_COLUMNS: &str = "id, account_id, email, email_verified, password_hash, username, display_name, \
-     avatar_url, google_id, discord_id, telegram_id, telegram_username, \
+     avatar_url, google_id, discord_id, telegram_id, telegram_username, apple_id, \
      created_at, updated_at, last_login_at, is_admin, suspended_at, suspension_reason, suspended_until";
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -26,6 +26,7 @@ pub struct User {
     pub discord_id: Option<String>,
     pub telegram_id: Option<String>,
     pub telegram_username: Option<String>,
+    pub apple_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_login_at: Option<DateTime<Utc>>,
@@ -47,6 +48,7 @@ pub struct NewUser {
     pub discord_id: Option<String>,
     pub telegram_id: Option<String>,
     pub telegram_username: Option<String>,
+    pub apple_id: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -61,6 +63,7 @@ pub struct UserPatch {
     pub discord_id: Option<String>,
     pub telegram_id: Option<String>,
     pub telegram_username: Option<String>,
+    pub apple_id: Option<String>,
     pub touch_login: Option<bool>,
 }
 
@@ -134,6 +137,7 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
             discord_id VARCHAR(32) UNIQUE,
             telegram_id VARCHAR(32) UNIQUE,
             telegram_username VARCHAR(64),
+            apple_id VARCHAR(128) UNIQUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             last_login_at TIMESTAMPTZ
@@ -143,6 +147,7 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
     .execute(pool)
     .await?;
     for statement in [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(128) UNIQUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_id VARCHAR(16)",
         "CREATE UNIQUE INDEX IF NOT EXISTS users_account_id_unique_idx ON users (account_id) WHERE account_id IS NOT NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
@@ -324,6 +329,7 @@ pub async fn find_by_provider(
         "google" => format!("SELECT {USER_COLUMNS} FROM users WHERE google_id = $1"),
         "discord" => format!("SELECT {USER_COLUMNS} FROM users WHERE discord_id = $1"),
         "telegram" => format!("SELECT {USER_COLUMNS} FROM users WHERE telegram_id = $1"),
+        "apple" => format!("SELECT {USER_COLUMNS} FROM users WHERE apple_id = $1"),
         _ => return Ok(None),
     };
     sqlx::query_as::<_, User>(&sql)
@@ -358,6 +364,7 @@ async fn tx_by_provider(
         "google" => format!("SELECT {USER_COLUMNS} FROM users WHERE google_id = $1"),
         "discord" => format!("SELECT {USER_COLUMNS} FROM users WHERE discord_id = $1"),
         "telegram" => format!("SELECT {USER_COLUMNS} FROM users WHERE telegram_id = $1"),
+        "apple" => format!("SELECT {USER_COLUMNS} FROM users WHERE apple_id = $1"),
         _ => return Ok(None),
     };
     sqlx::query_as::<_, User>(&sql)
@@ -371,8 +378,8 @@ pub async fn create_user(pool: &PgPool, new_user: NewUser) -> Result<User, sqlx:
     sqlx::query_as::<_, User>(&format!(
         "INSERT INTO users (
             id, account_id, email, email_verified, password_hash, username, display_name, avatar_url,
-            google_id, discord_id, telegram_id, telegram_username
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            google_id, discord_id, telegram_id, telegram_username, apple_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         RETURNING {USER_COLUMNS}"
     ))
     .bind(id)
@@ -387,6 +394,7 @@ pub async fn create_user(pool: &PgPool, new_user: NewUser) -> Result<User, sqlx:
     .bind(new_user.discord_id)
     .bind(new_user.telegram_id)
     .bind(new_user.telegram_username)
+    .bind(new_user.apple_id)
     .fetch_one(pool)
     .await
 }
@@ -423,6 +431,9 @@ pub async fn patch_user(pool: &PgPool, id: Uuid, patch: UserPatch) -> Result<Opt
     if let Some(telegram_username) = &patch.telegram_username {
         builder.push(", telegram_username = ").push_bind(telegram_username);
     }
+    if let Some(apple_id) = &patch.apple_id {
+        builder.push(", apple_id = ").push_bind(apple_id);
+    }
     if patch.touch_login.unwrap_or(false) {
         builder.push(", last_login_at = NOW()");
     }
@@ -438,6 +449,21 @@ pub async fn delete_user(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
         .execute(pool)
         .await?;
     Ok(result.rows_affected() == 1)
+}
+
+pub async fn unlink_provider(pool: &PgPool, id: Uuid, provider: &str) -> Result<Option<User>, sqlx::Error> {
+    let (column, extra) = match provider {
+        "google" => ("google_id", ""),
+        "telegram" => ("telegram_id", ", telegram_username = NULL"),
+        _ => return Ok(None),
+    };
+    let query = format!(
+        "UPDATE users SET {column} = NULL{extra}, updated_at = NOW() WHERE id = $1 RETURNING {USER_COLUMNS}"
+    );
+    sqlx::query_as::<_, User>(&query)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
 }
 
 pub async fn oauth_upsert(pool: &PgPool, req: OAuthRequest) -> Result<Result<User, &'static str>, sqlx::Error> {
@@ -510,17 +536,18 @@ pub async fn oauth_upsert(pool: &PgPool, req: OAuthRequest) -> Result<Result<Use
     }
 
     let id = Uuid::new_v4();
-    let (google_id, discord_id, telegram_id) = match req.provider.as_str() {
-        "google" => (Some(req.provider_id.clone()), None, None),
-        "discord" => (None, Some(req.provider_id.clone()), None),
-        "telegram" => (None, None, Some(req.provider_id.clone())),
+    let (google_id, discord_id, telegram_id, apple_id) = match req.provider.as_str() {
+        "google" => (Some(req.provider_id.clone()), None, None, None),
+        "discord" => (None, Some(req.provider_id.clone()), None, None),
+        "telegram" => (None, None, Some(req.provider_id.clone()), None),
+        "apple" => (None, None, None, Some(req.provider_id.clone())),
         _ => return Ok(Err("unknown_provider")),
     };
     sqlx::query(
         "INSERT INTO users (
             id, account_id, email, email_verified, display_name, avatar_url,
-            google_id, discord_id, telegram_id, telegram_username
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+            google_id, discord_id, telegram_id, telegram_username, apple_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
     )
     .bind(id)
     .bind(account_id_for())
@@ -536,6 +563,7 @@ pub async fn oauth_upsert(pool: &PgPool, req: OAuthRequest) -> Result<Result<Use
     } else {
         None
     })
+    .bind(apple_id)
     .execute(&mut *tx)
     .await?;
     let user = tx_by_id(&mut tx, id)
@@ -574,6 +602,13 @@ async fn apply_provider_update(
             .bind(&req.telegram_username)
             .execute(&mut **tx)
             .await?;
+        }
+        "apple" => {
+            sqlx::query("UPDATE users SET apple_id = $2, updated_at = NOW() WHERE id = $1")
+                .bind(user_id)
+                .bind(&req.provider_id)
+                .execute(&mut **tx)
+                .await?;
         }
         _ => {}
     }

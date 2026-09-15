@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     domain: str = "misa.lol"
     public_base_url: str = "https://misa.lol"
     dashboard_url: str = "/dashboard"
+    admin_public_url: str = "https://ukvhq.dev/m"
     database_url: str = Field(default="", validation_alias=AliasChoices("DATABASE_URL", "MISA_DATABASE_URL"))
 
     data_api_url: str = Field(
@@ -46,8 +47,29 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     discord_client_id: str = ""
     discord_client_secret: str = ""
+    discord_server_invite: str = ""
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
+    apple_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_APPLE_CLIENT_ID", "APPLE_CLIENT_ID"),
+    )
+    apple_team_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_APPLE_TEAM_ID", "APPLE_TEAM_ID"),
+    )
+    apple_key_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_APPLE_KEY_ID", "APPLE_KEY_ID"),
+    )
+    apple_private_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_APPLE_PRIVATE_KEY", "APPLE_PRIVATE_KEY"),
+    )
+    apple_client_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("MISA_APPLE_CLIENT_SECRET", "APPLE_CLIENT_SECRET"),
+    )
     lastfm_api_key: str = ""
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
@@ -97,6 +119,10 @@ class Settings(BaseSettings):
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_bot_token and self.telegram_bot_username)
+
+    @property
+    def apple_enabled(self) -> bool:
+        return bool(self.apple_client_id)
 
     @property
     def telegram_bot_id(self) -> str:

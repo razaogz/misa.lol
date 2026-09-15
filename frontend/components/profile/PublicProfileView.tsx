@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { loadProfileForUsername } from "@/lib/profile-store";
@@ -28,6 +28,7 @@ export function PublicProfileView({ username }: { username: string }) {
     });
     return () => { cancelled = true; };
   }, [username]);
+
 
   if (status === "loading") return <div className="min-h-[100svh] bg-[#07070a]" />;
   if (status === "missing" || !config) {

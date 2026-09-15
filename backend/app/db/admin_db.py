@@ -48,6 +48,7 @@ async def init_admin_db(database_url: str, root_email: str = "") -> None:
     await ensure_feature_flags()
     await ensure_premium_ranks()
     await ensure_default_fonts()
+    await ensure_apple_support()
     await ensure_admin_auth_tables(root_email)
 
 
@@ -88,6 +89,15 @@ async def ensure_discord_links() -> None:
             )
             """
         )
+    except (asyncpg.PostgresError, OSError):
+        return
+
+
+async def ensure_apple_support() -> None:
+    if _pool is None:
+        return
+    try:
+        await _pool.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(128) UNIQUE")
     except (asyncpg.PostgresError, OSError):
         return
 
@@ -1188,6 +1198,18 @@ async def clear_user_discord_id(user_id: str) -> None:
     await _get_pool().execute("UPDATE users SET discord_id = NULL, updated_at = NOW() WHERE id = $1", UUID(user_id))
 
 
+async def clear_user_provider(user_id: str, provider: str) -> None:
+    columns = {"google": "google_id", "telegram": "telegram_id"}
+    column = columns.get(provider)
+    if column is None:
+        raise ValueError("unsupported provider")
+    extra = ", telegram_username = NULL" if provider == "telegram" else ""
+    await _get_pool().execute(
+        f"UPDATE users SET {column} = NULL{extra}, updated_at = NOW() WHERE id = $1",
+        UUID(user_id),
+    )
+
+
 async def get_user_discord_id(user_id: str) -> str | None:
     row = await _get_pool().fetchrow("SELECT discord_id FROM users WHERE id = $1", UUID(user_id))
     value = str((row or {}).get("discord_id") or "").strip() if row else ""
@@ -1334,7 +1356,7 @@ async def search_users(search: str = "", limit: int = 50, offset: int = 0, allow
     try:
         rows = await _get_pool().fetch(
             """SELECT id, email, email_verified, username, display_name, avatar_url,
-                      google_id, discord_id, telegram_id, telegram_username,
+                      google_id, discord_id, telegram_id, telegram_username, apple_id,
                       created_at, updated_at, last_login_at, is_admin,
                       suspended_at, suspension_reason, suspended_until,
                       EXISTS (
@@ -1361,7 +1383,7 @@ async def search_users(search: str = "", limit: int = 50, offset: int = 0, allow
     except asyncpg.UndefinedTableError:
         rows = await _get_pool().fetch(
             """SELECT id, email, email_verified, username, display_name, avatar_url,
-                      google_id, discord_id, telegram_id, telegram_username,
+                      google_id, discord_id, telegram_id, telegram_username, apple_id,
                       created_at, updated_at, last_login_at, is_admin,
                       suspended_at, suspension_reason, suspended_until
                FROM users
