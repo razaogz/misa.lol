@@ -84,10 +84,26 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
     if (!requestNonce || !requestedId) return;
     const next = tracks.findIndex((item) => item.id === requestedId);
     if (next < 0) return;
+    if (next === safeIndex) {
+      const audio = audioRef.current;
+      if (!audio || !src) return;
+      if (srcRef.current !== src) {
+        srcRef.current = src;
+        audio.src = src;
+      }
+      playingRef.current = true;
+      void audio.play()
+        .then(() => setPlaying(true))
+        .catch(() => {
+          playingRef.current = false;
+          setPlaying(false);
+        });
+      return;
+    }
     playingRef.current = true;
     setPlaying(true);
     setIndex(next);
-  }, [requestNonce, requestedId, tracks]);
+  }, [requestNonce, requestedId, safeIndex, src, tracks]);
   useEffect(() => {
     if (!pauseNonce) return;
     audioRef.current?.pause();

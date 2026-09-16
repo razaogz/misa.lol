@@ -2,9 +2,9 @@
 
 import { AlignCenter, AlignLeft, AlignRight, GripVertical, Link2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import { useProfile } from "@/lib/profile-store";
+import { uploadProfileAsset, useProfile } from "@/lib/profile-store";
 import { platformOptions } from "@/lib/mock-data";
-import { composeSocialValue, createSocialId, defaultSocialAction, extractSocialHandle, iconFromFile, isForeignSocialHost, isSafeSocialIconUrl, PLATFORM_ICON_COLORS, platformUrlPrefix, resolveIconColor, sanitizeSocialHref } from "@/lib/socials";
+import { composeSocialValue, createSocialId, defaultSocialAction, extractSocialHandle, isForeignSocialHost, isSafeSocialIconUrl, PLATFORM_ICON_COLORS, platformUrlPrefix, resolveIconColor, sanitizeSocialHref } from "@/lib/socials";
 import type { ProfileAsset, SocialAction, SocialAlign, SocialLink, SocialPlatform } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { Button, FieldLabel, Modal, PageHeader, TextInput, Toggle } from "@/components/ui";
@@ -111,7 +111,7 @@ function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: So
 
   const uploadIcon = async (file: File) => {
     try {
-      setCustomIcon(await iconFromFile(file));
+      setCustomIcon(await uploadProfileAsset("socialIcon", file));
       setError("");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : t("links.iconFail"));

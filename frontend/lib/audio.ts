@@ -4,6 +4,7 @@ export const DEFAULT_MAX_TRACKS = 8;
 export const DEFAULT_MAX_TRACK_BYTES = 8_000_000;
 export const DEFAULT_MAX_ARTWORK_BYTES = 3_000_000;
 export const KEEP_ASSET_URL = "misa:keep";
+export const REMOVE_ASSET_URL = "misa:remove";
 const MAX_SAVE_CHARS = 60_000_000;
 
 export type AudioSource = "video" | "standalone" | "tracks";
@@ -134,6 +135,10 @@ export function savePayloadTooLarge(body: string) {
 }
 
 function compactAsset(next: ProfileAsset, previous?: ProfileAsset): ProfileAsset {
+  if (next?.remove) return { ...next, url: REMOVE_ASSET_URL, remove: undefined };
+  // Empty asset values are common in the full profile form. Preserve stored media
+  // unless the UI marked this asset as an explicit removal.
+  if (!next?.url && previous?.url) return { ...next, url: KEEP_ASSET_URL };
   if (next?.url && previous?.url && next.url === previous.url) return { ...next, url: KEEP_ASSET_URL };
   return next;
 }

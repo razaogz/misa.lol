@@ -115,10 +115,13 @@ def _oauth_destination(settings: Settings, signed_in: bool, next_path: str) -> s
         if dashboard.startswith("http"):
             return f"{dashboard}{extra}"
         return next_path
-    # Provider linking starts from the authenticated Security page. Preserve that
-    # safe local destination instead of collapsing it back to the dashboard.
+    # Provider linking starts from the authenticated Security page. Always return
+    # through the dashboard base path so Next.js does not lose /dashboard.
     if signed_in and next_path in {"/security", "/settings"}:
-        return next_path
+        suffix = next_path
+        if dashboard.startswith("http"):
+            return f"{dashboard}{suffix}"
+        return f"/dashboard{suffix}"
     return dashboard if signed_in else next_path
 
 

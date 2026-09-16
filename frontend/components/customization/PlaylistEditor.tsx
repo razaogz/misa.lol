@@ -8,7 +8,7 @@ import { fileTitle, loadPlaylistLimits, newTrackId, playlistTracks, trackTitle }
 import { readAudioTags } from "@/lib/id3";
 import { IMAGE_ACCEPT } from "@/lib/image-edit";
 import { usePreviewPlayer } from "@/lib/preview-player";
-import { assetFromFile } from "@/lib/profile-store";
+import { uploadProfileAsset } from "@/lib/profile-store";
 import type { AudioTrack, ProfileAsset, ProfileConfig } from "@/lib/types";
 
 export function PlaylistEditor({ config, onChange }: { config: ProfileConfig; onChange: (tracks: AudioTrack[]) => void }) {
@@ -24,7 +24,7 @@ export function PlaylistEditor({ config, onChange }: { config: ProfileConfig; on
     for (const file of Array.from(files)) {
       if (next.length >= limits.maxTracks) { window.alert(t("customize.playlistMax", { count: limits.maxTracks })); break; }
       if (file.size > limits.maxTrackBytes) { window.alert(t("customize.playlistFileTooLarge", { name: file.name, mb: Math.round(limits.maxTrackBytes / 1_000_000) })); continue; }
-      const audio = await assetFromFile(file);
+      const audio = await uploadProfileAsset("audio", file);
       const tags = await readAudioTags(file);
       next.push({
         id: newTrackId(),
@@ -82,7 +82,7 @@ function TrackRow({ track, index, total, maxArtworkBytes, onTitle, onArtwork, on
   const playing = player.activeId === track.id && player.playing;
   const uploadArt = async (file: File) => {
     if (file.size > maxArtworkBytes) { window.alert(t("customize.artTooLarge", { mb: Math.round(maxArtworkBytes / 1_000_000) })); return; }
-    onArtwork(await assetFromFile(file));
+    onArtwork(await uploadProfileAsset("audioArtwork", file));
   };
   return (
     <div className="rounded-xl border border-white/[.06] bg-black/15 p-3">

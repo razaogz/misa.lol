@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ProfileProvider } from "@/lib/profile-store";
 import { AuthProvider } from "@/lib/auth-store";
@@ -11,19 +11,19 @@ import { RuntimeErrorBoundary } from "@/components/dashboard/RuntimeErrorBoundar
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <I18nProvider>
-      <DashboardTabState />
-      <FeatureFlagsProvider>
-        <AuthProvider>
-        <ProfileProvider>
-          <DiscordLiveProvider>
-            <RuntimeErrorBoundary>
-              <DashboardShell>{children}</DashboardShell>
-            </RuntimeErrorBoundary>
-          </DiscordLiveProvider>
-        </ProfileProvider>
-        </AuthProvider>
-      </FeatureFlagsProvider>
-    </I18nProvider>
+    <RuntimeErrorBoundary>
+      <I18nProvider>
+        <DashboardTabState />
+        <FeatureFlagsProvider>
+          <AuthProvider>
+            <ProfileProvider>
+              <DiscordLiveProvider>
+                <DashboardShell>{children}</DashboardShell>
+              </DiscordLiveProvider>
+            </ProfileProvider>
+          </AuthProvider>
+        </FeatureFlagsProvider>
+      </I18nProvider>
+    </RuntimeErrorBoundary>
   );
 }

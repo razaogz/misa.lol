@@ -1,5 +1,9 @@
 const apiOrigin = process.env.API_PROXY_TARGET
-  || (process.env.NODE_ENV === "production" ? "https://misa.lol" : "http://127.0.0.1:8000");
+  || "http://127.0.0.1:8000";
+const mediaHosts = (process.env.NEXT_PUBLIC_MEDIA_HOSTS || "r2.misa.lol")
+  .split(",")
+  .map((host) => host.trim().toLowerCase())
+  .filter(Boolean);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,6 +13,9 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons"],
     middlewareClientMaxBodySize: "64mb",
+  },
+  images: {
+    remotePatterns: mediaHosts.map((hostname) => ({ protocol: "https", hostname, pathname: "/**" })),
   },
   outputFileTracingRoot: process.cwd(),
   async rewrites() {

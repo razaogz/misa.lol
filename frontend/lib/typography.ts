@@ -1,7 +1,7 @@
 import type { PageEnter, ProfileFont, UsernameEffect } from "./types";
 
 export const PROFILE_FONTS: ProfileFont[] = ["Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"];
-export const USERNAME_EFFECTS: UsernameEffect[] = ["None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave", "Shadow"];
+export const USERNAME_EFFECTS: UsernameEffect[] = ["None", "Glow", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave"];
 
 export function usernameEffectClass(effect: UsernameEffect) {
   if (effect === "Gradient" || effect === "Typewriter") return "bg-gradient-to-r from-[var(--username-color)] via-[var(--effect-color)] to-[var(--username-color)] bg-clip-text text-transparent";

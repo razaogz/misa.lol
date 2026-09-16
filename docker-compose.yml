@@ -8,18 +8,21 @@ services:
       frontend:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
+      - tunnel_ingress
       - app
 
   frontend:
     build:
       context: ./frontend
+      args:
+        API_PROXY_TARGET: http://api:8000
+        NEXT_PUBLIC_MEDIA_HOSTS: "${NEXT_PUBLIC_MEDIA_HOSTS:-r2.misa.lol}"
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -32,6 +35,7 @@ services:
       - "3000"
     networks:
       - app
+      - frontend_egress
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/dashboard').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -53,6 +57,8 @@ services:
       MISA_PUBLIC_BASE_URL: "${MISA_PUBLIC_BASE_URL:-https://misa.lol}"
       MISA_ADMIN_PUBLIC_URL: "${MISA_ADMIN_PUBLIC_URL:-https://ukvhq.dev/m}"
       MISA_CORS_ORIGINS: "${MISA_CORS_ORIGINS:-https://misa.lol,https://www.misa.lol,https://ukvhq.dev}"
+      MISA_TRUSTED_HOSTS: "${MISA_TRUSTED_HOSTS:-misa.lol,www.misa.lol,ukvhq.dev,localhost,127.0.0.1,api}"
+      MISA_MEDIA_FETCH_HOSTS: "${MISA_MEDIA_FETCH_HOSTS:-}"
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
       MISA_ADMIN_USER_IDS: "${MISA_ADMIN_USER_IDS:-}"
       SUPER_ADMIN_EMAIL: "${SUPER_ADMIN_EMAIL:?Set SUPER_ADMIN_EMAIL in .env}"
@@ -76,6 +82,12 @@ services:
       MISA_SUPABASE_URL: "${MISA_SUPABASE_URL:-}"
       MISA_SUPABASE_SERVICE_ROLE_KEY: "${MISA_SUPABASE_SERVICE_ROLE_KEY:-}"
       MISA_STORAGE_BUCKET: "${MISA_STORAGE_BUCKET:-misa-assets}"
+      R2_ACCOUNT_ID: "${R2_ACCOUNT_ID:-}"
+      R2_BUCKET: "${R2_BUCKET:-}"
+      R2_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:-}"
+      R2_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY:-}"
+      R2_ENDPOINT: "${R2_ENDPOINT:-}"
+      R2_PUBLIC_BASE_URL: "${R2_PUBLIC_BASE_URL:-}"
     depends_on:
       data-api:
         condition: service_healthy
@@ -86,6 +98,7 @@ services:
     networks:
       - app
       - data
+      - api_egress
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/', timeout=3)"]
       interval: 10s
@@ -99,7 +112,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
-      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-10}"
+      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-5}"
       DATA_API_KEY: "${DATA_API_KEY:?Set DATA_API_KEY in .env}"
       LISTEN_ADDR: 0.0.0.0:8080
       RUST_LOG: "${RUST_LOG:-info}"
@@ -107,7 +120,7 @@ services:
       - "8080"
     networks:
       - data
-      - egress
+      - data_api_egress
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -129,7 +142,7 @@ services:
         condition: service_started
     networks:
       - data
-      - egress
+      - bot_egress
 
   dragonfly:
     image: docker.dragonflydb.io/dragonflydb/dragonfly
@@ -141,12 +154,21 @@ services:
       - data
 
 networks:
+  tunnel_ingress:
+    driver: bridge
   app:
     driver: bridge
+    internal: true
   data:
     driver: bridge
     internal: true
-  egress:
+  api_egress:
+    driver: bridge
+  frontend_egress:
+    driver: bridge
+  data_api_egress:
+    driver: bridge
+  bot_egress:
     driver: bridge
 
 volumes:

@@ -126,7 +126,14 @@ export function sanitizeSocialHref(value: string, platform: SocialPlatform): str
 }
 
 export function isSafeSocialIconUrl(url: string | null | undefined): url is string {
-  return Boolean(url && SAFE_ICON_PREFIX.test(url) && url.length <= SOCIAL_ICON_MAX_BYTES * 2);
+  if (!url || url.length > 2048) return false;
+  if (SAFE_ICON_PREFIX.test(url)) return url.length <= SOCIAL_ICON_MAX_BYTES * 2;
+  try {
+    const parsed = new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.origin);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function sanitizeHexColor(value: string | null | undefined): string | null {

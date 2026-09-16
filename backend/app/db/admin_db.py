@@ -29,11 +29,24 @@ STAFF_ROLES = ("admin", "moderator")
 _pool: asyncpg.Pool | None = None
 
 
-async def init_admin_db(database_url: str, root_email: str = "") -> None:
+async def init_admin_db(
+    database_url: str,
+    root_email: str = "",
+    *,
+    initialize_schema: bool = True,
+) -> None:
     global _pool
     if not database_url:
         return
-    _pool = await asyncpg.create_pool(database_url, min_size=2, max_size=8, command_timeout=60)
+    _pool = await asyncpg.create_pool(
+        database_url,
+        min_size=1,
+        max_size=4,
+        command_timeout=30,
+        max_inactive_connection_lifetime=30,
+    )
+    if not initialize_schema:
+        return
     await ensure_official_badges()
     await ensure_badge_icons()
     await ensure_verification_requests()
@@ -1341,6 +1354,67 @@ async def save_profile(user_id: str, config: dict[str, Any]) -> dict[str, Any]:
         json.dumps(config),
     )
     return config
+
+
+async def list_profiles_for_media_migration(
+    after_user_id: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Read profile JSON in stable batches for the one-time media migration.
+
+    This intentionally includes disabled profiles: migrating their embedded media
+    changes no account or publication state and avoids leaving oversized JSONB
+    documents behind.
+    """
+    batch_size = max(1, min(int(limit), 500))
+    if after_user_id:
+        rows = await _get_pool().fetch(
+            """
+            SELECT user_id::text AS user_id, config
+            FROM profiles
+            WHERE user_id > $1
+            ORDER BY user_id
+            LIMIT $2
+            """,
+            UUID(after_user_id),
+            batch_size,
+        )
+    else:
+        rows = await _get_pool().fetch(
+            """
+            SELECT user_id::text AS user_id, config
+            FROM profiles
+            ORDER BY user_id
+            LIMIT $1
+            """,
+            batch_size,
+        )
+    profiles: list[dict[str, Any]] = []
+    for row in rows:
+        config = row["config"]
+        if isinstance(config, str):
+            config = json.loads(config)
+        profiles.append({"user_id": row["user_id"], "config": config})
+    return profiles
+
+
+async def replace_profile_config_for_media_migration(
+    user_id: str,
+    expected_config: dict[str, Any],
+    updated_config: dict[str, Any],
+) -> bool:
+    """Replace only an unchanged profile document and never insert or delete rows."""
+    result = await _get_pool().execute(
+        """
+        UPDATE profiles
+        SET config = $3::jsonb, updated_at = NOW()
+        WHERE user_id = $1 AND config = $2::jsonb
+        """,
+        UUID(user_id),
+        json.dumps(expected_config),
+        json.dumps(updated_config),
+    )
+    return result == "UPDATE 1"
 
 
 async def _audit(conn: asyncpg.Connection, actor_id: UUID, action: str, target_type: str | None, target_id: str | None, metadata: dict[str, Any] | None = None) -> None:

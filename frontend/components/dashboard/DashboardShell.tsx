@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Copy, LayoutDashboard, Link2, LockKeyhole, LogOut, Menu, Palette, Search, Settings, Share2, ShieldCheck, Sparkles, Trophy, UsersRound, X } from "lucide-react";
+import { BarChart3, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Copy, LayoutDashboard, Link2, LockKeyhole, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Palette, Search, Settings, Share2, ShieldCheck, Sparkles, Trophy, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LanguageSelect } from "@/components/dashboard/LanguageSelect";
 import { UsernameClaimGate } from "@/components/onboarding/UsernameClaimGate";
@@ -30,7 +30,7 @@ function NavLink({ href, label, icon: Icon, close }: DashboardNavItem & { close:
   );
 }
 
-function SidebarContent({ close }: { close: () => void }) {
+function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggleDesktop?: () => void }) {
   const { config } = useProfile();
   const { logout, user } = useAuth();
   const { t } = useI18n();
@@ -84,7 +84,10 @@ function SidebarContent({ close }: { close: () => void }) {
           <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
           <span className="text-[15px] font-semibold tracking-[-.02em]">Misa<span className="text-[#fb7185]">.lol</span></span>
         </Link>
-        <button type="button" className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/[.06] hover:text-white md:hidden" onClick={close} aria-label={t("nav.close")}><X size={18} /></button>
+        <div className="flex items-center gap-1">
+          {onToggleDesktop && <button type="button" className="hidden rounded-lg p-1.5 text-zinc-500 hover:bg-white/[.06] hover:text-white md:flex" onClick={onToggleDesktop} aria-label="Hide navigation" title="Hide navigation"><PanelLeftClose size={17} /></button>}
+          <button type="button" className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/[.06] hover:text-white md:hidden" onClick={close} aria-label={t("nav.close")}><X size={18} /></button>
+        </div>
       </div>
       <div className="relative px-4">
         <label className="flex h-10 w-full items-center gap-2.5 rounded-xl border border-white/[.06] bg-white/[.025] px-3 text-start text-xs text-zinc-500 transition focus-within:border-white/[.16] focus-within:text-zinc-300">
@@ -162,9 +165,19 @@ function SidebarContent({ close }: { close: () => void }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, isReady } = useAuth();
+  const { profileReady } = useProfile();
   const { dir, locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const localPreview = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_LOCAL_PREVIEW === "true";
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("misa.dashboard.sidebarCollapsed") === "1");
+  }, []);
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    window.localStorage.setItem("misa.dashboard.sidebarCollapsed", next ? "1" : "0");
+  };
   const isPublicProfile = pathname.startsWith("/p/");
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard/admin" || pathname.startsWith("/dashboard/admin/") || pathname === "/m" || pathname.startsWith("/m/");
   useEffect(() => {
@@ -181,17 +194,30 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
   if (!localPreview && !user?.username) return <UsernameClaimGate />;
   return (
     <div className="app-shell min-h-screen" dir={dir} lang={locale}>
-      <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[248px] border-e md:block"><SidebarContent close={() => undefined} /></aside>
+      {!profileReady && (
+        <div role="status" className="pointer-events-none fixed inset-x-0 top-3 z-[70] flex justify-center">
+          <div className="rounded-full border border-white/[.08] bg-[#0d0d12]/90 px-3 py-1.5 text-xs text-zinc-500 shadow-lg backdrop-blur">
+            Preview loaded · syncing your profile...
+          </div>
+        </div>
+      )}
+      {!sidebarCollapsed && <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[248px] border-e md:block"><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>}
+      {sidebarCollapsed && (
+        <button type="button" className="sidebar-glass fixed start-3 top-4 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border text-zinc-300 shadow-lg hover:text-white md:flex" onClick={toggleSidebar} aria-label="Show navigation" title="Show navigation">
+          <PanelLeftOpen size={17} />
+        </button>
+      )}
       {open && (
         <>
           <button type="button" className="animate-fade-in fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)} aria-label={t("nav.close")} />
           <aside className="sidebar-glass animate-slide-in fixed inset-y-0 start-0 z-50 w-[272px] border-e md:hidden"><SidebarContent close={() => setOpen(false)} /></aside>
         </>
       )}
-      <div className="md:ps-[248px]">
+      <div className={sidebarCollapsed ? "" : "md:ps-[248px]"}>
         <header className="sticky top-0 z-30 flex h-[68px] items-center border-b border-white/[.06] bg-[#07070a]/70 px-4 backdrop-blur-xl sm:px-8 md:hidden">
           <button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#e11d48]/30 bg-[#e11d48]/10 p-2 text-[#fecdd3] hover:bg-[#e11d48]/20" aria-label={t("nav.open")}><Menu size={19} /></button>
           <div className="ms-3 flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#fb7185]">.lol</span></div>

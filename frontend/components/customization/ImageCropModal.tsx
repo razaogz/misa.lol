@@ -2,7 +2,7 @@
 
 import { RotateCcw, RotateCw } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { coverScale, exportCroppedImage } from "@/lib/image-edit";
+import { coverScale, cropImageSource, exportCroppedImage } from "@/lib/image-edit";
 import { Button, Modal, RangeControl } from "@/components/ui";
 
 export function ImageCropModal({
@@ -34,6 +34,7 @@ export function ImageCropModal({
   const [busy, setBusy] = useState(false);
   const [box, setBox] = useState({ w: 320, h: 320 });
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const imageSrc = cropImageSource(src);
 
   useEffect(() => {
     if (!open) return;
@@ -41,9 +42,10 @@ export function ImageCropModal({
     setRotation(0);
     setOffset({ x: 0, y: 0 });
     const image = new Image();
+    if (/^https?:\/\//i.test(imageSrc)) image.crossOrigin = "anonymous";
     image.onload = () => setNatural({ w: image.naturalWidth || 1, h: image.naturalHeight || 1 });
-    image.src = src;
-  }, [open, src]);
+    image.src = imageSrc;
+  }, [open, imageSrc]);
 
   useLayoutEffect(() => {
     if (!open || !frame.current) return;
@@ -70,7 +72,7 @@ export function ImageCropModal({
     setBusy(true);
     try {
       const url = await exportCroppedImage({
-        src,
+        src: imageSrc,
         boxWidth: box.w,
         boxHeight: box.h,
         outputWidth,
@@ -102,7 +104,7 @@ export function ImageCropModal({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          src={imageSrc}
           alt=""
           draggable={false}
           className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"

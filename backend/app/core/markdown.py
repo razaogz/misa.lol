@@ -1,6 +1,7 @@
 import re
 from html import escape
-from urllib.parse import urlparse
+
+from app.core.network_safety import safe_public_url
 
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 CODE = re.compile(r"`([^`]+)`")
@@ -80,10 +81,5 @@ def _safe_href(url: str) -> str | None:
     if lower.startswith("mailto:"):
         address = text.split(":", 1)[1].strip()
         return f"mailto:{address}" if re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", address) else None
-    parsed = urlparse(text if "://" in text else f"https://{text}")
-    host = (parsed.hostname or "")
-    if parsed.scheme not in {"http", "https"} or not host or parsed.username or parsed.password:
-        return None
-    if host in {"javascript", "vbscript", "data"} or ":" in host:
-        return None
-    return text if "://" in text else f"https://{text}"
+    candidate = text if "://" in text else f"https://{text}"
+    return safe_public_url(candidate)

@@ -2,6 +2,23 @@ import type { ProfileAsset } from "./types";
 
 export const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 export const FAVICON_ACCEPT = `${IMAGE_ACCEPT},image/x-icon,image/vnd.microsoft.icon,.ico`;
+const CROP_PROXY_HOSTS = new Set(
+  (process.env.NEXT_PUBLIC_MEDIA_HOSTS || "r2.misa.lol")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+export function cropImageSource(src: string) {
+  if (!/^https:\/\//i.test(src)) return src;
+  try {
+    const url = new URL(src);
+    if (!CROP_PROXY_HOSTS.has(url.hostname.toLowerCase())) return src;
+    return `/dashboard/_next/image?url=${encodeURIComponent(url.toString())}&w=3840&q=100`;
+  } catch {
+    return src;
+  }
+}
 
 export function isAnimatedAsset(asset: Pick<ProfileAsset, "url" | "type" | "name"> | null | undefined) {
   if (!asset) return false;
@@ -35,6 +52,7 @@ export async function prepareCursorAsset(asset: ProfileAsset): Promise<ProfileAs
 export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    if (/^https?:\/\//i.test(src)) image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Could not load that image."));
     image.src = src;

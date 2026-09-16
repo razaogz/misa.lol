@@ -1,7 +1,10 @@
-﻿from typing import Any, Annotated
+import re
+from pathlib import Path
+from typing import Any, Annotated
+from uuid import uuid4
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import RedirectResponse
 from httpx import HTTPError
 
@@ -13,6 +16,7 @@ from app.core.profiles import default_public_profile, resolve_public_profile, st
 from app.core.security import USERNAME_RE
 from app.core.sessions import get_user_from_request
 from app.core.rate_limit import client_ip, rate_limit
+from app.core.r2_storage import get_r2_storage
 from app.core.usernames import current_handle_for, username_redirect
 from app.core.widgets import resolve_profile_widgets
 from app.db import data_api
@@ -39,6 +43,64 @@ def _media_response(url: str) -> Response | None:
     return None
 
 
+ASSET_LIMITS = {
+    "avatar": 3_000_000, "background": 3_000_000, "banner": 3_000_000,
+    "ogImage": 3_000_000, "favicon": 1_100_000, "cursor": 3_000_000,
+    "backgroundVideo": 20_000_000, "audio": 8_000_000, "audioArtwork": 3_000_000,
+    "clickSound": 400_000, "customFont": 2_000_000, "cover": 3_000_000,
+    "socialIcon": 512_000,
+}
+
+def _asset_content_allowed(kind: str, content_type: str) -> bool:
+    if kind in {"avatar", "background", "banner", "ogImage", "favicon", "audioArtwork", "cover", "socialIcon", "cursor"}:
+        return content_type in {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"}
+    if kind == "backgroundVideo":
+        return content_type in {"video/mp4", "video/webm", "video/quicktime"}
+    if kind in {"audio", "clickSound"}:
+        return content_type.startswith("audio/")
+    if kind == "customFont":
+        return content_type.startswith("font/") or content_type in {"application/font-woff", "application/font-woff2", "application/octet-stream"}
+    return False
+
+def _safe_upload_name(filename: str | None) -> str:
+    value = Path(filename or "upload").name
+    value = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip(".-")
+    return value[:100] or "upload"
+
+@router.post("/assets")
+async def upload_asset(
+    kind: Annotated[str, Form(...)],
+    file: Annotated[UploadFile, File(...)],
+    settings = Depends(get_settings),
+    user: User = Depends(require_user),
+) -> dict[str, Any]:
+    if kind not in ASSET_LIMITS:
+        raise HTTPException(status_code=400, detail="Unsupported asset type.")
+    content_type = (file.content_type or "").lower()
+    if not content_type:
+        content_type = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon",
+            ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg",
+            ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4",
+            ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf",
+            ".otf": "font/otf",
+        }.get(Path(file.filename or "").suffix.lower(), "application/octet-stream")
+    if not _asset_content_allowed(kind, content_type):
+        raise HTTPException(status_code=400, detail="That file type is not supported for this asset.")
+    body = await file.read(ASSET_LIMITS[kind] + 1)
+    if len(body) > ASSET_LIMITS[kind]:
+        raise HTTPException(status_code=413, detail="That file is too large.")
+    storage = get_r2_storage(settings)
+    if not storage.enabled:
+        raise HTTPException(status_code=503, detail="R2 object storage is not configured.")
+    name = _safe_upload_name(file.filename)
+    key = f"profiles/{user.id}/{kind}/{uuid4().hex}-{name}"
+    try:
+        await storage.put(key, body, content_type)
+    except Exception:
+        raise HTTPException(status_code=502, detail="R2 object storage is temporarily unavailable.") from None
+    return {"asset": {"url": storage.public_url(key), "name": name, "type": content_type, "key": key}}
 @router.get("/limits")
 async def profile_limits() -> dict[str, int]:
     settings = get_settings()
@@ -156,13 +218,16 @@ async def public_profile_asset(username: str, kind: str) -> Response:
     assets = profile.get("assets") or {}
     item = assets.get(kind)
     url = str((item or {}).get("url") or "") if isinstance(item, dict) else ""
-    media = _media_response(url)
+    media = _public_media(url, ASSET_KIND_TYPES[kind])
     if media:
         return media
     if kind in {"audio", "audioArtwork"}:
         first = next((track for track in assets.get("tracks") or [] if isinstance(track, dict)), None)
         source = (first or {}).get("audio" if kind == "audio" else "artwork")
-        media = _media_response(str((source or {}).get("url") or "") if isinstance(source, dict) else "")
+        media = _public_media(
+            str((source or {}).get("url") or "") if isinstance(source, dict) else "",
+            "audio" if kind == "audio" else "image",
+        )
         if media:
             return media
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
@@ -216,12 +281,12 @@ async def public_track_asset(username: str, track_id: str, kind: str) -> Respons
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
     source = track.get("audio" if kind == "audio" else "artwork")
     url = str((source or {}).get("url") or "") if isinstance(source, dict) else ""
-    media = _media_response(url)
+    media = _public_media(url, "audio" if kind == "audio" else "image")
     if media:
         return media
     if kind == "artwork":
         avatar = (assets.get("avatar") or {}).get("url") if isinstance(assets.get("avatar"), dict) else ""
-        media = _media_response(str(avatar or ""))
+        media = _public_media(str(avatar or ""), "image")
         if media:
             return media
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")

@@ -21,6 +21,8 @@ export interface ProfileAsset {
   url: string | null;
   name?: string;
   type?: string;
+  /** Set only for an explicit user removal. */
+  remove?: boolean;
 }
 
 export interface AudioTrack {

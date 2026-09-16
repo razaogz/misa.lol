@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Check, ChevronDown, LoaderCircle } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
 export const buttonStyles = {
@@ -23,8 +23,8 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
   return <span role="switch" tabIndex={0} aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onChange(!checked); } }} className={`relative inline-block h-6 w-11 shrink-0 cursor-pointer rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e11d48] ${checked ? "bg-[#e11d48]" : "bg-white/[.13]"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-[inset-inline-start] ${checked ? "start-6" : "start-1"}`} /></span>;
 }
 
-export function RangeControl({ label, value, min, max, suffix = "", onChange }: { label: string; value: number; min: number; max: number; suffix?: string; onChange: (value: number) => void }) {
-  return <div className="space-y-2"><div className="flex items-center justify-between text-sm"><span className="text-zinc-300">{label}</span><span className="font-mono text-xs text-zinc-500">{value}{suffix}</span></div><input aria-label={label} type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/[.09] accent-[#e11d48]" /></div>;
+export function RangeControl({ label, value, min, max, suffix = "", onChange, onReset }: { label: string; value: number; min: number; max: number; suffix?: string; onChange: (value: number) => void; onReset?: () => void }) {
+  return <div className="space-y-2"><div className="flex items-center justify-between gap-2 text-sm"><span className="text-zinc-300">{label}</span><div className="flex items-center gap-2"><span className="font-mono text-xs text-zinc-500">{value}{suffix}</span>{onReset && <button type="button" onClick={onReset} aria-label={"Reset " + label} title={"Reset " + label} className="rounded-md p-1 text-zinc-600 transition hover:bg-white/[.06] hover:text-zinc-200"><RotateCcw size={12} /></button>}</div></div><input aria-label={label} type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/[.09] accent-[#e11d48]" /></div>;
 }
 
 export function FieldLabel({ children }: { children: React.ReactNode }) { return <label className="mb-2 block text-xs font-medium uppercase tracking-[.11em] text-zinc-500">{children}</label>; }
@@ -54,9 +54,9 @@ export function MiniBar({ value, color = "#e11d48" }: { value: number; color?: s
 
 export function StatusDot({ active = true }: { active?: boolean }) { return <span className={`h-2 w-2 rounded-full ${active ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]" : "bg-zinc-600"}`} />; }
 
-export function SelectBox({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+export function SelectBox({ value, options, onChange, onReset }: { value: string; options: string[]; onChange: (value: string) => void; onReset?: () => void }) {
   const [open, setOpen] = useState(false);
-  return <div className="relative"><button type="button" onClick={() => setOpen(!open)} className="flex h-10 min-w-[128px] items-center justify-between gap-4 rounded-[11px] border border-white/[.09] bg-white/[.035] px-3 text-sm text-zinc-200 hover:bg-white/[.07]"><span>{value}</span><ChevronDown size={15} className="text-zinc-500" /></button>{open && <><button type="button" onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" aria-label="Close options" /><div className="glass-floating absolute right-0 top-12 z-20 min-w-full overflow-hidden rounded-[13px] p-1">{options.map((option) => <button key={option} type="button" onClick={() => { onChange(option); setOpen(false); }} className="flex w-full items-center justify-between gap-5 rounded-lg px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/[.07]">{option}{option === value && <Check size={13} className="text-[#fb7185]" />}</button>)}</div></>}</div>;
+  return <div className="flex items-center gap-2"><div className="relative"><button type="button" onClick={() => setOpen(!open)} className="flex h-10 min-w-[128px] items-center justify-between gap-4 rounded-[11px] border border-white/[.09] bg-white/[.035] px-3 text-sm text-zinc-200 hover:bg-white/[.07]"><span>{value}</span><ChevronDown size={15} className="text-zinc-500" /></button>{open && <><button type="button" onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" aria-label="Close options" /><div className="glass-floating absolute right-0 top-12 z-20 min-w-full overflow-hidden rounded-[13px] p-1">{options.map((option) => <button key={option} type="button" onClick={() => { onChange(option); setOpen(false); }} className="flex w-full items-center justify-between gap-5 rounded-lg px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/[.07]">{option}{option === value && <Check size={13} className="text-[#fb7185]" />}</button>)}</div></>}</div>{onReset && <button type="button" onClick={onReset} aria-label={"Reset " + value} title="Reset" className="rounded-md p-1.5 text-zinc-600 transition hover:bg-white/[.06] hover:text-zinc-200"><RotateCcw size={12} /></button>}</div>;
 }
 
 export function LoadingButton({ children, loading }: { children: React.ReactNode; loading: boolean }) { return <Button disabled={loading}>{loading && <LoaderCircle size={15} className="animate-spin" />}{children}</Button>; }

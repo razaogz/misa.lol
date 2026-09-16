@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 
 from app.core.config import get_settings
+from app.core.network_safety import safe_public_url
 from app.core.profile_sanitize import sanitize_widgets
 from app.db.dragonfly import get_dragonfly
 
@@ -36,10 +37,9 @@ WEATHER_LABELS = {
 
 def _https(url: Any) -> str | None:
     text = str(url or "").strip()
-    parsed = urlparse(text)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+    if len(text) > 500:
         return None
-    return text[:500]
+    return safe_public_url(text, https_only=True)
 
 
 def _host(url: str) -> str:
@@ -127,12 +127,12 @@ async def _fetch(kind: str, value: str) -> dict[str, Any]:
 
 
 async def _get(url: str, **kwargs: Any) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers={"User-Agent": "misa.lol profile widgets"}) as client:
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=False, trust_env=False, headers={"User-Agent": "misa.lol profile widgets"}) as client:
         return await client.get(url, **kwargs)
 
 
 async def _post(url: str, **kwargs: Any) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers={"User-Agent": "misa.lol profile widgets"}) as client:
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=False, trust_env=False, headers={"User-Agent": "misa.lol profile widgets"}) as client:
         return await client.post(url, **kwargs)
 
 

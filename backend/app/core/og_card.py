@@ -1,12 +1,10 @@
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
-
-import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from app.core.config import get_settings
+from app.core.network_safety import fetch_public_image_bytes
 from app.core.profile_sanitize import decode_data_url, safe_asset_url
 
 OG_WIDTH = 1200
@@ -137,20 +135,7 @@ async def load_image_bytes(url: Any) -> bytes | None:
     safe = safe_asset_url(text, "image")
     if not safe:
         return None
-    parsed = urlparse(safe)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, max_redirects=3) as client:
-            response = await client.get(safe, headers={"User-Agent": "misa.lol"})
-    except (httpx.HTTPError, OSError):
-        return None
-    if response.status_code != 200 or len(response.content) > MAX_IMAGE_BYTES:
-        return None
-    kind = str(response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
-    if kind and not kind.startswith("image/"):
-        return None
-    return response.content
+    return await fetch_public_image_bytes(safe, max_bytes=MAX_IMAGE_BYTES)
 
 
 def _open_image(data: bytes | None) -> Image.Image | None:

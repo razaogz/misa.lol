@@ -5,7 +5,7 @@ import { useRef } from "react";
 import { Button, FieldLabel, SectionTitle, TextArea, TextInput, Toggle } from "@/components/ui";
 import { IMAGE_ACCEPT } from "@/lib/image-edit";
 import { useT } from "@/lib/i18n";
-import { assetFromFile, useProfile } from "@/lib/profile-store";
+import { uploadProfileAsset, useProfile } from "@/lib/profile-store";
 import type { ProfileSection, SectionType } from "@/lib/types";
 import { MAX_SECTIONS, SECTION_CATALOG, defaultSection, sectionLabel, tagsFromInput, tagsToInput } from "@/lib/sections";
 
@@ -155,7 +155,7 @@ function CoverField({ cover, onChange }: { cover?: ProfileSection["cover"]; onCh
       window.alert(t("customize.coverTooLarge"));
       return;
     }
-    onChange(await assetFromFile(file));
+    onChange(await uploadProfileAsset("cover", file));
   };
   return (
     <div>
@@ -166,7 +166,7 @@ function CoverField({ cover, onChange }: { cover?: ProfileSection["cover"]; onCh
         </div>
         <input ref={input} className="hidden" type="file" accept={IMAGE_ACCEPT} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }} />
         <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => input.current?.click()}>{cover?.url ? t("common.replace") : t("common.upload")}</Button>
-        {cover?.url && <button type="button" onClick={() => onChange({ url: null })} className="text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button>}
+        {cover?.url && <button type="button" onClick={() => onChange({ url: null, remove: true })} className="text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button>}
       </div>
     </div>
   );

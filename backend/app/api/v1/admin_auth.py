@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.core.config import Settings, get_settings
 from app.core.email import send_transactional_email
 from app.core.rate_limit import client_ip, limit_auth, rate_limit
+from app.core.sessions import get_user_from_request
 from app.core.turnstile import verify_turnstile
 from app.db import admin_db
 

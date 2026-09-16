@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     )
 
     cors_origins: str = "http://localhost,http://localhost:80,https://misa.lol,https://www.misa.lol"
+    trusted_hosts: str = "misa.lol,www.misa.lol,ukvhq.dev,localhost,127.0.0.1,api"
 
     session_cookie_name: str = "misa_session"
     session_ttl_seconds: int = 60 * 60 * 24 * 7
@@ -82,6 +83,16 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("MISA_ADMIN_TOKEN_SECRET", "ADMIN_TOKEN_SECRET"),
     )
+    r2_account_id: str = Field(default="", validation_alias=AliasChoices("MISA_R2_ACCOUNT_ID", "R2_ACCOUNT_ID"))
+    r2_bucket: str = Field(default="", validation_alias=AliasChoices("MISA_R2_BUCKET", "R2_BUCKET"))
+    r2_access_key_id: str = Field(default="", validation_alias=AliasChoices("MISA_R2_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID"))
+    r2_secret_access_key: str = Field(default="", validation_alias=AliasChoices("MISA_R2_SECRET_ACCESS_KEY", "R2_SECRET_ACCESS_KEY"))
+    r2_endpoint: str = Field(default="", validation_alias=AliasChoices("MISA_R2_ENDPOINT", "R2_ENDPOINT"))
+    r2_public_base_url: str = Field(default="", validation_alias=AliasChoices("MISA_R2_PUBLIC_BASE_URL", "R2_PUBLIC_BASE_URL"))
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    storage_bucket: str = "misa-assets"
+    media_fetch_hosts: str = ""
     email_api_url: str = Field(
         default="https://api.resend.com/emails",
         validation_alias=AliasChoices("MISA_EMAIL_API_URL", "EMAIL_API_URL"),
@@ -103,6 +114,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_host_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    @property
+    def media_fetch_host_list(self) -> list[str]:
+        return [host.strip() for host in self.media_fetch_hosts.split(",") if host.strip()]
 
     @property
     def is_production(self) -> bool:

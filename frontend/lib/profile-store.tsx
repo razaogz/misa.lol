@@ -16,6 +16,7 @@ interface ProfileContextValue {
   hydrateFromServer: (nextConfig: ProfileConfig) => void;
   saveState: SaveState;
   saveError: string;
+  profileReady: boolean;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -25,12 +26,19 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<ProfileConfig>(() => cloneMockProfile());
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
+  const [profileReady, setProfileReady] = useState(false);
   const lastSavedRef = useRef("");
+  const hydratedUserRef = useRef<string | null>(null);
 
   const persist = useCallback(async (nextConfig: ProfileConfig) => {
     if (!user) { setSaveState("error"); setSaveError("You are not signed in."); return; }
     if (!user.username) { setSaveState("error"); setSaveError("Choose a username in Account settings before saving your profile."); return; }
-    const profileToSave = normalizeProfileSocials(nextConfig);
+    if (hydratedUserRef.current !== user.id) {
+      setSaveState("error");
+      setSaveError("Your profile has not loaded safely yet. Refresh the page before saving.");
+      return;
+    }
+    const profileToSave = normalizeDashboardProfile(nextConfig);
     const snapshot = JSON.stringify(profileToSave);
     if (snapshot === lastSavedRef.current) { setSaveState("saved"); return; }
     let previous: ProfileConfig | null = null;
@@ -50,7 +58,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       try { result = raw ? JSON.parse(raw) as typeof result : {}; } catch { /* The proxy may return an HTML error page. */ }
       if (!response.ok && !result.detail && !result.error) result.detail = `Profile save failed (server returned ${response.status}).`;
       if (!response.ok || !result.profile) throw new Error(result.detail || result.error || "Profile save failed. Please try again.");
-      const saved = normalizeProfileSocials(result.profile);
+      const saved = normalizeDashboardProfile(result.profile);
       lastSavedRef.current = JSON.stringify(saved);
       setConfig(saved);
       setSaveState("saved");
@@ -63,29 +71,35 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authReady) return;
     let cancelled = false;
+    hydratedUserRef.current = null;
     const load = async () => {
       try {
         const next = user ? await loadProfileForUser(user) : cloneMockProfile();
         if (cancelled) return;
-        const normalized = normalizeProfileSocials(next);
+        const normalized = normalizeDashboardProfile(next);
         setConfig(normalized);
         lastSavedRef.current = user?.username ? JSON.stringify(normalized) : "";
+        hydratedUserRef.current = user?.id || null;
         setSaveState("idle");
         setSaveError("");
+        setProfileReady(true);
       } catch (error) {
         if (cancelled) return;
         // A temporary profile/API failure must not tear down the dashboard tree.
         console.error("Profile hydration failed", error);
-        const fallback = user ? profileForUser(user) : cloneMockProfile();
-        setConfig(normalizeProfileSocials(fallback));
+        // Never replace a real account with demo data after a failed load.
+        // Keep the current config untouched and let the dashboard show its
+        // loading state until the profile can be hydrated safely.
         lastSavedRef.current = "";
-        setSaveState("error");
-        setSaveError("Your profile could not be loaded. You can keep editing and try saving again.");
+        hydratedUserRef.current = null;
+        setSaveState("idle");
+        setSaveError("");
+        setProfileReady(false);
       }
     };
     void load();
     return () => { cancelled = true; };
-  }, [authReady, user]);
+  }, [authReady, user?.id, user?.username]);
 
   const value = useMemo<ProfileContextValue>(() => ({
     config,
@@ -93,7 +107,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     resetConfig: () => { setConfig(user ? profileForUser(user) : cloneMockProfile()); setSaveState("idle"); setSaveError(""); },
     saveProfile: async (nextConfig) => { await persist(nextConfig || config); },
     hydrateFromServer: (nextConfig) => {
-      const normalized = normalizeProfileSocials(nextConfig);
+      setProfileReady(true);
+      const normalized = normalizeDashboardProfile(nextConfig);
       lastSavedRef.current = JSON.stringify(normalized);
       setConfig(normalized);
       setSaveState("saved");
@@ -101,7 +116,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     },
     saveState,
     saveError,
-  }), [config, persist, saveState, saveError, user]);
+    profileReady,
+  }), [config, persist, saveState, saveError, profileReady, user]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
@@ -111,13 +127,33 @@ export function useProfile() {
   return value;
 }
 
+function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
+  const defaults = cloneMockProfile();
+  const incoming = (input && typeof input === "object" ? input : {}) as Partial<ProfileConfig>;
+  const assets = (incoming.assets && typeof incoming.assets === "object" ? incoming.assets : {}) as Partial<ProfileConfig["assets"]>;
+  const normalizedAssets = { ...defaults.assets, ...assets } as ProfileConfig["assets"];
+  for (const key of ["avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound"] as const) {
+    if (!normalizedAssets[key] || typeof normalizedAssets[key] !== "object") normalizedAssets[key] = defaults.assets[key] || { url: null };
+  }
+  return normalizeProfileSocials({
+    ...defaults,
+    ...incoming,
+    profile: { ...defaults.profile, ...(incoming.profile || {}) },
+    settings: { ...defaults.settings, ...(incoming.settings || {}) },
+    assets: normalizedAssets,
+    socials: Array.isArray(incoming.socials) ? incoming.socials : defaults.socials,
+    badges: Array.isArray(incoming.badges) ? incoming.badges : defaults.badges,
+    widgets: Array.isArray(incoming.widgets) ? incoming.widgets : defaults.widgets,
+    sections: Array.isArray(incoming.sections) ? incoming.sections : defaults.sections,
+  } as ProfileConfig);
+}
 export async function loadProfileForUsername(username: string): Promise<ProfileConfig | null> {
   const normalized = username.trim().toLowerCase();
   try {
     const response = await fetch(`/api/v1/profile?username=${encodeURIComponent(normalized)}`, { cache: "no-store" });
     if (response.ok) {
       const result = await response.json() as { profile?: ProfileConfig };
-      if (result.profile) return normalizeProfileSocials(result.profile);
+      if (result.profile) return normalizeDashboardProfile(result.profile);
     }
   } catch { /* Keep public profiles from crashing if the API is briefly down. */ }
   return null;
@@ -177,6 +213,29 @@ export function assetFromFile(file: File): Promise<ProfileAsset> {
   });
 }
 
+export async function dataUrlToFile(dataUrl: string, name: string, type?: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], name, { type: type || blob.type || "application/octet-stream" });
+}
+
+export async function uploadProfileAsset(kind: string, file: File): Promise<ProfileAsset> {
+  const form = new FormData();
+  form.append("kind", kind);
+  form.append("file", file, file.name);
+  const response = await fetch("/api/v1/profile/assets", {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  const raw = await response.text();
+  let result: { asset?: ProfileAsset; detail?: string } = {};
+  try { result = raw ? JSON.parse(raw) as typeof result : {}; } catch { /* handled below */ }
+  if (!response.ok || !result.asset?.url) {
+    throw new Error(result.detail || "Asset upload failed (server returned " + response.status + ").");
+  }
+  return result.asset;
+}
 function profileForUser(user: AuthUser) {
   const profile = cloneMockProfile();
   profile.profile.username = user.username || "choose-username";
@@ -187,15 +246,32 @@ function profileForUser(user: AuthUser) {
 }
 
 async function loadProfileForUser(user: AuthUser) {
-  try {
-    const response = await fetch("/api/v1/profile/me", { credentials: "include", cache: "no-store" });
-    if (response.ok) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch("/api/v1/profile/me", {
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error("Profile load failed (server returned " + response.status + ").");
+      }
       const result = await response.json() as { profile?: ProfileConfig };
-      if (result.profile) return normalizeProfileSocials(result.profile);
+      if (result.profile) return normalizeDashboardProfile(result.profile);
+      // A user without a saved profile can safely start from defaults. A failed
+      // request must throw instead, otherwise an empty fallback could overwrite
+      // existing assets on the next save.
+      if (!user.username) return profileForUser(user);
+      throw new Error("The profile response did not contain saved profile data.");
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    } finally {
+      clearTimeout(timeout);
     }
-  } catch (error) {
-    // Keep the dashboard usable while the API or proxy is restarting.
-    console.warn("Profile API unavailable; using the local profile fallback", error);
   }
-  return profileForUser(user);
+  throw lastError instanceof Error ? lastError : new Error("Profile load failed.");
 }

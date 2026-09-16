@@ -1,4 +1,3 @@
-import socket
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
@@ -26,9 +25,6 @@ class RootResponse(BaseModel):
 
 class InfoResponse(BaseModel):
     app: str
-    instance: str
-    hostname: str
-    environment: str
     version: str
     time: datetime
 
@@ -45,9 +41,6 @@ async def root(settings: Settings = Depends(get_settings)) -> RootResponse:
 async def info(settings: Settings = Depends(get_settings)) -> InfoResponse:
     return InfoResponse(
         app=settings.app_name,
-        instance=settings.instance_name,
-        hostname=socket.gethostname(),
-        environment=settings.environment,
         version=settings.app_version,
         time=datetime.now(timezone.utc),
     )

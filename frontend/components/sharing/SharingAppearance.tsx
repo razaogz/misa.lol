@@ -93,7 +93,7 @@ export function SharingAppearance({
           croppable={canCropAsset(ogImage)}
           onUpload={(file) => onUpload("ogImage", file)}
           onCrop={() => onCrop({ key: "ogImage", asset: ogImage })}
-          onRemove={() => setAsset("ogImage", { url: null })}
+          onRemove={() => setAsset("ogImage", { url: null, remove: true })}
         />
         <ShareAssetRow
           title={t("customize.favicon")}
@@ -104,7 +104,7 @@ export function SharingAppearance({
           preview={favicon.url || avatar}
           onUpload={(file) => onUpload("favicon", file)}
           onCrop={() => onCrop({ key: "favicon", asset: favicon })}
-          onRemove={() => setAsset("favicon", { url: null })}
+          onRemove={() => setAsset("favicon", { url: null, remove: true })}
         />
       </div>
 
@@ -143,7 +143,7 @@ function ShareAssetRow({
   const thumb = preview || asset.url;
   return (
     <div className="rounded-xl border border-white/[.06] bg-black/10 p-3">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[.06] text-zinc-500">
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -156,11 +156,12 @@ function ShareAssetRow({
           <p className="text-sm font-medium text-zinc-200">{title}</p>
           <p className="mt-1 truncate text-xs text-zinc-600">{asset.url ? (isAnimatedAsset(asset) ? t("customize.animated") : asset.name || t("customize.uploaded")) : description}</p>
         </div>
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:ms-auto">
         <input ref={input} className="hidden" type="file" accept={accept} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
         <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => input.current?.click()}>{asset.url ? t("common.replace") : <><Upload size={13} />{t("common.upload")}</>}</Button>
         {croppable ? <Button variant="ghost" className="h-9 min-h-0 px-3 text-xs" onClick={onCrop}><Crop size={13} />{t("common.crop")}</Button> : null}
-        {asset.url ? <button type="button" onClick={onRemove} className="px-1 text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button> : null}
-      </div>
+        {asset.url ? <button type="button" onClick={onRemove} className="shrink-0 px-1 text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button> : null}
+      </div></div>
     </div>
   );
 }

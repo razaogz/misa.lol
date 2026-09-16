@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.v1.router import api_router
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     )
     application.add_middleware(RequestContextMiddleware)
     application.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_host_list)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

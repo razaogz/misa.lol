@@ -3,6 +3,7 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from app.core.network_safety import safe_media_url, safe_public_url
 from app.core.social_prefixes import compose_social_value, host_allowed
 
 HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
@@ -53,6 +54,7 @@ MAX_ASSET = 12_000_000
 MAX_VIDEO_ASSET = 28_000_000
 MAX_FONT = 2_800_000
 KEEP_ASSET_URL = "misa:keep"
+REMOVE_ASSET_URL = "misa:remove"
 ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
 ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
 USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave", "Shadow"}
@@ -290,10 +292,17 @@ def merge_kept_profile(incoming: dict[str, Any], stored: dict[str, Any] | None) 
 def _merge_asset(incoming: Any, stored: Any) -> dict[str, Any]:
     current = dict(incoming) if isinstance(incoming, dict) else {"url": None}
     previous = stored if isinstance(stored, dict) else {}
-    if current.get("url") == KEEP_ASSET_URL:
+    if current.get("remove") is True or current.get("url") == REMOVE_ASSET_URL:
+        current["url"] = None
+        current.pop("remove", None)
+        return current
+    if current.get("url") in {KEEP_ASSET_URL, None, ""} and previous.get("url"):
         current["url"] = previous.get("url")
+        for field in ("name", "type"):
+            if not current.get(field) and previous.get(field):
+                current[field] = previous[field]
+    current.pop("remove", None)
     return current
-
 
 def safe_asset_url(url: Any, kind: str) -> str | None:
     return _safe_asset_url(url, kind)
@@ -309,10 +318,7 @@ def _safe_asset_url(url: Any, kind: str) -> str | None:
             return None
         limit = MAX_FONT if kind == "font" else MAX_VIDEO_ASSET if kind == "video" else MAX_ASSET
         return text if pattern.match(text) and len(text) <= limit else None
-    parsed = urlparse(text)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
-        return None
-    return text[:2000]
+    return safe_media_url(text)
 
 
 def _clamp_int(value: Any, default: int, low: int, high: int) -> int:
@@ -757,9 +763,7 @@ def _sanitize_value(value: Any) -> str:
         address = re.sub(r"^mailto:", "", trimmed, flags=re.I).strip()
         return f"mailto:{address}" if re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", address) else ""
     if "://" in trimmed:
-        parsed = urlparse(trimmed)
-        if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
-            return ""
+        return safe_public_url(trimmed) or ""
     return trimmed
 
 
@@ -782,9 +786,10 @@ def public_social_href(value: str, platform: str) -> str | None:
     if re.match(r"^[a-z][a-z0-9+.-]*:", trimmed, flags=re.I) and not trimmed.lower().startswith(("http://", "https://")):
         return None
     candidate = trimmed if "://" in trimmed else f"https://{trimmed}"
-    parsed = urlparse(candidate)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+    safe = safe_public_url(candidate)
+    if not safe:
         return None
+    parsed = urlparse(safe)
     if not host_allowed(platform, parsed.hostname or ""):
         return None
-    return candidate
+    return safe

@@ -168,8 +168,16 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
   };
   if (playBtn && audio) {
     bind(playBtn, togglePlay);
-    audio.addEventListener("play", () => { playBtn.dataset.playing = "1"; });
-    audio.addEventListener("pause", () => { playBtn.dataset.playing = "0"; });
+    audio.addEventListener("play", () => {
+      playBtn.dataset.playing = "1";
+      playBtn.setAttribute("aria-label", "Pause");
+      playBtn.setAttribute("aria-pressed", "true");
+    });
+    audio.addEventListener("pause", () => {
+      playBtn.dataset.playing = "0";
+      playBtn.setAttribute("aria-label", "Play");
+      playBtn.setAttribute("aria-pressed", "false");
+    });
     audio.addEventListener("timeupdate", () => {
       if (seek && audio.duration) seek.value = String(Math.floor(audio.currentTime));
       if (nowEl) nowEl.textContent = fmt(audio.currentTime);
@@ -189,18 +197,29 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
   bind(nextBtn, () => step(1));
   bind(shuffleBtn, () => {
     shuffle = !shuffle;
-    if (shuffleBtn) shuffleBtn.dataset.on = shuffle ? "1" : "0";
+    if (shuffleBtn) {
+      shuffleBtn.dataset.on = shuffle ? "1" : "0";
+      shuffleBtn.setAttribute("aria-label", shuffle ? "Disable shuffle" : "Shuffle");
+      shuffleBtn.setAttribute("aria-pressed", shuffle ? "true" : "false");
+    }
     order = tracks.map((_, i) => i);
     if (shuffle) order = order.map((v, i) => [v, (i * 17 + 11) % order.length]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
   });
   bind(repeatBtn, () => {
     repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
-    if (repeatBtn) repeatBtn.dataset.mode = repeat;
+    if (repeatBtn) {
+      repeatBtn.dataset.mode = repeat;
+      repeatBtn.setAttribute("aria-label", repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off");
+    }
   });
   bind(muteBtn, () => {
     if (!audio) return;
     audio.muted = !audio.muted;
-    if (muteBtn) muteBtn.dataset.muted = audio.muted ? "1" : "0";
+    if (muteBtn) {
+      muteBtn.dataset.muted = audio.muted ? "1" : "0";
+      muteBtn.setAttribute("aria-label", audio.muted ? "Unmute" : "Mute");
+      muteBtn.setAttribute("aria-pressed", audio.muted ? "true" : "false");
+    }
   });
   if (volumeInput && audio) {
     volumeInput.addEventListener("input", (event) => {
@@ -425,6 +444,28 @@ DISCORD_STATUS_ICON_SVG = """<svg viewBox="0 0 16 16" aria-hidden="true">
   </g>
 </svg>"""
 
+
+def _audio_icon(body: str, class_name: str = "") -> str:
+    classes = f"audio-icon {class_name}".strip()
+    return (
+        f'<svg class="{classes}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{body}</svg>'
+    )
+
+
+AUDIO_ICON_SHUFFLE = _audio_icon(
+    '<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/>'
+    '<path d="M2 18h1.5c2.8 0 5.2-1.6 6.5-4"/><path d="M2 6h1.5c2.8 0 5.2 1.6 6.5 4"/>'
+    '<path d="M22 6h-1.5c-2.8 0-5.2 1.6-6.5 4"/><path d="M22 18h-1.5c-2.8 0-5.2-1.6-6.5-4"/>'
+)
+AUDIO_ICON_PREVIOUS = _audio_icon('<path d="m19 20-9-8 9-8v16Z"/><path d="M5 19V5"/>')
+AUDIO_ICON_PLAY = _audio_icon('<path d="m6 3 14 9-14 9V3Z" fill="currentColor"/>', "audio-icon-play")
+AUDIO_ICON_PAUSE = _audio_icon('<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>', "audio-icon-pause")
+AUDIO_ICON_NEXT = _audio_icon('<path d="m5 4 9 8-9 8V4Z"/><path d="M19 5v14"/>')
+AUDIO_ICON_REPEAT = _audio_icon('<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h18"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>')
+AUDIO_ICON_VOLUME = _audio_icon('<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>', "audio-icon-volume")
+AUDIO_ICON_VOLUME_X = _audio_icon('<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/>', "audio-icon-volume-x")
+
 PUBLIC_LYRICS_SCRIPT = """<script>
 (() => {
   const boxes = document.querySelectorAll("[data-lyrics]");
@@ -616,7 +657,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         }]
     first = playlist[0] if playlist else None
     art_src = (first or {}).get("artwork") or (asset_src("avatar") if has_avatar else "")
-    art_tag = f'<img id="audio-art" class="player-art" src="{escape(art_src, quote=True)}" alt="">' if art_src else '<img id="audio-art" class="player-art player-art-empty" alt="">'
+    art_tag = f'<img id="audio-art" class="player-art" src="{escape(art_src, quote=True)}" alt="" width="56" height="56">' if art_src else '<img id="audio-art" class="player-art player-art-empty" alt="" width="56" height="56">'
     audio_tag = '<audio id="profile-audio" preload="none"></audio>' if playlist else ""
     playlist_data = (
         f'<script type="application/json" id="playlist-data">{json.dumps(playlist, separators=(",", ":")).replace("<", "\\u003c")}</script>'
@@ -629,13 +670,13 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         f'<input id="audio-seek" type="range" min="0" max="1" value="0" aria-label="Seek">'
         f'<div class="player-times"><span id="audio-now">0:00</span><span id="audio-dur">0:00</span></div>'
         f'<div class="player-controls">'
-        f'<button type="button" id="audio-shuffle" class="audio-btn" data-on="0" aria-label="Shuffle"></button>'
-        f'<button type="button" id="audio-prev" class="audio-btn" aria-label="Previous track"></button>'
-        f'<button type="button" id="audio-play" class="audio-btn play" data-playing="0" aria-label="Play or pause"></button>'
-        f'<button type="button" id="audio-next" class="audio-btn" aria-label="Next track"></button>'
-        f'<button type="button" id="audio-repeat" class="audio-btn" data-mode="all" aria-label="Repeat"></button>'
+        f'<button type="button" id="audio-shuffle" class="audio-btn" data-on="0" aria-label="Shuffle" aria-pressed="false">{AUDIO_ICON_SHUFFLE}</button>'
+        f'<button type="button" id="audio-prev" class="audio-btn" aria-label="Previous track">{AUDIO_ICON_PREVIOUS}</button>'
+        f'<button type="button" id="audio-play" class="audio-btn play" data-playing="0" aria-label="Play" aria-pressed="false">{AUDIO_ICON_PLAY}{AUDIO_ICON_PAUSE}</button>'
+        f'<button type="button" id="audio-next" class="audio-btn" aria-label="Next track">{AUDIO_ICON_NEXT}</button>'
+        f'<button type="button" id="audio-repeat" class="audio-btn" data-mode="all" aria-label="Repeat all">{AUDIO_ICON_REPEAT}</button>'
         f'</div>'
-        f'<div class="player-volume"><button type="button" id="audio-mute" class="audio-btn" data-muted="0" aria-label="Mute"></button>'
+        f'<div class="player-volume"><button type="button" id="audio-mute" class="audio-btn" data-muted="0" aria-label="Mute" aria-pressed="false">{AUDIO_ICON_VOLUME}{AUDIO_ICON_VOLUME_X}</button>'
         f'<input id="audio-volume" type="range" min="0" max="100" value="{volume}" aria-label="Volume"></div>'
         f"</div>"
         if playlist
@@ -643,7 +684,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     )
     presence_pfp = safe_discord_img(discord.get("accountAvatar") or discord.get("avatar"))
     presence_face = (
-        f'<img src="{presence_pfp}" alt="">'
+        f'<img class="discord-presence-image" src="{presence_pfp}" alt="" width="44" height="44">'
         if presence_pfp
         else f'<div class="discord-presence-fallback">{escape((str(profile.get("displayName") or username)[:1]) or "*")}</div>'
     )
@@ -823,6 +864,12 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .avatar-inner.no-border{{border:0;background:transparent}}
 .avatar-ring .avatar{{width:100%;height:100%;object-fit:cover;border:0;border-radius:0;display:block;box-shadow:none}}
 .avatar-deco{{position:absolute;left:-18%;top:-18%;width:136%;height:136%;pointer-events:none;z-index:3}}
+.status-dot{{display:block;overflow:hidden;line-height:0}}
+.status-dot svg{{display:block;width:100%;height:100%;max-width:100%;max-height:100%}}
+.status-dot .icon-idle,.status-dot .icon-dnd,.status-dot .icon-offline{{display:none}}
+.status-dot.status-idle .icon-online,.status-dot.status-dnd .icon-online,.status-dot.status-offline .icon-online{{display:none}}
+.status-dot.status-idle .icon-idle,.status-dot.status-dnd .icon-dnd,.status-dot.status-offline .icon-offline{{display:block}}
+.avatar-ring>.status-dot{{position:absolute;right:2px;bottom:2px;z-index:4;width:clamp(14px,22%,22px);height:clamp(14px,22%,22px);min-width:14px;min-height:14px;max-width:22px;max-height:22px;border-radius:999px}}
 .layout-sleek .avatar-ring{{position:absolute;left:20px;bottom:-32px;width:72px;height:72px;margin:0;z-index:2}}
 .layout-simplistic .avatar-ring{{width:80px;height:80px;margin-bottom:16px}}
 .avatar-placeholder{{display:grid;place-items:center;color:#fff;font-size:28px;font-weight:600}}
@@ -878,11 +925,23 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 #copy-toast{{position:fixed;bottom:24px;left:50%;z-index:5;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:#111118ee;color:#fff;font-size:12px}}
 #copy-toast[hidden],.card[hidden],.entry[hidden]{{display:none}}
 .brand{{display:block;margin-top:28px;color:#ffffff33;font-size:10px;letter-spacing:.23em;text-transform:uppercase}}
-.player{{position:relative;z-index:5;margin-top:24px;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left;pointer-events:auto;isolation:isolate}}
-.player-top{{display:flex;align-items:center;gap:12px}}
-.player-art{{width:56px;height:56px;border-radius:12px;object-fit:cover;background:#ffffff10}}
+.player-row{{display:flex;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin-top:24px;overflow:hidden}}
+.discord-presence{{position:relative;display:flex;flex:0 0 clamp(104px,30vw,120px);width:clamp(104px,30vw,120px);min-width:0;max-width:120px;align-items:center;justify-content:center;overflow:hidden;padding:32px 8px 12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:center}}
+.discord-presence-title{{position:absolute;top:10px;left:4px;right:4px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ffffffe0;font-size:10px;font-weight:600;line-height:1.2;letter-spacing:.02em}}
+.discord-presence-body{{display:flex;width:100%;min-width:0;max-width:100%;flex-direction:column;align-items:center;gap:6px;overflow:hidden}}
+.discord-presence-avatar{{position:relative;width:clamp(40px,12vw,44px);height:clamp(40px,12vw,44px);min-width:40px;min-height:40px;max-width:44px;max-height:44px;flex:none;overflow:visible}}
+.discord-presence-image,.discord-presence-fallback{{display:block;width:100%;height:100%;min-width:0;max-width:100%;overflow:hidden;border-radius:999px;object-fit:cover}}
+.discord-presence-fallback{{display:grid;place-items:center;background:#ffffff14;color:#fff;font-size:14px;font-weight:600}}
+.discord-presence-avatar .status-dot{{position:absolute;right:-2px;bottom:-2px;z-index:4;width:16px;height:16px;min-width:16px;min-height:16px;max-width:16px;max-height:16px;border-radius:999px}}
+.discord-presence-name,.discord-presence-status{{width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.discord-presence-name{{color:#fff;font-size:11px;font-weight:600;line-height:1.2}}
+.discord-presence-status{{color:#ffffff8c;font-size:9px;line-height:1.2}}
+.player-row>.player{{flex:1 1 auto;min-width:0;max-width:100%;margin-top:0;overflow:hidden}}
+.player{{position:relative;z-index:5;width:100%;min-width:0;max-width:100%;margin-top:24px;padding:12px;overflow:hidden;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left;pointer-events:auto;isolation:isolate}}
+.player-top{{display:flex;min-width:0;align-items:center;gap:12px;overflow:hidden}}
+.player-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
 .player-art-empty{{display:grid;place-items:center;color:#ffffff88}}
-.player-meta{{min-width:0;flex:1}}
+.player-meta{{min-width:0;max-width:100%;flex:1;overflow:hidden}}
 .player-meta strong{{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}}
 .player-meta span{{display:block;margin-top:4px;color:#ffffff66;font-size:11px}}
 .player-times{{display:flex;justify-content:space-between;margin:4px 0 8px;color:#ffffff55;font-size:10px;font-family:ui-monospace,monospace}}
@@ -890,14 +949,17 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .player-volume{{display:flex;align-items:center;gap:8px;margin-top:10px}}
 #audio-seek,#audio-volume{{width:100%;accent-color:{accent};pointer-events:auto;cursor:pointer}}
 #audio-seek{{margin-top:10px}}
-.audio-btn{{position:relative;z-index:1;width:36px;height:36px;border:0;border-radius:999px;background:#ffffff14;color:#fff;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
+.audio-btn{{position:relative;z-index:1;display:inline-flex;width:36px;height:36px;flex:none;align-items:center;justify-content:center;overflow:hidden;border:0;border-radius:999px;background:#ffffff14;color:#fff;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
 .audio-btn.play{{width:42px;height:42px}}
-.audio-btn::before,.audio-btn::after{{pointer-events:none}}
-#audio-play::before{{content:"â–¶"}}#audio-play[data-playing="1"]::before{{content:"âšâš"}}
-#audio-prev::before{{content:"â®"}}#audio-next::before{{content:"â­"}}
-#audio-shuffle::before{{content:"â†"}}#audio-shuffle[data-on="1"]{{background:#9b87f533}}
-#audio-repeat::before{{content:"ðŸ”"}}#audio-repeat[data-mode="off"]{{opacity:.45}}#audio-repeat[data-mode="one"]::after{{content:"1";font-size:9px}}
-#audio-mute::before{{content:"â™ª"}}#audio-mute[data-muted="1"]::before{{content:"Ã¸"}}
+.audio-btn::before,.audio-btn::after{{display:none!important;content:none!important}}
+.audio-icon{{display:block;width:16px;height:16px;flex:none;pointer-events:none}}
+.audio-btn.play .audio-icon{{width:17px;height:17px}}
+.audio-icon-pause,.audio-icon-volume-x{{display:none}}
+#audio-play[data-playing="1"] .audio-icon-play{{display:none}}#audio-play[data-playing="1"] .audio-icon-pause{{display:block}}
+#audio-mute[data-muted="1"] .audio-icon-volume{{display:none}}#audio-mute[data-muted="1"] .audio-icon-volume-x{{display:block}}
+#audio-shuffle[data-on="1"]{{background:#9b87f533}}
+#audio-repeat[data-mode="off"]{{opacity:.45}}
+#audio-repeat[data-mode="one"]::after{{display:block!important;content:"1"!important;position:absolute;right:4px;top:2px;font-size:9px}}
 .widget-swap .player{{background:{accent};color:{background};border-color:{background}33}}
 .widget-swap .player-meta span,.widget-swap .player-times{{color:{background};opacity:.66}}
 .widget-swap .player-art-empty{{background:{background}22;color:{background}}}
@@ -905,12 +967,12 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .widget-swap .audio-btn.play,.widget-swap #audio-shuffle[data-on="1"]{{background:{background}33}}
 .widget-swap #audio-seek,.widget-swap #audio-volume{{accent-color:{background}}}
 .widgets{{display:flex;flex-direction:column;gap:10px;margin-top:24px}}
-.widget{{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;color:inherit;text-decoration:none}}
-.widget-art{{width:56px;height:56px;border-radius:12px;object-fit:cover;background:#ffffff10;flex-shrink:0}}
+.widget{{display:flex;width:100%;min-width:0;max-width:100%;align-items:center;gap:12px;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;color:inherit;text-decoration:none}}
+.widget-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
 .widget-art-empty{{display:grid;place-items:center;color:#ffffff66;font-size:10px;text-transform:uppercase;letter-spacing:.06em}}
-.widget-meta{{min-width:0;flex:1;text-align:left}}
+.widget-meta{{min-width:0;max-width:100%;flex:1;overflow:hidden;text-align:left}}
 .widget-meta strong{{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}}
-.widget-meta span{{display:block;margin-top:4px;color:#ffffff66;font-size:11px}}
+.widget-meta span{{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ffffff66;font-size:11px}}
 .widget.is-error{{opacity:.85}}
 .widget-swap .widget{{background:{accent};color:{background};border-color:{background}33}}
 .widget-swap .widget-meta span{{color:{background};opacity:.66}}
@@ -1035,7 +1097,7 @@ def _public_widgets_markup(widgets: list | None) -> str:
         zone = escape(str(meta.get("timezone") or ""), quote=True) if item.get("type") == "timezone" else ""
         kind = escape(str(item.get("type") or "widget")[:10])
         art = (
-            f'<img class="widget-art" src="{escape(image, quote=True)}" alt="">'
+            f'<img class="widget-art" src="{escape(image, quote=True)}" alt="" width="56" height="56" loading="lazy">'
             if image
             else f'<div class="widget-art widget-art-empty">{kind}</div>'
         )

@@ -14,6 +14,7 @@ COPY requirements.txt .
 RUN uv pip install --no-cache -r requirements.txt
 
 COPY app ./app
+COPY scripts ./scripts
 
 EXPOSE 8000
 
