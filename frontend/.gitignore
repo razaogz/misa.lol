@@ -1,9 +1,0 @@
-node_modules/
-.next/
-*.env
-*.env.local
-!.env.example
-data/*.sqlite
-data/*.sqlite-*
-
-.vercel
