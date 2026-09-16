@@ -1,18 +1,18 @@
 misa.lol, www.misa.lol {
 	encode gzip
 
-	# Keep /admin available for users already assigned the owner/admin role.
+	
 	@admin_login path /admin/login /admin/login/*
 	handle @admin_login {
 		redir /admin 302
 	}
-	# Short public admin URL. Rewrite it once into the Next basePath.
+	
 	@admin_short path /admin /admin/*
 	handle @admin_short {
 		rewrite * /dashboard{uri}
 		reverse_proxy frontend:3000
 	}
-	# Next links can emit the internal basePath URL. Do not prefix it twice.
+	
 	@admin_internal path /dashboard/admin /dashboard/admin/*
 	handle @admin_internal {
 		reverse_proxy frontend:3000
@@ -29,13 +29,13 @@ misa.lol, www.misa.lol {
 ukvhq.dev {
 	encode gzip
 
-	# Admin API calls stay on this host so the host-only admin cookie is used.
+	
 	handle /api* {
 		reverse_proxy api:8000
 	}
 
-	# The existing Next app is built with /dashboard as its internal base path.
-	# Caddy exposes only the admin surface at the new canonical /m path.
+	
+	
 	handle_path /m/login* {
 		rewrite * /dashboard/admin/login
 		reverse_proxy frontend:3000
@@ -45,7 +45,7 @@ ukvhq.dev {
 		reverse_proxy frontend:3000
 	}
 
-	# Next static assets retain the existing build base path.
+	
 	handle /dashboard* {
 		reverse_proxy frontend:3000
 	}
