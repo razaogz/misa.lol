@@ -239,16 +239,17 @@ export function ProfileMediaModules({ config, preview }: { config: ProfileConfig
   const hasVideoAudio = usesBackgroundVideoAudio(config.assets);
   const hasPlaylist = usesUploadedProfileAudio(config.assets);
   const showAudio = hasPlaylist || hasVideoAudio;
+  const stackMedia = (config.settings.profileFrameWidth ?? 430) < 400;
 
   if (!showDiscordTile && !showAudio) return null;
 
   return (
-    <div className="mt-3 flex w-full min-w-0 flex-col items-stretch gap-2.5 sm:h-20 sm:flex-row">
-      {showDiscordTile && <DiscordPresenceTile config={config} compact={showAudio} />}
+    <div className={`mt-3 flex w-full min-w-0 flex-col items-stretch gap-2.5 ${stackMedia ? "" : "sm:h-20 sm:flex-row"}`}>
+      {showDiscordTile && <DiscordPresenceTile config={config} compact={showAudio && !stackMedia} />}
       {showAudio && (
-        <div className="min-w-0 flex-1 [&>div]:mt-0 sm:h-full sm:[&>div]:h-full">
+        <div className={`min-w-0 flex-1 [&>div]:mt-0 ${stackMedia ? "" : "sm:h-full sm:[&>div]:h-full"}`}>
           {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
-          {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile} />}
+          {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile && !stackMedia} />}
         </div>
       )}
     </div>

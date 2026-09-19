@@ -607,7 +607,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     frame_width = _clamp(settings.get("profileFrameWidth"), 430, 260, 800)
     stored_frame_height = _clamp(settings.get("profileFrameHeight"), 0, 0, 1000)
     frame_height = stored_frame_height if stored_frame_height >= 200 else 0
-    frame_height_css = f"height:{frame_height}px;" if frame_height else ""
+    frame_height_css = f"min-height:{frame_height}px;" if frame_height else ""
     frame_x = _clamp(settings.get("profileFrameX"), 0, -45, 45)
     frame_y = _clamp(settings.get("profileFrameY"), 0, -45, 45)
     border_color = css_hex_color(settings.get("borderColor"), "#ffffff")
@@ -977,7 +977,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .entry small{{color:#ffffff66;font-size:12px}}
 #copy-toast{{position:fixed;bottom:24px;left:50%;z-index:5;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:#111118ee;color:#fff;font-size:12px}}
 #copy-toast[hidden],.card[hidden],.media-dock[hidden],.meta[hidden],.entry[hidden]{{display:none}}
-.media-dock{{width:100%;margin-top:12px;pointer-events:auto}}
+.media-dock{{width:100%;margin-top:12px;pointer-events:auto;container-type:inline-size}}
 .player-row{{display:flex;min-height:80px;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden}}
 .discord-presence{{position:relative;display:flex;flex:0 0 42%;width:42%;min-width:0;min-height:80px;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
 .discord-presence-body{{display:grid;width:100%;min-width:0;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:2px 10px;overflow:hidden}}
@@ -1006,6 +1006,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .player-row .player-layout{{display:grid;grid-template-columns:48px minmax(0,1fr);grid-template-rows:auto auto;gap:6px 8px}}
 .player-row .player-art{{grid-row:1/3;width:48px;height:48px;min-width:48px;min-height:48px}}
 .player-row .player-controls{{grid-column:2;justify-content:flex-end}}
+@container (max-width:399px){{.player-row{{min-height:0;flex-direction:column}}.discord-presence{{width:100%;min-height:80px;flex:1 1 auto}}.player-row>.player{{width:100%;height:auto;min-height:80px}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
 @media(max-width:639px){{.player-row{{min-height:0;flex-direction:column}}.discord-presence{{width:100%;min-height:80px;flex:1 1 auto}}.player-row>.player{{width:100%;height:auto;min-height:80px}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
 .audio-btn::before,.audio-btn::after{{display:none!important;content:none!important}}
 .audio-icon{{display:block;width:16px;height:16px;flex:none;pointer-events:none}}

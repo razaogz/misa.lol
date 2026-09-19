@@ -183,7 +183,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
                     border: frameVisible ? (s.borderWidth ?? 1) + "px solid " + colorWithAlpha(s.borderColor, frameOpacity) : "0 solid transparent",
                     boxShadow: embedded ? "none" : frameVisible ? (layout === "Simplistic" ? "0 12px 40px rgba(0,0,0," + (0.22 * frameOpacity).toFixed(3) + ")" : "0 25px 90px rgba(0,0,0," + (0.36 * frameOpacity).toFixed(3) + "), 0 0 70px " + colorWithAlpha(s.accentColor, 0.09 * frameOpacity)) : "none",
                     color: s.textColor,
-                    height: frameHeight ? frameHeight + "px" : undefined,
+                    minHeight: frameHeight ? frameHeight + "px" : undefined,
                   }}
                 >
                   {layout === "Modern" && frameVisible && <div className="absolute inset-x-8 top-0 h-px" style={{ background: "linear-gradient(90deg, transparent, " + s.accentColor + "aa, transparent)" }} />}
