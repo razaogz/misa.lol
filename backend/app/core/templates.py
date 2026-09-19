@@ -186,7 +186,7 @@ def official_seed_looks() -> list[dict[str, Any]]:
                 "backgroundColor": "#0a1220",
                 "iconColor": "#b8fff4",
                 "layout": "Sleek",
-                "backgroundEffect": "Ocean waves",
+                "backgroundEffect": "None",
                 "usernameEffect": "Gradient",
                 "buttonStyle": "glass",
                 "profileFont": "Inter",

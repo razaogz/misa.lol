@@ -178,7 +178,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     setSidebarCollapsed(next);
     window.localStorage.setItem("misa.dashboard.sidebarCollapsed", next ? "1" : "0");
   };
-  const isPublicProfile = pathname.startsWith("/p/");
+  const isPublicProfile = pathname.startsWith("/p/") || pathname.startsWith("/c/") || pathname === "/constellations/examples";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard/admin" || pathname.startsWith("/dashboard/admin/") || pathname === "/m" || pathname.startsWith("/m/");
   useEffect(() => {
     if (!localPreview && !isPublicProfile && !isAdminRoute && isReady && !user) {

@@ -41,6 +41,14 @@ http://misa.lol, http://www.misa.lol {
 		}
 	}
 
+	@constellation_public path /c/*
+	handle @constellation_public {
+		rewrite * /dashboard{uri}
+		reverse_proxy frontend:3000 {
+			import tunnel_headers
+		}
+	}
+
 	handle /dashboard* {
 		reverse_proxy frontend:3000 {
 			import tunnel_headers

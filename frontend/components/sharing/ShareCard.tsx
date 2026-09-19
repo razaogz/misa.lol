@@ -42,7 +42,7 @@ export function ShareCard({ username }: { username: string }) {
       <div className="flex items-start gap-4">
         <div className="flex h-[116px] w-[116px] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/[.08] bg-white">
           {qr ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={qr} alt={t("share.qrAlt", { username })} className="h-full w-full" />
           ) : (
             <QrCode size={28} className="text-zinc-400" />

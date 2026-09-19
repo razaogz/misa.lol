@@ -10,6 +10,7 @@ export interface AuthUser {
   displayName: string;
   email: string | null;
   emailVerified: boolean;
+  telegramUsername: string | null;
   pendingEmail: string | null;
   hasPassword: boolean;
   mfaEnabled: boolean;
@@ -59,6 +60,7 @@ function normalizeUser(value: Record<string, unknown>): AuthUser {
     displayName: String(value.display_name || value.displayName || value.username || "Misa user"),
     email: value.email ? String(value.email) : null,
     emailVerified: Boolean(value.email_verified || value.emailVerified),
+    telegramUsername: value.telegram_username ? String(value.telegram_username) : (value.telegramUsername ? String(value.telegramUsername) : null),
     pendingEmail: value.pending_email ? String(value.pending_email) : (value.pendingEmail ? String(value.pendingEmail) : null),
     hasPassword: Boolean(value.has_password || value.hasPassword || (value.providers as AuthUser["providers"] | undefined)?.email),
     mfaEnabled: Boolean(value.mfa_enabled || value.mfaEnabled),

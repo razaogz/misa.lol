@@ -23,52 +23,43 @@ export function LinksManager() {
   const { config, updateConfig, saveProfile, saveState } = useProfile();
   const [editing, setEditing] = useState<SocialLink | null>(null);
   const [adding, setAdding] = useState(false);
+  const [newPlatform, setNewPlatform] = useState<SocialPlatform>("YouTube");
   const [dragged, setDragged] = useState<string | null>(null);
   const active = config.socials.filter((social) => social.enabled);
   const hidden = config.socials.filter((social) => !social.enabled);
   const align = config.settings.socialAlign || "center";
   const remove = (id: string) => updateConfig((current) => ({ ...current, socials: current.socials.filter((social) => social.id !== id) }));
   const toggle = (id: string, value: boolean) => updateConfig((current) => ({ ...current, socials: current.socials.map((social) => social.id === id ? { ...social, enabled: value } : social) }));
+  const addPlatform = (platform: SocialPlatform) => { setNewPlatform(platform); setAdding(true); };
   const reorder = (targetId: string) => {
     if (!dragged || dragged === targetId) return;
-    updateConfig((current) => {
-      const list = [...current.socials];
-      const from = list.findIndex((item) => item.id === dragged);
-      const to = list.findIndex((item) => item.id === targetId);
-      const [item] = list.splice(from, 1);
-      list.splice(to, 0, item);
-      return { ...current, socials: list };
-    });
+    updateConfig((current) => { const list=[...current.socials]; const from=list.findIndex((item)=>item.id===dragged); const to=list.findIndex((item)=>item.id===targetId); if(from<0||to<0)return current; const [item]=list.splice(from,1); list.splice(to,0,item); return {...current,socials:list}; });
     setDragged(null);
   };
   const setAlign = (socialAlign: SocialAlign) => updateConfig((current) => ({ ...current, settings: { ...current.settings, socialAlign } }));
-
-  return <main className="mx-auto min-h-screen max-w-[1050px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
-    <PageHeader eyebrow={t("links.eyebrow")} title={t("links.title")} description={t("links.description")} action={<div className="flex gap-2"><Button variant="subtle" onClick={() => setAdding(true)} disabled={config.socials.length >= MAX_SOCIALS}><Plus size={16} />{t("links.add")}</Button><Button variant="accent" onClick={() => void saveProfile()} disabled={saveState === "saving"}>{saveState === "saving" ? t("common.saving") : saveState === "saved" ? t("common.savedCheck") : t("common.save")}</Button></div>} />
-    <div className="mb-8 rounded-2xl border border-[#e11d48]/15 bg-[#e11d48]/[.05] p-4"><div className="flex gap-3"><Link2 size={17} className="mt-0.5 text-[#b6aaff]" /><p className="text-xs leading-5 text-zinc-400">{t("links.hint")}</p></div></div>
-    <section className="mb-8 rounded-2xl border border-white/[.07] bg-white/[.02] p-4">
-      <FieldLabel>{t("links.align")}</FieldLabel>
-      <div className="grid grid-cols-3 gap-2">{aligns.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setAlign(id)} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs ${align === id ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}><Icon size={14} />{id === "left" ? t("common.left") : id === "right" ? t("common.right") : t("common.center")}</button>)}</div>
-      <div className="mt-4 rounded-xl border border-white/[.06] bg-black/25 px-4 py-3">
-        <p className="mb-1 text-[10px] uppercase tracking-[.14em] text-zinc-600">{t("links.onProfile")}</p>
-        <SocialLinks config={config} className="mt-0" />
-      </div>
+  return <main className="mx-auto min-h-screen max-w-[1250px] px-4 py-8 sm:px-8 sm:py-11 xl:px-12">
+    <PageHeader eyebrow={t("links.eyebrow")} title={t("links.title")} description={t("links.description")} action={<Button variant="accent" onClick={() => void saveProfile()} disabled={saveState === "saving"}>{saveState === "saving" ? t("common.saving") : saveState === "saved" ? t("common.savedCheck") : t("common.save")}</Button>} />
+    <section className="mb-8 rounded-3xl border border-white/[.07] bg-white/[.025] p-4 sm:p-6">
+      <div className="mb-5 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e11d48]/10 text-[#fecdd3]"><Link2 size={18}/></span><div><h2 className="text-base font-semibold text-white">Link your social media profiles.</h2><p className="mt-1 text-xs text-zinc-500">Pick a social media to add to your profile.</p></div></div>
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10 xl:grid-cols-[repeat(13,minmax(0,1fr))]">{platformOptions.filter((platform)=>platform!=="Custom URL").map((platform)=><button key={platform} type="button" disabled={config.socials.length>=MAX_SOCIALS} onClick={()=>addPlatform(platform)} title={`Add ${platform}`} aria-label={`Add ${platform}`} className="group flex aspect-square min-h-12 items-center justify-center rounded-2xl border border-white/[.06] bg-black/20 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[.05] disabled:opacity-40"><SocialIcon platform={platform} size={22} color={PLATFORM_ICON_COLORS[platform]}/></button>)}</div>
+      <button type="button" disabled={config.socials.length>=MAX_SOCIALS} onClick={()=>addPlatform("Custom URL")} className="mt-3 flex w-full items-center gap-3 rounded-2xl border border-white/[.06] bg-black/20 p-3 text-left transition hover:border-white/20 hover:bg-white/[.05] sm:max-w-md"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] text-zinc-300"><Link2 size={18}/></span><span><strong className="block text-sm text-white">Add Custom URL</strong><small className="text-xs text-zinc-500">Use any safe URL and choose an icon to match.</small></span></button>
     </section>
-    <div className="space-y-8"><LinkGroup title={t("links.active")} items={active} onEdit={setEditing} onRemove={remove} onToggle={toggle} onDragStart={setDragged} onDrop={reorder} /><LinkGroup title={t("links.hidden")} items={hidden} onEdit={setEditing} onRemove={remove} onToggle={toggle} onDragStart={setDragged} onDrop={reorder} /></div>
-    <AddSocialModal key={editing?.id || (adding ? "new" : "closed")} open={adding || !!editing} initial={editing} onClose={() => { setAdding(false); setEditing(null); }} />
+    <section className="mb-8 rounded-2xl border border-white/[.07] bg-white/[.02] p-4"><FieldLabel>{t("links.align")}</FieldLabel><div className="grid grid-cols-3 gap-2">{aligns.map(({id,icon:Icon})=><button key={id} type="button" onClick={()=>setAlign(id)} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs ${align===id?"border-[#e11d48]/50 bg-[#e11d48]/10 text-white":"border-white/[.08] text-zinc-500"}`}><Icon size={14}/>{id==="left"?t("common.left"):id==="right"?t("common.right"):t("common.center")}</button>)}</div><div className="mt-4 rounded-xl border border-white/[.06] bg-black/25 px-4 py-3"><p className="mb-1 text-[10px] uppercase tracking-[.14em] text-zinc-600">{t("links.onProfile")}</p><SocialLinks config={config} className="mt-0"/></div></section>
+    <div className="space-y-8"><LinkGroup title={t("links.active")} items={active} onEdit={setEditing} onRemove={remove} onToggle={toggle} onDragStart={setDragged} onDrop={reorder}/><LinkGroup title={t("links.hidden")} items={hidden} onEdit={setEditing} onRemove={remove} onToggle={toggle} onDragStart={setDragged} onDrop={reorder}/></div>
+    <AddSocialModal key={editing?.id || (adding ? `new-${newPlatform}` : "closed")} open={adding || !!editing} initial={editing} initialPlatform={newPlatform} onClose={()=>{setAdding(false);setEditing(null);}} />
   </main>;
 }
 
 function LinkGroup({ title, items, onEdit, onRemove, onToggle, onDragStart, onDrop }: { title: string; items: SocialLink[]; onEdit: (item: SocialLink) => void; onRemove: (id: string) => void; onToggle: (id: string, value: boolean) => void; onDragStart: (id: string) => void; onDrop: (id: string) => void }) {
   const t = useT();
-  return <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-medium text-zinc-300">{title}</h2><span className="rounded-full bg-white/[.06] px-2 py-1 text-[10px] text-zinc-500">{items.length}</span></div>{items.length ? <div className="space-y-2">{items.map((item) => <div key={item.id} draggable onDragStart={() => onDragStart(item.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(item.id)} className="surface surface-hover flex items-center gap-3 rounded-2xl p-3.5"><GripVertical size={16} className="shrink-0 cursor-grab text-zinc-700" /><span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-lg" style={{ color: resolveIconColor(item), background: `${resolveIconColor(item)}16` }}><SocialIcon platform={item.platform} size={18} color={resolveIconColor(item)} customIcon={item.customIcon} /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-zinc-200">{item.label}</p><p className="mt-1 truncate text-xs text-zinc-600">{defaultSocialAction(item) === "copy" ? t("links.copyAction") : t("links.openAction")} · {item.displayMode === "link" ? composeSocialValue(item.platform, item.value) : item.value}</p></div><button onClick={() => onEdit(item)} className="rounded-lg p-2 text-zinc-600 hover:bg-white/[.06] hover:text-white" aria-label={t("links.edit", { name: item.label })}><Pencil size={15} /></button><button onClick={() => onRemove(item.id)} className="rounded-lg p-2 text-zinc-600 hover:bg-red-400/10 hover:text-red-300" aria-label={`${t("common.delete")} ${item.label}`}><Trash2 size={15} /></button><Toggle label={item.label} checked={item.enabled} onChange={(value) => onToggle(item.id, value)} /></div>)}</div> : <div className="rounded-2xl border border-dashed border-white/[.08] px-5 py-8 text-center text-xs text-zinc-600">{t("links.noHidden")}</div>}</section>;
+  return <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-medium text-zinc-300">{title}</h2><span className="rounded-full bg-white/[.06] px-2 py-1 text-[10px] text-zinc-500">{items.length}</span></div>{items.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} draggable onDragStart={() => onDragStart(item.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(item.id)} className="surface surface-hover flex min-w-0 items-center gap-2.5 rounded-2xl p-3"><GripVertical size={16} className="shrink-0 cursor-grab text-zinc-700" /><span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-lg" style={{ color: resolveIconColor(item), background: `${resolveIconColor(item)}16` }}><SocialIcon platform={item.platform} size={18} color={resolveIconColor(item)} customIcon={item.customIcon} /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-zinc-200">{item.label}</p><p className="mt-1 truncate text-xs text-zinc-600">{defaultSocialAction(item) === "copy" ? t("links.copyAction") : t("links.openAction")} · {item.displayMode === "link" ? composeSocialValue(item.platform, item.value) : item.value}</p></div><button onClick={() => onEdit(item)} className="rounded-lg p-2 text-zinc-600 hover:bg-white/[.06] hover:text-white" aria-label={t("links.edit", { name: item.label })}><Pencil size={15} /></button><button onClick={() => onRemove(item.id)} className="rounded-lg p-2 text-zinc-600 hover:bg-red-400/10 hover:text-red-300" aria-label={`${t("common.delete")} ${item.label}`}><Trash2 size={15} /></button><Toggle label={item.label} checked={item.enabled} onChange={(value) => onToggle(item.id, value)} /></div>)}</div> : <div className="rounded-2xl border border-dashed border-white/[.08] px-5 py-8 text-center text-xs text-zinc-600">{t("links.noHidden")}</div>}</section>;
 }
 
-function AddSocialModal({ open, initial, onClose }: { open: boolean; initial: SocialLink | null; onClose: () => void }) {
+function AddSocialModal({ open, initial, initialPlatform, onClose }: { open: boolean; initial: SocialLink | null; initialPlatform: SocialPlatform; onClose: () => void }) {
   const t = useT();
   const { config, updateConfig } = useProfile();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [platform, setPlatform] = useState<SocialPlatform>(initial?.platform || "YouTube");
+  const [platform, setPlatform] = useState<SocialPlatform>(initial?.platform || initialPlatform);
   const [value, setValue] = useState(initial ? extractSocialHandle(initial.platform, initial.value) : "");
   const [label, setLabel] = useState(initial?.label || "");
   const [displayMode, setDisplayMode] = useState<SocialLink["displayMode"]>(initial?.displayMode || "link");

@@ -59,6 +59,25 @@ PUBLIC_ANALYTICS_SCRIPT = """<script>
 </script>
 """
 
+PUBLIC_BADGE_SCRIPT = """<script>
+(() => {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.querySelectorAll("img[data-animated-badge]").forEach((image) => {
+    const preview = image.getAttribute("src") || "";
+    const animated = image.getAttribute("data-animated-badge") || "";
+    if (!preview || !animated) return;
+    const start = () => image.setAttribute("src", animated);
+    const stop = () => image.setAttribute("src", preview);
+    image.addEventListener("pointerenter", start);
+    image.addEventListener("pointerleave", stop);
+    image.addEventListener("pointerdown", start);
+    image.addEventListener("pointerup", stop);
+    image.addEventListener("pointercancel", stop);
+  });
+})();
+</script>
+"""
+
 PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
 <script>
 (() => {
@@ -493,12 +512,51 @@ PUBLIC_LYRICS_SCRIPT = """<script>
 </script>"""
 
 
+PUBLIC_BACKGROUND_EFFECT_SCRIPT = """<script>
+(()=>{const c=document.getElementById("bg-particles");if(!c)return;const e=c.dataset.effect||"None",x=c.getContext("2d"),reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;let w=1,h=1,t=0,raf=0,wind=0,p=[];
+if(e==="Rain"){c.style.backdropFilter="blur(1.4px) saturate(.88) brightness(.93)";c.style.background="rgba(130,175,198,.035)"}
+const make=(random=true)=>({x:Math.random()*w,y:random?Math.random()*h:-30,s:e==="Rain"?2.5+Math.pow(Math.random(),3.1)*18:e==="Fireflies"?.45+Math.pow(Math.random(),2.2)*1.35:e==="Sakura"?10+Math.random()*4:e==="Snow"?.8+Math.random()*2.4:1.4+Math.random()*(e==="Snowflakes"?4:2.6),v:e==="Rain"?.025+Math.random()*.22:e==="Snow"?.2+Math.random()*1.8:.25+Math.random()*1.1,d:(Math.random()-.5)*(e==="Fireflies"?.7:e==="Sakura"?.9:e==="Snow"?2.2:.35),q:Math.random()*Math.PI*2,a:.35+Math.random()*.55});
+const resize=()=>{const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,e==="Rain"?1.5:1.75);w=Math.max(1,r.width);h=Math.max(1,r.height);c.width=Math.round(w*d);c.height=Math.round(h*d);x.setTransform(d,0,0,d,0,0);const n=e==="Fireflies"?Math.max(60,Math.min(200,Math.round(w*h/6000))):e==="Sakura"?Math.max(10,Math.min(28,Math.round(w/80))):e==="Snow"?Math.max(24,Math.min(64,Math.round(w*h/14500))):Math.max(12,Math.min(e==="Rain"?140:48,Math.round(e==="Rain"?w*h/5200:w/28)));p=Array.from({length:reduce?Math.min(22,n):n},()=>make())};
+const flake=o=>{x.save();x.translate(o.x,o.y);x.strokeStyle="rgba(255,255,255,"+o.a+")";x.lineWidth=Math.max(.7,o.s/5);for(let i=0;i<3;i++){x.rotate(Math.PI/3);x.beginPath();x.moveTo(-o.s,0);x.lineTo(o.s,0);x.stroke()}x.restore()};
+const rain=o=>{const r=o.s,z=1+Math.max(0,r-7)*.035;if(r>8){const l=x.createLinearGradient(o.x,o.y-r*3.2,o.x,o.y);l.addColorStop(0,"rgba(210,235,246,0)");l.addColorStop(1,"rgba(210,235,246,"+o.a*.16+")");x.strokeStyle=l;x.lineWidth=Math.max(1,r*.18);x.beginPath();x.moveTo(o.x,o.y-r*3.2);x.lineTo(o.x,o.y-r*.7);x.stroke()}const g=x.createRadialGradient(o.x-r*.32,o.y-r*.4,r*.08,o.x,o.y,r*1.15);g.addColorStop(0,"rgba(255,255,255,.68)");g.addColorStop(.2,"rgba(210,235,246,.13)");g.addColorStop(.68,"rgba(120,155,176,.08)");g.addColorStop(1,"rgba(5,18,28,.48)");x.shadowColor="rgba(0,10,20,.62)";x.shadowBlur=Math.max(2,r*.45);x.shadowOffsetY=Math.max(1,r*.12);x.fillStyle=g;x.beginPath();x.ellipse(o.x,o.y,r*.72,r*z,0,0,Math.PI*2);x.fill();x.shadowColor="transparent";x.strokeStyle="rgba(235,249,255,"+Math.min(.7,o.a*.75)+")";x.lineWidth=Math.max(.45,r*.055);x.stroke();x.strokeStyle="rgba(255,255,255,"+o.a*.5+")";x.lineWidth=Math.max(.5,r*.08);x.beginPath();x.arc(o.x-r*.08,o.y-r*.13,r*.48,Math.PI*1.05,Math.PI*1.68);x.stroke()};
+const draw=(move=true)=>{x.clearRect(0,0,w,h);t+=move?1:0;for(const o of p){if(move){if(e==="Fireflies"){o.x+=(o.q>Math.PI?-1:1)*(.12+o.v*.12);o.y+=Math.sin(t/95+o.q)*.06}else if(e==="Rain"){o.y+=o.v*Math.max(1,o.s/5);o.x+=Math.sin(t/130+o.q)*.018}else if(e==="Snow"){o.y+=o.v;o.x+=o.d+wind}else{o.y+=o.v;o.x+=o.d+Math.sin(t/70+o.q)*.16}if(e==="Fireflies"){if(o.x>w+30){o.x=-30;o.y=Math.random()*h}else if(o.x< -30){o.x=w+30;o.y=Math.random()*h}}else if(o.y>h+30||o.x< -30||o.x>w+30)Object.assign(o,make(false))}x.save();x.globalAlpha=e==="Fireflies"?o.a*Math.pow(Math.max(0,Math.sin(t/(72+o.q*8)+o.q)),5):o.a;if(e==="Rain")rain(o);else if(e==="Sakura"){const pw=o.s*.78,ph=o.s;x.globalAlpha*=.9-Math.min(.7,o.y/Math.max(1,h)*.7);x.translate(o.x,o.y);x.rotate(Math.sin(t/34+o.q)*.48+o.q);if(Math.sin(t/42+o.q)<0)x.scale(-1,1);const g=x.createLinearGradient(-pw/2,-ph/2,pw/2,ph/2);g.addColorStop(0,"rgba(255,183,197,.92)");g.addColorStop(1,"rgba(255,197,208,.9)");x.fillStyle=g;x.beginPath();x.moveTo(-pw*.52,0);x.bezierCurveTo(-pw*.35,-ph*.48,pw*.32,-ph*.55,pw*.52,0);x.bezierCurveTo(pw*.3,ph*.42,-pw*.25,ph*.55,-pw*.52,0);x.closePath();x.fill()}else if(e==="Snowflakes")flake(o);else if(e==="Fireflies"){const g=x.createRadialGradient(o.x,o.y,0,o.x,o.y,o.s*3.2);g.addColorStop(0,"rgba(252,210,113,1)");g.addColorStop(.24,"rgba(252,210,113,.7)");g.addColorStop(1,"rgba(252,210,113,0)");x.fillStyle=g;x.beginPath();x.arc(o.x,o.y,o.s*3.2,0,Math.PI*2);x.fill()}else{x.fillStyle="rgba(255,255,255,.82)";x.beginPath();x.arc(o.x,o.y,o.s,0,Math.PI*2);x.fill()}x.restore()}};
+const tick=()=>{draw(true);raf=requestAnimationFrame(tick)};new ResizeObserver(()=>{resize();if(reduce)draw(false)}).observe(c);if(e==="Snow")addEventListener("pointermove",a=>{wind=(a.clientX/Math.max(1,innerWidth)-.5)*1.4},{passive:true});resize();reduce?draw(false):tick();document.addEventListener("visibilitychange",()=>{cancelAnimationFrame(raf);if(!reduce&&!document.hidden)tick()})})();
+</script>"""
+
+PUBLIC_SAKURA_EFFECT = """<style>
+.misa-sakura-petal{pointer-events:none;position:absolute;top:0}
+@keyframes misa-sakura-fall{0%{opacity:.9;top:0}100%{opacity:.2;top:100%}}
+@keyframes misa-sakura-blow-soft-left{0%{margin-left:0}100%{margin-left:-50%}}
+@keyframes misa-sakura-blow-medium-left{0%{margin-left:0}100%{margin-left:-100%}}
+@keyframes misa-sakura-blow-soft-right{0%{margin-left:0}100%{margin-left:50%}}
+@keyframes misa-sakura-blow-medium-right{0%{margin-left:0}100%{margin-left:100%}}
+@keyframes misa-sakura-sway-0{0%{transform:rotate(-5deg)}40%{transform:rotate(28deg)}100%{transform:rotate(3deg)}}
+@keyframes misa-sakura-sway-1{0%{transform:rotate(10deg)}40%{transform:rotate(43deg)}100%{transform:rotate(15deg)}}
+@keyframes misa-sakura-sway-2{0%{transform:rotate(15deg)}40%{transform:rotate(56deg)}100%{transform:rotate(22deg)}}
+@keyframes misa-sakura-sway-3{0%{transform:rotate(25deg)}40%{transform:rotate(74deg)}100%{transform:rotate(37deg)}}
+@keyframes misa-sakura-sway-4{0%{transform:rotate(40deg)}40%{transform:rotate(68deg)}100%{transform:rotate(25deg)}}
+@keyframes misa-sakura-sway-5{0%{transform:rotate(50deg)}40%{transform:rotate(78deg)}100%{transform:rotate(40deg)}}
+@keyframes misa-sakura-sway-6{0%{transform:rotate(65deg)}40%{transform:rotate(92deg)}100%{transform:rotate(58deg)}}
+@keyframes misa-sakura-sway-7{0%{transform:rotate(72deg)}40%{transform:rotate(118deg)}100%{transform:rotate(68deg)}}
+@keyframes misa-sakura-sway-8{0%{transform:rotate(94deg)}40%{transform:rotate(136deg)}100%{transform:rotate(82deg)}}
+</style><script>
+/* Adapted from Sakura.js, copyright (c) 2019 Jeroen Hammann, MIT License. */
+(()=>{const l=document.getElementById("sakura-effect");if(!l||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+const ri=(a,b)=>Math.floor(Math.random()*(b-a+1))+a,bl=["soft-left","medium-left","soft-right","medium-right"],sw=Array.from({length:9},(_,i)=>"sway-"+i);
+const create=()=>{setTimeout(()=>requestAnimationFrame(create),300);const ft=innerHeight*.007+Math.round(Math.random()*5),b=bl[ri(0,bl.length-1)],s=sw[ri(0,sw.length-1)],h=ri(10,14),w=h-Math.floor(ri(0,10)/3),p=document.createElement("span");
+p.className="misa-sakura-petal";p.style.animation="misa-sakura-fall "+ft+"s linear 0s 1, misa-sakura-blow-"+b+" "+(Math.max(ft,30)-20+ri(0,20))+"s linear 0s infinite, misa-sakura-"+s+" "+ri(2,4)+"s linear 0s infinite";
+p.style.background="linear-gradient(120deg,rgba(255,183,197,.9),rgba(255,197,208,.9))";p.style.borderRadius=ri(14,14+Math.floor(Math.random()*10))+"px "+ri(1,Math.max(1,Math.floor(w/4)))+"px";p.style.height=h+"px";p.style.left=Math.random()*l.clientWidth-100+"px";p.style.marginTop=-(Math.floor(Math.random()*20)+15)+"px";p.style.width=w+"px";p.addEventListener("animationend",()=>p.remove(),{once:true});l.appendChild(p)};requestAnimationFrame(create)})();
+</script>"""
+
 def render_public_profile(config: dict, request: Request | None = None, widgets: list | None = None, default_fonts: list[dict] | None = None) -> str:
     incoming = config if isinstance(config, dict) else {}
     discord_live = incoming.get("discord") if isinstance(incoming.get("discord"), dict) else {}
+    rank = incoming.get("rank") if isinstance(incoming.get("rank"), dict) else None
     config = sanitize_profile_config(incoming)
     if discord_live:
         config["discord"] = discord_live
+    if rank:
+        config["rank"] = rank
     profile = config.get("profile") or {}
     settings = config.get("settings") or {}
     assets = config.get("assets") or {}
@@ -529,7 +587,6 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     profile_radius = _clamp(settings.get("profileRadius"), 24, 0, 40)
     profile_frame_opacity = _clamp(settings.get("profileFrameOpacity"), 100, 0, 100) / 100
     username_effect = settings.get("usernameEffect") if settings.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
-    background_effect = settings.get("backgroundEffect") if settings.get("backgroundEffect") in {"None", "Rain", "Raindrops", "Snow", "Snowflakes", "Stars", "Ocean waves", "Old TV", "Sun effect", "Paper texture"} else "None"
     layout = settings.get("layout") if settings.get("layout") in {"Modern", "Simplistic", "Sleek"} else "Modern"
     avatar_shape = settings.get("avatarShape") if settings.get("avatarShape") in {"circle", "rounded", "square"} else "circle"
     banner_shape = settings.get("bannerShape") if settings.get("bannerShape") in {"rounded", "square", "pill"} else "rounded"
@@ -549,6 +606,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     show_avatar = bool(settings.get("showAvatar", True))
     show_avatar_border = bool(settings.get("showAvatarBorder", True))
     show_display_name = bool(settings.get("showDisplayName", True))
+    show_username = bool(settings.get("showUsername", True))
     frame_scale = _clamp(settings.get("profileFrameScale"), 100, 50, 150) / 100
     frame_x = _clamp(settings.get("profileFrameX"), 0, -45, 45)
     frame_y = _clamp(settings.get("profileFrameY"), 0, -45, 45)
@@ -609,6 +667,8 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     has_avatar = has_public_asset(assets, "avatar", "image")
     has_background = has_public_asset(assets, "background", "image")
     has_video = has_public_asset(assets, "backgroundVideo", "video")
+    has_effect_video = has_public_asset(assets, "backgroundEffectVideo", "video")
+    background_effect = str(settings.get("backgroundEffect") or "None")
     has_cursor = has_public_asset(assets, "cursor", "image")
     audio_source = str(assets.get("audioSource") or "").strip().lower()
     if audio_source not in {"video", "standalone", "tracks"}:
@@ -647,6 +707,14 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if has_video
         else ""
     )
+    effect_video_tag = (
+        f'<video class="bg-effect" autoplay muted loop playsinline src="{asset_src("backgroundEffectVideo")}"></video>'
+        if has_effect_video
+        else ""
+    )
+    sakura_effect_tag = '<div id="sakura-effect" class="bg-effect" aria-hidden="true"></div>' if background_effect == "Sakura" else ""
+    rain_effect_tag = '<iframe class="bg-effect codrops-rain-effect" src="/dashboard/vendor/rain-effect/profile.html#slide-2" title="Codrops rain effect" aria-hidden="true" tabindex="-1"></iframe>' if background_effect == "Rain" else ""
+    effect_canvas_tag = f'<canvas id="bg-particles" class="bg-effect" data-effect="{escape(background_effect, quote=True)}" aria-hidden="true"></canvas>' if background_effect not in {"None", "Sakura", "Rain"} else ""
     playlist = public_playlist(username_raw, assets) if audio_source == "tracks" else []
     if audio_source == "standalone" and asset_src("audio"):
         playlist = [{
@@ -666,18 +734,16 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     )
     audio_controls = (
         f'<div class="player" id="profile-player">'
-        f'<div class="player-top">{art_tag}<div class="player-meta"><strong id="audio-title">{escape((first or {}).get("title") or audio_title)}</strong><span id="audio-count">1 / {len(playlist)}</span></div></div>'
+        f'<div class="player-layout">{art_tag}<div class="player-meta">'
+        f'<strong id="audio-title">{escape((first or {}).get("title") or audio_title)}</strong>'
+        f'<div class="player-progress"><span id="audio-now">0:00</span>'
         f'<input id="audio-seek" type="range" min="0" max="1" value="0" aria-label="Seek">'
-        f'<div class="player-times"><span id="audio-now">0:00</span><span id="audio-dur">0:00</span></div>'
+        f'<span id="audio-dur">0:00</span></div></div>'
         f'<div class="player-controls">'
-        f'<button type="button" id="audio-shuffle" class="audio-btn" data-on="0" aria-label="Shuffle" aria-pressed="false">{AUDIO_ICON_SHUFFLE}</button>'
         f'<button type="button" id="audio-prev" class="audio-btn" aria-label="Previous track">{AUDIO_ICON_PREVIOUS}</button>'
         f'<button type="button" id="audio-play" class="audio-btn play" data-playing="0" aria-label="Play" aria-pressed="false">{AUDIO_ICON_PLAY}{AUDIO_ICON_PAUSE}</button>'
         f'<button type="button" id="audio-next" class="audio-btn" aria-label="Next track">{AUDIO_ICON_NEXT}</button>'
-        f'<button type="button" id="audio-repeat" class="audio-btn" data-mode="all" aria-label="Repeat all">{AUDIO_ICON_REPEAT}</button>'
-        f'</div>'
-        f'<div class="player-volume"><button type="button" id="audio-mute" class="audio-btn" data-muted="0" aria-label="Mute" aria-pressed="false">{AUDIO_ICON_VOLUME}{AUDIO_ICON_VOLUME_X}</button>'
-        f'<input id="audio-volume" type="range" min="0" max="100" value="{volume}" aria-label="Volume"></div>'
+        f'</div></div>'
         f"</div>"
         if playlist
         else ""
@@ -698,7 +764,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     presence_name = f'<p class="discord-presence-name">{discord_handle}</p>' if discord_handle else ""
     presence_label = f'<p class="discord-presence-status" data-discord-status-label>{status_label}</p>' if status_label else ""
     discord_tile = (
-        f'<div class="discord-presence"><p class="discord-presence-title">Discord Status</p>'
+        f'<div class="discord-presence">'
         f'<div class="discord-presence-body"><div class="discord-presence-avatar">{presence_face}{presence_status}</div>{presence_name}{presence_label}</div></div>'
         if settings.get("showDiscordStatus", True) and (presence_pfp or discord_status)
         else ""
@@ -736,7 +802,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     card_padding = "0" if layout == "Sleek" else ("24px 28px" if layout == "Simplistic" else "36px 28px")
     links, justify = _public_social_markup(config, icon_color)
     location_tag = (
-        f'<p class="location"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg>{location}</p>'
+        f'<p class="location"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>{location}</p>'
         if location
         else ""
     )
@@ -774,16 +840,16 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if has_banner
         else ('<div class="banner banner-fallback"></div>' if layout == "Sleek" else "")
     )
-    effects = _effect_markup(background_effect)
     verified = (
         '<span class="verified" title="Verified"><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M12 2 9.2 4.1 5.7 4.6 4.6 8 2.2 10.6 3.5 14l.1 3.6 3.3 1.4L9.2 22 12 20.7 14.8 22l2.3-2.9 3.3-1.4.1-3.6L21.8 10.6 19.4 8 18.3 4.6 14.8 4.1 12 2Zm-1.2 12.7-2.8-2.8 1.2-1.2 1.6 1.6 3.8-3.8 1.2 1.2-5 5Z"/></svg></span>'
         if any(isinstance(item, dict) and item.get("id") == "verified" and item.get("owned") for item in config.get("badges") or [])
         else ""
     )
     display_name_tag = f'<h1 id="display-name" class="{name_class}" style="{name_style}">{display_name}</h1>' if show_display_name else ""
+    handle_tag = f'<p class="handle">@{username}</p>' if show_username else ""
     identity = (
-        f'<div class="name-row">{display_name_tag}{guild_tag}{verified}</div>'
-        f'<p class="handle">@{username}</p>{description_tag}{location_tag}{badges_tag}'
+        f'<div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>'
+        f'{handle_tag}{description_tag}{location_tag}'
         f'<div class="socials">{links}</div>{_public_widgets_markup(widgets)}{_public_sections_markup(config, username_raw)}{audio_controls}{meta_tag}'
     )
     if layout == "Sleek":
@@ -820,30 +886,14 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.lyrics::-webkit-scrollbar{{disp
 {cursor_css}
 .has-cursor,.has-cursor *{{cursor:var(--cursor, auto)}}
 body{{position:relative;display:flex;align-items:center;justify-content:{page_place};padding:32px 16px;overflow:auto{";perspective:900px" if card_tilt else ""}}}
-.card-stage{{position:relative;z-index:2;width:min(92vw,430px);transform:translate({frame_x}vw,{frame_y}vh) scale({frame_scale});transform-origin:center;}}
+.card-stage{{position:relative;z-index:3;width:min(92vw,430px);transform:translate({frame_x}vw,{frame_y}vh) scale({frame_scale});transform-origin:center;}}
 #profile-audio{{position:absolute;width:0;height:0;opacity:0;pointer-events:none}}
-.bg-wash,.bg-image,.bg-video,.fx,.backdrop{{position:fixed;inset:0;pointer-events:none}}
-.fx *,.fx::before,.fx::after,.fx-glow::before,.fx-glow::after,.fx-aurora span,.dot{{pointer-events:none}}
-.bg-wash{{z-index:0;opacity:{background_opacity};background-size:cover;background-position:center;animation:drift 18s ease-in-out infinite}}
-.bg-image,.bg-video{{z-index:0;width:100%;height:100%;object-fit:cover;opacity:{background_opacity}}}
-.backdrop{{z-index:1;background:rgba(0,0,0,.35)}}
-.fx{{z-index:1}}
-.fx-glow{{background:radial-gradient(ellipse at center,transparent 15%,rgba(0,0,0,.45) 78%)}}
-.fx-glow::before,.fx-glow::after{{content:"";position:absolute;border-radius:50%;filter:blur(40px);animation:pulse 4.8s ease-in-out infinite}}
-.fx-glow::before{{width:280px;height:280px;left:12%;top:8%;background:{accent}55}}
-.fx-glow::after{{width:240px;height:240px;right:10%;bottom:12%;background:{accent}40;animation-delay:-2s}}
-.fx-stars{{opacity:.6;background-image:radial-gradient(circle,rgba(255,255,255,.8) 1px,transparent 1px);background-size:67px 67px}}
-.fx-stars{{animation:background-stars 5s ease-in-out infinite}}
-.fx-ocean-waves{{background:repeating-linear-gradient(115deg,transparent 0 46px,{accent}22 47px 49px,transparent 50px 94px);background-size:180px 180px;opacity:.35;animation:background-waves 15s ease-in-out infinite}}
-.raindrop{{position:absolute;top:-8%;border-radius:50%;background:#bae6fd70;transform:rotate(24deg);animation:background-rain 3.8s linear infinite}}
-.snow,.snowflake{{position:absolute;top:-10%;color:#fff9;animation:background-snow 8s linear infinite}}
-.fx-old-tv{{background-image:repeating-linear-gradient(0deg,transparent 0 3px,#ffffff14 4px,transparent 5px),radial-gradient(circle at 50% 50%,transparent 35%,#00000075 100%);mix-blend-mode:screen;opacity:.35}}
-.fx-sun{{background:radial-gradient(circle at 72% 18%,#fbbf24aa 0,#f9731644 16%,transparent 48%);animation:pulse 7s ease-in-out infinite;opacity:.7}}
-.fx-paper{{background-image:repeating-linear-gradient(0deg,#ffffff1f 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,#ffffff0f 0 1px,transparent 1px 5px);opacity:.2}}
-.ember{{position:absolute;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent};animation:background-ember 6s ease-in-out infinite}}
-.rain{{position:absolute;top:-15%;width:1px;background:#ffffff40;animation:background-rain 3s linear infinite}}
-
-.dot{{position:absolute;border-radius:50%;background:#fff6;animation:drift 8s ease-in-out infinite}}
+.bg-wash,.bg-image,.bg-video,.bg-effect,.backdrop{{position:fixed;inset:0;pointer-events:none}}
+.bg-wash,.bg-image,.bg-video{{z-index:0}}
+.bg-image,.bg-video,.bg-effect{{width:100%;height:100%;object-fit:cover}}
+.backdrop{{z-index:1}}
+.bg-effect{{z-index:2;background:transparent}}
+.codrops-rain-effect{{border:0}}
 .card{{position:relative;width:100%;margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
 .card.no-frame{{border-color:transparent;background:transparent;backdrop-filter:none;box-shadow:none}}
 .card.no-frame::before{{display:none}}
@@ -908,10 +958,12 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .views{{display:inline-flex;align-items:center;gap:8px;margin:0;color:#ffffff;opacity:.35;font-size:12px}}
 .eye{{position:relative;display:inline-flex;width:20px;height:14px;border:1px solid currentColor;border-radius:50%}}
 .eye::after{{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;background:currentColor;transform:translate(-50%,-50%)}}
-.badges{{display:flex;flex-wrap:wrap;justify-content:{justify};gap:8px;margin-top:24px}}
-.badge{{display:grid;place-items:center;width:32px;height:32px;border-radius:999px;border:1px solid #ffffff1a;background:#ffffff12;color:inherit}}
-.badge img{{display:block;width:15px;height:15px;object-fit:contain}}
-.badge svg{{display:block}}
+.badges{{display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:{justify};gap:6px;margin:0}}
+.badge{{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;overflow:hidden;border-radius:11px;border:1px solid #ffffff1a;background:#ffffff12;color:inherit}}
+.badge img{{display:block;width:24px;height:24px;object-fit:contain}}
+.rank-badge{{display:inline-flex;width:auto;flex-basis:auto;gap:6px;padding:0 12px;border-radius:999px;font-size:11px;font-weight:600}}
+.badge svg{{display:block;width:22px;height:22px}}
+.rank-badge svg{{width:15px;height:15px}}
 .socials{{display:flex;flex-wrap:wrap;justify-content:{justify};gap:10px;margin-top:28px;width:100%}}
 .social{{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #ffffff17;border-radius:12px;background:#ffffff0e;color:inherit;text-decoration:none;cursor:pointer;font:inherit}}
 .social img{{width:18px;height:18px;object-fit:contain;border-radius:4px}}
@@ -926,31 +978,33 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 #copy-toast[hidden],.card[hidden],.entry[hidden]{{display:none}}
 .brand{{display:block;margin-top:28px;color:#ffffff33;font-size:10px;letter-spacing:.23em;text-transform:uppercase}}
 .player-row{{display:flex;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin-top:24px;overflow:hidden}}
-.discord-presence{{position:relative;display:flex;flex:0 0 clamp(104px,30vw,120px);width:clamp(104px,30vw,120px);min-width:0;max-width:120px;align-items:center;justify-content:center;overflow:hidden;padding:32px 8px 12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:center}}
-.discord-presence-title{{position:absolute;top:10px;left:4px;right:4px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ffffffe0;font-size:10px;font-weight:600;line-height:1.2;letter-spacing:.02em}}
-.discord-presence-body{{display:flex;width:100%;min-width:0;max-width:100%;flex-direction:column;align-items:center;gap:6px;overflow:hidden}}
-.discord-presence-avatar{{position:relative;width:clamp(40px,12vw,44px);height:clamp(40px,12vw,44px);min-width:40px;min-height:40px;max-width:44px;max-height:44px;flex:none;overflow:visible}}
+.discord-presence{{position:relative;display:flex;flex:0 0 136px;width:136px;min-width:0;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
+.discord-presence-body{{display:grid;width:100%;min-width:0;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:2px 10px;overflow:hidden}}
+.discord-presence-avatar{{position:relative;grid-row:1/3;width:44px;height:44px;flex:none;overflow:visible}}
 .discord-presence-image,.discord-presence-fallback{{display:block;width:100%;height:100%;min-width:0;max-width:100%;overflow:hidden;border-radius:999px;object-fit:cover}}
 .discord-presence-fallback{{display:grid;place-items:center;background:#ffffff14;color:#fff;font-size:14px;font-weight:600}}
 .discord-presence-avatar .status-dot{{position:absolute;right:-2px;bottom:-2px;z-index:4;width:16px;height:16px;min-width:16px;min-height:16px;max-width:16px;max-height:16px;border-radius:999px}}
 .discord-presence-name,.discord-presence-status{{width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.discord-presence-name{{color:#fff;font-size:11px;font-weight:600;line-height:1.2}}
-.discord-presence-status{{color:#ffffff8c;font-size:9px;line-height:1.2}}
+.discord-presence-name{{color:#fff;font-size:13px;font-weight:600;line-height:1.2;text-align:left}}
+.discord-presence-status{{color:#ffffff8c;font-size:10px;line-height:1.2;text-align:left}}
 .player-row>.player{{flex:1 1 auto;min-width:0;max-width:100%;margin-top:0;overflow:hidden}}
 .player{{position:relative;z-index:5;width:100%;min-width:0;max-width:100%;margin-top:24px;padding:12px;overflow:hidden;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left;pointer-events:auto;isolation:isolate}}
-.player-top{{display:flex;min-width:0;align-items:center;gap:12px;overflow:hidden}}
+.player-layout{{display:flex;min-width:0;align-items:center;gap:12px;overflow:hidden}}
 .player-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
 .player-art-empty{{display:grid;place-items:center;color:#ffffff88}}
 .player-meta{{min-width:0;max-width:100%;flex:1;overflow:hidden}}
 .player-meta strong{{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}}
-.player-meta span{{display:block;margin-top:4px;color:#ffffff66;font-size:11px}}
-.player-times{{display:flex;justify-content:space-between;margin:4px 0 8px;color:#ffffff55;font-size:10px;font-family:ui-monospace,monospace}}
-.player-controls{{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap}}
-.player-volume{{display:flex;align-items:center;gap:8px;margin-top:10px}}
-#audio-seek,#audio-volume{{width:100%;accent-color:{accent};pointer-events:auto;cursor:pointer}}
-#audio-seek{{margin-top:10px}}
-.audio-btn{{position:relative;z-index:1;display:inline-flex;width:36px;height:36px;flex:none;align-items:center;justify-content:center;overflow:hidden;border:0;border-radius:999px;background:#ffffff14;color:#fff;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
-.audio-btn.play{{width:42px;height:42px}}
+.player-progress{{display:flex;min-width:0;align-items:center;gap:8px;margin-top:8px;color:#ffffff66;font-size:10px;font-family:ui-monospace,monospace}}
+.player-progress span{{display:block;flex:none;margin:0}}
+#audio-seek{{width:100%;min-width:0;flex:1;accent-color:{accent};pointer-events:auto;cursor:pointer}}
+.player-controls{{display:flex;flex:none;justify-content:flex-end;align-items:center;gap:2px}}
+.audio-btn{{position:relative;z-index:1;display:inline-flex;width:28px;height:32px;flex:none;align-items:center;justify-content:center;overflow:hidden;border:0;border-radius:9px;background:transparent;color:#ffffff73;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
+.audio-btn:hover{{background:#ffffff0d;color:#fff}}
+.audio-btn.play{{width:32px;height:36px;color:#ffffffcc}}
+.player-row .player-layout{{display:grid;grid-template-columns:48px minmax(0,1fr);grid-template-rows:auto auto;gap:6px 8px}}
+.player-row .player-art{{grid-row:1/3;width:48px;height:48px;min-width:48px;min-height:48px}}
+.player-row .player-controls{{grid-column:2;justify-content:flex-end}}
+@media(max-width:639px){{.player-row{{flex-direction:column}}.discord-presence{{width:100%;flex:1 1 auto}}.player-row>.player{{width:100%}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
 .audio-btn::before,.audio-btn::after{{display:none!important;content:none!important}}
 .audio-icon{{display:block;width:16px;height:16px;flex:none;pointer-events:none}}
 .audio-btn.play .audio-icon{{width:17px;height:17px}}
@@ -961,11 +1015,11 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 #audio-repeat[data-mode="off"]{{opacity:.45}}
 #audio-repeat[data-mode="one"]::after{{display:block!important;content:"1"!important;position:absolute;right:4px;top:2px;font-size:9px}}
 .widget-swap .player{{background:{accent};color:{background};border-color:{background}33}}
-.widget-swap .player-meta span,.widget-swap .player-times{{color:{background};opacity:.66}}
+.widget-swap .player-progress{{color:{background};opacity:.66}}
 .widget-swap .player-art-empty{{background:{background}22;color:{background}}}
 .widget-swap .audio-btn{{background:{background}22;color:{background}}}
 .widget-swap .audio-btn.play,.widget-swap #audio-shuffle[data-on="1"]{{background:{background}33}}
-.widget-swap #audio-seek,.widget-swap #audio-volume{{accent-color:{background}}}
+.widget-swap #audio-seek{{accent-color:{background}}}
 .widgets{{display:flex;flex-direction:column;gap:10px;margin-top:24px}}
 .widget{{display:flex;width:100%;min-width:0;max-width:100%;align-items:center;gap:12px;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;color:inherit;text-decoration:none}}
 .widget-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
@@ -999,25 +1053,17 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 @keyframes shimmer{{0%{{background-position:0 50%}}100%{{background-position:100% 50%}}}}
 @keyframes pulse{{0%,100%{{opacity:.42;transform:scale(1)}}50%{{opacity:.9;transform:scale(1.08)}}}}
 @keyframes aurora{{0%,100%{{transform:translate3d(-6%,-3%,0) scale(1)}}50%{{transform:translate3d(7%,5%,0) scale(1.12)}}}}
-@keyframes background-stars{{0%,100%{{opacity:.35}}50%{{opacity:.8}}}}
-@keyframes background-waves{{0%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:0 0}}50%{{transform:translate3d(4%,2%,0) rotate(3deg);background-position:120px 80px}}100%{{transform:translate3d(-4%,-2%,0) rotate(0deg);background-position:240px 0}}}}
-@keyframes background-ember{{0%,100%{{transform:translate3d(0,18px,0) scale(.65);opacity:.2}}50%{{transform:translate3d(-12px,-28px,0) scale(1.3);opacity:.95}}}}
-@keyframes background-rain{{0%{{transform:translate3d(0,-20vh,0);opacity:0}}15%{{opacity:.7}}100%{{transform:translate3d(18px,130vh,0);opacity:0}}}}
-@keyframes background-snow{{0%{{transform:translate3d(0,-12vh,0) rotate(0deg);opacity:0}}15%{{opacity:.75}}100%{{transform:translate3d(24px,120vh,0) rotate(180deg);opacity:0}}}}
 
-.fx-aurora span{{position:absolute;border-radius:50%;filter:blur(48px);animation:aurora 9s ease-in-out infinite}}
-.fx-aurora span:first-child{{left:-15%;top:-8%;width:70%;height:55%;background:{accent}55}}
-.fx-aurora span:last-child{{right:-12%;bottom:-6%;width:65%;height:50%;background:#5eead455;animation-delay:-2.4s}}
 @keyframes enter-fade{{from{{opacity:0}}to{{opacity:1}}}}
 @keyframes enter-unfold{{from{{opacity:0;transform:scaleY(.12)}}to{{opacity:1;transform:none}}}}
 @keyframes enter-pop{{from{{opacity:0;transform:scale(.86)}}to{{opacity:1;transform:none}}}}
 .enter-fade{{animation:enter-fade .55s ease both}}
 .enter-unfold{{transform-origin:top center;animation:enter-unfold .55s ease both}}
 .enter-pop{{animation:enter-pop .45s cubic-bezier(.22,1,.36,1) both}}
-@media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}}}
+@media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}.codrops-rain-effect{{display:none}}}}
 </style></head>
 <body{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-typewriter="{1 if username_effect == "Typewriter" else 0}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
-{background_tag}{video_tag}{effects}<div class="backdrop"></div>
+{background_tag}{video_tag}<div class="backdrop"></div>{effect_canvas_tag}{sakura_effect_tag}{rain_effect_tag}{effect_video_tag if background_effect == "None" else ""}
 {f'<button type="button" id="entry" class="entry"><span class="entry-play"></span><small>{entry_text}</small></button>' if entry_on else ""}
 <div class="card-stage"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main></div>
 {audio_tag}
@@ -1026,6 +1072,9 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 {title_data}
 {PUBLIC_COPY_SCRIPT}
 {PUBLIC_ANALYTICS_SCRIPT}
+{PUBLIC_BACKGROUND_EFFECT_SCRIPT if effect_canvas_tag else ""}
+{PUBLIC_SAKURA_EFFECT if sakura_effect_tag else ""}
+{PUBLIC_BADGE_SCRIPT}
 {PUBLIC_WIDGET_SCRIPT}
 {PUBLIC_DISCORD_STATUS_SCRIPT if status_tag else ""}
 {PUBLIC_LYRICS_SCRIPT}
@@ -1164,25 +1213,32 @@ def _public_social_markup(config: dict, global_icon_color: str) -> tuple[str, st
 
 
 def _public_badges(config: dict, settings: dict) -> str:
-    if settings.get("showBadges") is False:
-        return ""
     items: list[str] = []
-    for badge in config.get("badges") or []:
-        if not badge.get("owned") or not badge.get("enabled"):
-            continue
-        color = css_hex_color(settings.get("iconColor") if badge.get("monochrome") else badge.get("color"), "#d8d3ff")
-        glow = f"box-shadow:0 0 18px {color}4d;" if settings.get("badgeGlow") else ""
-        paint = f"color:{color};background:{color}22;border-color:{color}66;{glow}"
-        name = escape(str(badge.get("name") or "Badge"), quote=True)
-        icon_src = str(badge.get("icon") or "")
-        mark = (
-            f'<img src="{escape(icon_src, quote=True)}" alt="" width="15" height="15">'
-            if icon_src.startswith("/api/v1/badges/") and icon_src.endswith("/icon")
-            else _badge_icon_markup(str(badge.get("name") or ""))
-        )
-        items.append(f'<span class="badge" title="{name}" style="{paint}">{mark}</span>')
+    rank = config.get("rank") if isinstance(config.get("rank"), dict) else None
+    if rank:
+        color = css_hex_color(rank.get("color"), "#b6aaff")
+        name = escape(str(rank.get("name") or "Rank"), quote=True)
+        description = escape(str(rank.get("description") or name), quote=True)
+        crown = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m3 6 4 4 5-7 5 7 4-4-2 13H5L3 6Z"/></svg>'
+        items.append(f'<span class="badge rank-badge" title="{description}" style="color:{color};border-color:{color}55;background:{color}18">{crown}{name}</span>')
+    if settings.get("showBadges") is not False:
+        for badge in (config.get("badges") or [])[:5]:
+            if not badge.get("owned") or not badge.get("enabled"):
+                continue
+            color = css_hex_color(settings.get("iconColor") if badge.get("monochrome") else badge.get("color"), "#d8d3ff")
+            glow = f"box-shadow:0 0 18px {color}4d;" if settings.get("badgeGlow") else ""
+            paint = f"color:{color};background:{color}22;border-color:{color}66;{glow}"
+            name = escape(str(badge.get("name") or "Badge"), quote=True)
+            icon_src = str(badge.get("icon") or "")
+            animated_src = str(badge.get("assetUrl") or "") if badge.get("animated") else ""
+            animated_attr = f' data-animated-badge="{escape(animated_src, quote=True)}"' if animated_src.startswith("https://") else ""
+            mark = (
+                f'<img src="{escape(icon_src, quote=True)}"{animated_attr} alt="" width="15" height="15" loading="lazy">'
+                if icon_src.startswith("/api/v1/badges/") and icon_src.endswith("/icon")
+                else _badge_icon_markup(str(badge.get("name") or ""))
+            )
+            items.append(f'<span class="badge" title="{name}" style="{paint}">{mark}</span>')
     return f'<div class="badges">{"".join(items)}</div>' if items else ""
-
 
 def _badge_icon_markup(name: str) -> str:
     if name == "Premium":
@@ -1191,43 +1247,6 @@ def _badge_icon_markup(name: str) -> str:
         return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-14h-7l0-6Z"/></svg>'
     return '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2 9.2 4.1 5.7 4.6 4.6 8 2.2 10.6 3.5 14l.1 3.6 3.3 1.4L9.2 22 12 20.7 14.8 22l2.3-2.9 3.3-1.4.1-3.6L21.8 10.6 19.4 8 18.3 4.6 14.8 4.1 12 2Zm-1.2 12.7-2.8-2.8 1.2-1.2 1.6 1.6 3.8-3.8 1.2 1.2-5 5Z"/></svg>'
 
-
-def _effect_markup(effect: str) -> str:
-    if effect == "Stars":
-        return '<div class="fx fx-stars"></div>'
-    if effect == "Ocean waves":
-        return '<div class="fx fx-ocean-waves"></div>'
-    if effect == "Old TV":
-        return '<div class="fx fx-old-tv"></div>'
-    if effect == "Sun effect":
-        return '<div class="fx fx-sun"></div>'
-    if effect == "Paper texture":
-        return '<div class="fx fx-paper"></div>'
-    if effect in {"Rain", "Raindrops", "Snow", "Snowflakes"}:
-        items = []
-        for index in range(22):
-            left = (index * 37) % 100
-            delay = (index % 7) * 0.5
-            size = 2 + (index % 4)
-            if effect == "Rain":
-                height = 70 + (index % 5) * 24
-                items.append(
-                    f'<span class="rain" style="left:{left}%;height:{height}px;animation-delay:{delay}s"></span>'
-                )
-            elif effect == "Raindrops":
-                items.append(
-                    f'<span class="raindrop" style="left:{left}%;width:{size + 2}px;height:{size + 8}px;animation-delay:{delay}s"></span>'
-                )
-            elif effect == "Snowflakes":
-                items.append(
-                    f'<span class="snowflake" style="left:{left}%;font-size:{10 + size * 2}px;animation-delay:{delay}s">❄</span>'
-                )
-            else:
-                items.append(
-                    f'<span class="snow" style="left:{left}%;width:{size + 2}px;height:{size + 2}px;animation-delay:{delay}s"></span>'
-                )
-        return f'<div class="fx fx-{effect.lower().replace(" ", "-")}">{"".join(items)}</div>'
-    return ""
 
 def _join_label(value: object) -> str:
     text = str(value or "").strip()

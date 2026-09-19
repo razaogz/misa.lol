@@ -29,10 +29,11 @@ def section_for_admin_path(path: str) -> str | None:
     tail = _admin_path_tail(path)
     if tail.startswith("/access") or tail.startswith("/staff"):
         return None
-    if "/badges" in tail or tail.startswith("/verification"):
+    if "/badges" in tail or tail.startswith("/verification") or tail.startswith("/badge-platform"):
         return "badges"
     prefixes = (
         ("/users", "users"),
+        ("/constellations", "constellations"),
         ("/bans", "bans"),
         ("/reserved-usernames", "reserved"),
         ("/banned-words", "banned"),
@@ -400,36 +401,22 @@ async def remove_ip_ban(admin: AdminUser, ip: str = Query(min_length=3, max_leng
 
 @router.get("/badges")
 async def badges(_admin: AdminUser) -> dict:
-    return {"badges": await admin_db.list_badges()}
+    """Compatibility listing backed by the dynamic platform."""
+    return {"badges": await achievements.list_badges_admin()}
 
 
-@router.post("/badges", status_code=201)
-async def add_badge(payload: BadgeRequest, admin: AdminUser) -> dict:
-    if not HEX_COLOR.match(payload.color):
-        raise HTTPException(status_code=400, detail="Pick a valid badge color.")
-    if not is_safe_social_icon(payload.icon):
-        raise HTTPException(status_code=400, detail="Upload a PNG, JPG, WebP, or GIF icon.")
-    try:
-        await admin_db.add_badge(
-            admin.id,
-            payload.id,
-            payload.name.strip(),
-            payload.description.strip(),
-            css_hex_color(payload.color, "#9b87f5"),
-            payload.icon,
-        )
-    except asyncpg.UniqueViolationError:
-        raise HTTPException(status_code=409, detail="That badge ID already exists.") from None
-    return {"ok": True}
+@router.post("/badges", status_code=410)
+async def add_badge(_payload: BadgeRequest, _admin: AdminUser) -> dict:
+    raise HTTPException(status_code=410, detail="Use the Badge + Rank platform so assets are validated and stored in R2.")
 
 
 @router.put("/users/{user_id}/badges/{badge_id}")
-async def assign_badge(user_id: UUID, badge_id: str, payload: UserBadgeRequest, admin: AdminUser) -> dict:
+async def assign_badge(user_id: UUID, badge_id: str, _payload: UserBadgeRequest, admin: AdminUser) -> dict:
     try:
-        await admin_db.assign_badge(admin.id, user_id, badge_id, payload.enabled)
-    except asyncpg.ForeignKeyViolationError:
-        raise HTTPException(status_code=404, detail="User or badge not found.") from None
-    return {"ok": True}
+        changed = await achievements.assign(admin.id, user_id, "BADGE", badge_id, reason="Assigned through legacy admin route")
+    except (LookupError, PermissionError, ValueError):
+        raise HTTPException(status_code=404, detail="User or badge not found, or manual assignment is disabled.") from None
+    return {"ok": True, "changed": changed}
 
 
 @router.put("/badges/{badge_id}/grants")
@@ -441,25 +428,19 @@ async def grant_badge_by_username(badge_id: str, payload: BadgeGrantRequest, adm
     if not user_id:
         raise HTTPException(status_code=404, detail="User not found.")
     try:
-        if payload.granted:
-            await admin_db.assign_badge(admin.id, UUID(user_id), badge_id, True)
-        elif not await admin_db.revoke_badge(admin.id, UUID(user_id), badge_id):
-            raise HTTPException(status_code=404, detail="That user does not have this badge.")
-    except asyncpg.ForeignKeyViolationError:
-        raise HTTPException(status_code=404, detail="User or badge not found.") from None
-    return {"ok": True, "user": user_id, "granted": payload.granted}
+        changed = await (achievements.assign(admin.id, UUID(user_id), "BADGE", badge_id, reason="Assigned through legacy admin route") if payload.granted else achievements.revoke(admin.id, UUID(user_id), "BADGE", badge_id, "Removed through legacy admin route"))
+    except (LookupError, PermissionError, ValueError):
+        raise HTTPException(status_code=404, detail="User or badge not found, or manual assignment is disabled.") from None
+    return {"ok": True, "user": user_id, "granted": payload.granted, "changed": changed}
 
 
 @router.delete("/badges/{badge_id}")
 async def delete_badge(badge_id: str, admin: AdminUser) -> dict:
     try:
-        deleted = await admin_db.delete_custom_badge(admin.id, badge_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Official badges cannot be deleted.") from None
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Badge not found.")
-    return {"ok": True}
-
+        action = await achievements.delete_badge(admin.id, badge_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Badge not found.") from None
+    return {"ok": True, "action": action}
 
 @router.get("/verification")
 async def verification_queue(_admin: AdminUser, status: str = Query(default="", max_length=16)) -> dict:
@@ -623,3 +604,356 @@ async def delete_default_font(slot: int, admin: AdminUser) -> dict:
     if not await admin_db.delete_default_font(admin.id, slot):
         raise HTTPException(status_code=404, detail="Font slot is already empty.")
     return {"ok": True}
+
+
+class ConstellationModerationRequest(BaseModel):
+    suspended: bool
+
+
+def _constellation_repository(request: Request):
+    repository = getattr(request.app.state, "constellations", None)
+    if repository is None:
+        raise HTTPException(status_code=503, detail="Constellations are unavailable.")
+    return repository
+
+
+async def _constellation_admin_call(operation):
+    from app.constellation_system.repository import DomainError
+    try:
+        return await operation
+    except DomainError as error:
+        raise HTTPException(status_code=error.status, detail=error.message) from error
+
+
+@router.get("/constellations")
+async def admin_constellations(
+    request: Request,
+    _admin: AdminUser,
+    search: str = Query(default="", max_length=128),
+    status_filter: str = Query(default="", alias="status", max_length=16),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict:
+    repository = _constellation_repository(request)
+    return {"constellations": await _constellation_admin_call(repository.admin_list(search, status_filter, limit))}
+
+
+@router.get("/constellations/{constellation_id}")
+async def admin_constellation_detail(constellation_id: str, request: Request, _admin: AdminUser) -> dict:
+    repository = _constellation_repository(request)
+    return {"constellation": await _constellation_admin_call(repository.admin_detail(constellation_id))}
+
+
+@router.patch("/constellations/{constellation_id}/status")
+async def admin_constellation_status(
+    constellation_id: str,
+    payload: ConstellationModerationRequest,
+    request: Request,
+    admin: AdminUser,
+) -> dict:
+    repository = _constellation_repository(request)
+    return {"constellation": await _constellation_admin_call(repository.admin_status(constellation_id, admin.id, payload.suspended))}
+
+
+@router.delete("/constellations/{constellation_id}/members/{member_id}")
+async def admin_constellation_remove_member(
+    constellation_id: str,
+    member_id: str,
+    request: Request,
+    admin: AdminUser,
+) -> dict:
+    if getattr(request.state, "staff_role", "") not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Only owners and administrators can remove members.")
+    repository = _constellation_repository(request)
+    return {"constellation": await _constellation_admin_call(repository.admin_remove_member(constellation_id, admin.id, member_id))}
+
+
+@router.delete("/constellations/{constellation_id}/invitations/{invitation_id}")
+async def admin_constellation_revoke_invite(
+    constellation_id: str,
+    invitation_id: str,
+    request: Request,
+    admin: AdminUser,
+) -> dict:
+    repository = _constellation_repository(request)
+    return {"constellation": await _constellation_admin_call(repository.admin_revoke_invite(constellation_id, admin.id, invitation_id))}
+
+
+@router.delete("/constellations/{constellation_id}")
+async def admin_constellation_delete(constellation_id: str, request: Request, admin: AdminUser) -> dict:
+    if getattr(request.state, "staff_role", "") not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Only owners and administrators can delete Constellations.")
+    repository = _constellation_repository(request)
+    result = await _constellation_admin_call(repository.delete(constellation_id, admin.id, admin=True))
+    key = result.pop("backgroundKey", None)
+    if key:
+        from app.core.r2_storage import get_r2_storage
+        try:
+            await get_r2_storage(get_settings()).delete(key)
+        except Exception:
+            pass
+    return result
+
+
+# Dynamic Badge + Rank platform endpoints. Kept in this router so the existing OTP/session
+# and section-permission dependency protects every operation server-side.
+from io import BytesIO
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import File, UploadFile
+from PIL import Image, UnidentifiedImageError
+
+from app.core.r2_storage import get_r2_storage
+from app.db import achievements
+
+
+class AchievementDefinitionRequest(BaseModel):
+    slug: str = Field(min_length=2, max_length=64, pattern=r"^[a-z0-9-]+$")
+    name: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=1000)
+    color: str = Field(default="#9b87f5", max_length=32)
+    categoryId: UUID | None = None
+    rarity: str = Field(default="COMMON", max_length=32)
+    level: int = Field(default=0, ge=0, le=1_000_000)
+    displayOrder: int = Field(default=0, ge=-1_000_000, le=1_000_000)
+    requirements: list[dict] = Field(default_factory=list, max_length=12)
+    automaticAward: bool = False
+    manualAssignmentAllowed: bool = True
+    visibility: str = Field(default="PUBLIC", pattern=r"^(PUBLIC|PRIVATE)$")
+    limited: bool = False
+    maxAwards: int | None = Field(default=None, ge=1)
+    availableFrom: datetime | None = None
+    expiresAt: datetime | None = None
+    purchasable: bool = False
+    priceMinor: int | None = Field(default=None, ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    active: bool = True
+    badgeIds: list[str] = Field(default_factory=list, max_length=100)
+
+
+class AchievementCategoryRequest(BaseModel):
+    slug: str = Field(min_length=2, max_length=64, pattern=r"^[a-z0-9-]+$")
+    name: str = Field(min_length=1, max_length=96)
+    description: str = Field(default="", max_length=500)
+    displayOrder: int = Field(default=0, ge=-1_000_000, le=1_000_000)
+    active: bool = True
+
+
+class AchievementAssignmentRequest(BaseModel):
+    user: str = Field(min_length=3, max_length=128)
+    itemType: str = Field(pattern=r"^(BADGE|RANK)$")
+    itemId: str = Field(min_length=2, max_length=64)
+    action: str = Field(pattern=r"^(ASSIGN|REMOVE)$")
+    reason: str = Field(default="", max_length=500)
+
+
+class PurchaseTransitionRequest(BaseModel):
+    status: str = Field(pattern=r"^(PENDING|FAILED|REFUNDED|CANCELLED)$")
+    providerReference: str = Field(default="", max_length=255)
+
+
+@router.get("/badge-platform/categories")
+async def achievement_categories(_admin: AdminUser) -> dict:
+    return {"categories": await achievements.list_categories()}
+
+
+@router.post("/badge-platform/categories", status_code=201)
+async def create_achievement_category(payload: AchievementCategoryRequest, admin: AdminUser) -> dict:
+    try:
+        item = await achievements.save_category(admin.id, payload.model_dump())
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=409, detail="That category slug already exists.") from None
+    return {"category": item}
+
+
+@router.put("/badge-platform/categories/{category_id}")
+async def update_achievement_category(category_id: UUID, payload: AchievementCategoryRequest, admin: AdminUser) -> dict:
+    try:
+        item = await achievements.save_category(admin.id, payload.model_dump(), category_id)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=409, detail="That category slug already exists.") from None
+    return {"category": item}
+
+
+@router.delete("/badge-platform/categories/{category_id}")
+async def remove_achievement_category(category_id: UUID, admin: AdminUser) -> dict:
+    if not await achievements.delete_category(admin.id, category_id):
+        raise HTTPException(status_code=404, detail="Category not found.")
+    return {"ok": True}
+
+
+@router.get("/badge-platform/badges")
+async def achievement_badges(_admin: AdminUser, search: str = Query(default="", max_length=128)) -> dict:
+    return {"badges": await achievements.list_badges_admin(search)}
+
+
+@router.post("/badge-platform/badges", status_code=201)
+async def create_achievement_badge(payload: AchievementDefinitionRequest, admin: AdminUser) -> dict:
+    if not HEX_COLOR.match(payload.color):
+        raise HTTPException(status_code=400, detail="Pick a valid badge color.")
+    try:
+        badge = await achievements.save_badge(admin.id, payload.model_dump())
+    except (ValueError, asyncpg.ForeignKeyViolationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid badge definition.") from None
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=409, detail="That badge slug already exists.") from None
+    return {"badge": badge}
+
+
+@router.put("/badge-platform/badges/{badge_id}")
+async def update_achievement_badge(badge_id: str, payload: AchievementDefinitionRequest, admin: AdminUser) -> dict:
+    if not HEX_COLOR.match(payload.color):
+        raise HTTPException(status_code=400, detail="Pick a valid badge color.")
+    try:
+        badge = await achievements.save_badge(admin.id, payload.model_dump(), badge_id)
+    except (ValueError, asyncpg.ForeignKeyViolationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid badge definition.") from None
+    return {"badge": badge}
+
+
+@router.delete("/badge-platform/badges/{badge_id}")
+async def remove_achievement_badge(badge_id: str, admin: AdminUser) -> dict:
+    try:
+        action = await achievements.delete_badge(admin.id, badge_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Badge not found.") from None
+    return {"ok": True, "action": action}
+
+
+@router.post("/badge-platform/badges/{badge_id}/asset")
+async def upload_achievement_badge_asset(badge_id: str, admin: AdminUser, settings: SettingsDep, file: UploadFile = File(...)) -> dict:
+    allowed = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+    mime = (file.content_type or "").lower()
+    if mime not in allowed:
+        raise HTTPException(status_code=400, detail="Upload a PNG, JPG, WebP, or GIF badge.")
+    if not await admin_db.database_pool().fetchval("SELECT EXISTS(SELECT 1 FROM badges WHERE id=$1)", badge_id):
+        raise HTTPException(status_code=404, detail="Badge not found.")
+    body = await file.read(2_000_001)
+    if not body or len(body) > 2_000_000:
+        raise HTTPException(status_code=413, detail="Badge assets must be smaller than 2 MB.")
+    try:
+        image = Image.open(BytesIO(body))
+        image.verify()
+        image = Image.open(BytesIO(body))
+        format_name = str(image.format or "").upper()
+        format_mimes = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}
+        detected_mime = format_mimes.get(format_name)
+        if not detected_mime or detected_mime != mime:
+            raise HTTPException(status_code=400, detail="The file content does not match its image type.")
+        if image.width > 2048 or image.height > 2048:
+            raise HTTPException(status_code=400, detail="Badge dimensions cannot exceed 2048px.")
+        animated = bool(getattr(image, "is_animated", False) and getattr(image, "n_frames", 1) > 1)
+        image.seek(0)
+        preview = image.convert("RGBA")
+        preview.thumbnail((512, 512), Image.Resampling.LANCZOS)
+        preview_buffer = BytesIO()
+        preview.save(preview_buffer, format="PNG", optimize=True)
+        preview_body = preview_buffer.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="That badge image is invalid.") from None
+    storage = get_r2_storage(settings)
+    if not storage.enabled:
+        raise HTTPException(status_code=503, detail="R2 object storage is not configured.")
+    safe_stem = "".join(char if char.isalnum() or char in "-_" else "-" for char in Path(file.filename or "badge").stem)[:80] or "badge"
+    extension = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp", "GIF": ".gif"}[format_name]
+    token = uuid4().hex
+    asset_key = f"badges/{badge_id}/{token}-{safe_stem}{extension}"
+    preview_key = f"badges/{badge_id}/{token}-preview.png"
+    try:
+        await storage.put(asset_key, body, mime)
+        await storage.put(preview_key, preview_body, "image/png")
+        badge = await achievements.update_badge_asset(admin.id, badge_id, asset_url=storage.public_url(asset_key), preview_url=storage.public_url(preview_key), asset_key=asset_key, preview_key=preview_key, mime=mime, animated=animated)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not store that badge asset in R2.") from None
+    if badge is None:
+        raise HTTPException(status_code=404, detail="Badge not found.")
+    return {"badge": badge}
+
+
+@router.get("/badge-platform/ranks")
+async def achievement_ranks(_admin: AdminUser, search: str = Query(default="", max_length=128)) -> dict:
+    return {"ranks": await achievements.list_ranks_admin(search)}
+
+
+@router.post("/badge-platform/ranks", status_code=201)
+async def create_achievement_rank(payload: AchievementDefinitionRequest, admin: AdminUser) -> dict:
+    try:
+        rank = await achievements.save_rank(admin.id, payload.model_dump())
+    except (ValueError, asyncpg.ForeignKeyViolationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid rank definition.") from None
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=409, detail="That rank slug already exists.") from None
+    return {"rank": rank}
+
+
+@router.put("/badge-platform/ranks/{rank_id}")
+async def update_achievement_rank(rank_id: UUID, payload: AchievementDefinitionRequest, admin: AdminUser) -> dict:
+    try:
+        rank = await achievements.save_rank(admin.id, payload.model_dump(), rank_id)
+    except (ValueError, asyncpg.ForeignKeyViolationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid rank definition.") from None
+    return {"rank": rank}
+
+
+@router.delete("/badge-platform/ranks/{rank_id}")
+async def remove_achievement_rank(rank_id: UUID, admin: AdminUser) -> dict:
+    try:
+        action = await achievements.delete_rank(admin.id, rank_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Rank not found.") from None
+    return {"ok": True, "action": action}
+
+
+@router.get("/badge-platform/assignments")
+async def achievement_assignments(_admin: AdminUser, search: str = Query(default="", max_length=128), item_type: str = Query(default="", pattern=r"^(|BADGE|RANK)$"), active_only: bool = Query(default=False)) -> dict:
+    return {"assignments": await achievements.list_assignments(search, item_type, active_only)}
+
+
+@router.post("/badge-platform/assignments")
+async def update_achievement_assignment(payload: AchievementAssignmentRequest, admin: AdminUser) -> dict:
+    user_id = await admin_db.resolve_user_ref(payload.user)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="User not found.")
+    try:
+        if payload.action == "ASSIGN":
+            changed = await achievements.assign(admin.id, UUID(user_id), payload.itemType, payload.itemId, reason=payload.reason)
+        else:
+            changed = await achievements.revoke(admin.id, UUID(user_id), payload.itemType, payload.itemId, payload.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"{payload.itemType.title()} not found.") from None
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Manual assignment is disabled for that definition.") from None
+    except (ValueError, asyncpg.ForeignKeyViolationError):
+        raise HTTPException(status_code=400, detail="Invalid assignment request.") from None
+    return {"ok": True, "changed": changed, "userId": user_id}
+
+
+@router.get("/badge-platform/{item_type}/{item_id}/owners")
+async def achievement_owners(item_type: str, item_id: str, _admin: AdminUser) -> dict:
+    kind = item_type.upper()
+    if kind not in {"BADGE", "RANK"}:
+        raise HTTPException(status_code=400, detail="Invalid item type.")
+    try:
+        return {"owners": await achievements.owners(kind, item_id)}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid item ID.") from None
+
+
+@router.get("/badge-platform/purchases")
+async def achievement_purchases(_admin: AdminUser, search: str = Query(default="", max_length=128), purchase_status: str = Query(default="", max_length=16)) -> dict:
+    if purchase_status and purchase_status not in achievements.PURCHASE_STATES:
+        raise HTTPException(status_code=400, detail="Invalid purchase status.")
+    return {"purchases": await achievements.list_purchases(search, purchase_status)}
+
+
+@router.patch("/badge-platform/purchases/{purchase_id}")
+async def update_achievement_purchase(purchase_id: UUID, payload: PurchaseTransitionRequest, admin: AdminUser) -> dict:
+    try:
+        purchase = await achievements.transition_purchase(admin.id, purchase_id, payload.status, payload.providerReference)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Only a verified payment provider callback can complete a purchase.") from None
+    except ValueError:
+        raise HTTPException(status_code=409, detail="That purchase status transition is not allowed.") from None
+    if purchase is None:
+        raise HTTPException(status_code=404, detail="Purchase not found.")
+    return {"purchase": purchase}

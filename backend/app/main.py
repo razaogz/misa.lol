@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.v1.router import api_router
+from app.constellation_system.integration import install_constellations
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.profiles import resolve_public_profile
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     application.include_router(api_router, prefix=settings.api_v1_prefix)
+    install_constellations(application)
 
     def frontend_config_js() -> Response:
         current = get_settings()

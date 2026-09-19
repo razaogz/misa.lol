@@ -207,8 +207,11 @@ async def _finish_oauth(
     avatar_url: str | None,
     telegram_username: str | None = None,
     next_path: str = "/dashboard",
+    link: bool = False,
 ) -> tuple[RedirectResponse, User | None]:
     current_user = await get_user_from_request(request)
+    if link and current_user is None:
+        return _oauth_error("/login", "not_authenticated"), None
     destination = _oauth_destination(settings, current_user is not None, next_path)
     if current_user is None and await admin_db.request_ip_is_banned(client_ip(request)):
         return _oauth_error("/signup", "account_banned"), None
@@ -224,7 +227,7 @@ async def _finish_oauth(
             current_user_id=current_user.id if current_user else None,
         )
     except DataConflict as exc:
-        bounce = "/dashboard" if current_user else "/login"
+        bounce = destination if current_user else "/login"
         return _oauth_error(bounce, exc.code), None
     await admin_db.remember_signup_ip(user.id, client_ip(request))
     if await admin_db.user_is_banned(user.id):
@@ -232,7 +235,9 @@ async def _finish_oauth(
     if user.currently_suspended:
         return _oauth_error("/login", "account_suspended"), None
     linking = current_user is not None
-    if not linking and await admin_db.mfa_is_enabled(user.id):
+    if linking:
+        return RedirectResponse(destination, status_code=302), user
+    if await admin_db.mfa_is_enabled(user.id):
         ticket = await put_mfa_ticket(user.id, True)
         return RedirectResponse(f"/login?mfa_ticket={ticket}", status_code=302), user
     response = RedirectResponse(destination, status_code=302)
@@ -475,14 +480,19 @@ async def google_start(
     request: Request,
     settings: SettingsDep,
     next_path: str = Query("/dashboard", alias="next"),
+    mode: str = Query("login"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
+    safe_next = safe_next_path(next_path)
+    link = mode == "link"
+    error_target = _oauth_destination(settings, True, safe_next) if link else "/login"
     if not settings.google_enabled:
-        return _oauth_error("/login", "google_not_configured")
+        return _oauth_error(error_target, "google_not_configured")
+    if link and await get_user_from_request(request) is None:
+        return _oauth_error("/login", "not_authenticated")
     nonce = secrets.token_urlsafe(24)
-    state = await save_oauth_state("google", safe_next_path(next_path), nonce)
+    state = await save_oauth_state("google", safe_next, nonce, "link" if link else "login")
     return RedirectResponse(google_authorize_url(settings, state, nonce), status_code=302)
-
 
 @router.get("/google/callback")
 async def google_callback(
@@ -492,20 +502,23 @@ async def google_callback(
     state: str | None = None,
     error: str | None = None,
 ) -> RedirectResponse:
-    if error or not code:
-        return _oauth_error("/login", "oauth_denied")
     saved = await pop_oauth_state(state, "google")
     if not saved:
         return _oauth_error("/login", "oauth_failed")
+    next_path = safe_next_path(saved.get("next"))
+    link = saved.get("mode") == "link"
+    error_target = _oauth_destination(settings, True, next_path) if link else "/login"
+    if error or not code:
+        return _oauth_error(error_target, "oauth_denied")
     try:
         claims = await exchange_google_code(settings, code)
     except (httpx.HTTPError, ValueError, jwt.PyJWTError):
-        return _oauth_error("/login", "oauth_failed")
+        return _oauth_error(error_target, "oauth_failed")
     if saved.get("nonce") and claims.get("nonce") and claims.get("nonce") != saved["nonce"]:
-        return _oauth_error("/login", "oauth_failed")
+        return _oauth_error(error_target, "oauth_failed")
     sub = claims.get("sub")
     if not sub:
-        return _oauth_error("/login", "oauth_failed")
+        return _oauth_error(error_target, "oauth_failed")
     email = normalize_email(claims["email"]) if claims.get("email") else None
     response, _user = await _finish_oauth(
         request,
@@ -516,7 +529,8 @@ async def google_callback(
         email_verified=_trusted_email_claim(claims.get("email_verified")) if email else False,
         display_name=claims.get("name"),
         avatar_url=claims.get("picture"),
-        next_path=safe_next_path(saved.get("next")),
+        next_path=next_path,
+        link=link,
     )
     return response
 
@@ -526,13 +540,18 @@ async def discord_start(
     request: Request,
     settings: SettingsDep,
     next_path: str = Query("/dashboard", alias="next"),
+    mode: str = Query("login"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
+    safe_next = safe_next_path(next_path)
+    link = mode == "link"
+    error_target = _oauth_destination(settings, True, safe_next) if link else "/login"
     if not settings.discord_enabled:
-        return _oauth_error("/login", "discord_not_configured")
-    state = await save_oauth_state("discord", safe_next_path(next_path))
+        return _oauth_error(error_target, "discord_not_configured")
+    if link and await get_user_from_request(request) is None:
+        return _oauth_error("/login", "not_authenticated")
+    state = await save_oauth_state("discord", safe_next, mode="link" if link else "login")
     return RedirectResponse(discord_authorize_url(settings, state), status_code=302)
-
 
 @router.get("/discord/callback")
 async def discord_callback(
@@ -542,18 +561,21 @@ async def discord_callback(
     state: str | None = None,
     error: str | None = None,
 ) -> RedirectResponse:
-    if error or not code:
-        return _oauth_error("/login", "oauth_denied")
     saved = await pop_oauth_state(state, "discord")
     if not saved:
         return _oauth_error("/login", "oauth_failed")
+    next_path = safe_next_path(saved.get("next"))
+    link = saved.get("mode") == "link"
+    error_target = _oauth_destination(settings, True, next_path) if link else "/login"
+    if error or not code:
+        return _oauth_error(error_target, "oauth_denied")
     try:
         profile, tokens = await exchange_discord_code(settings, code)
     except (httpx.HTTPError, ValueError):
-        return _oauth_error("/login", "oauth_failed")
+        return _oauth_error(error_target, "oauth_failed")
     discord_id = profile.get("id")
     if not discord_id:
-        return _oauth_error("/login", "oauth_failed")
+        return _oauth_error(error_target, "oauth_failed")
     email = normalize_email(profile["email"]) if profile.get("email") else None
     response, user = await _finish_oauth(
         request,
@@ -564,7 +586,8 @@ async def discord_callback(
         email_verified=bool(profile.get("verified")) if email else False,
         display_name=profile.get("global_name") or profile.get("username"),
         avatar_url=discord_avatar_url(profile),
-        next_path=safe_next_path(saved.get("next")),
+        next_path=next_path,
+        link=link,
     )
     if user:
         try:
@@ -579,11 +602,17 @@ async def telegram_start(
     request: Request,
     settings: SettingsDep,
     next_path: str = Query("/dashboard", alias="next"),
+    mode: str = Query("login"),
 ) -> RedirectResponse:
     await limit_auth(request, "oauth", limit=20, window_seconds=60)
+    safe_next = safe_next_path(next_path)
+    link = mode == "link"
+    error_target = _oauth_destination(settings, True, safe_next) if link else "/login"
     if not settings.telegram_enabled:
-        return _oauth_error("/login", "telegram_not_configured")
-    state = await save_oauth_state("telegram", safe_next_path(next_path))
+        return _oauth_error(error_target, "telegram_not_configured")
+    if link and await get_user_from_request(request) is None:
+        return _oauth_error("/login", "not_authenticated")
+    state = await save_oauth_state("telegram", safe_next, mode="link" if link else "login")
     return RedirectResponse(telegram_authorize_url(settings, state), status_code=302)
 
 
@@ -637,6 +666,8 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
     saved = await pop_oauth_state(request.query_params.get("state"), "telegram")
     if not saved:
         return _oauth_error("/login", "oauth_failed")
+    next_path = safe_next_path(saved.get("next"))
+    link = saved.get("mode") == "link"
     first_name = payload.get("first_name") or ""
     last_name = payload.get("last_name") or ""
     display_name = f"{first_name} {last_name}".strip() or payload.get("username")
@@ -650,7 +681,8 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
         display_name=display_name,
         avatar_url=payload.get("photo_url"),
         telegram_username=payload.get("username"),
-        next_path=safe_next_path(saved.get("next")),
+        next_path=next_path,
+        link=link,
     )
     return response
 

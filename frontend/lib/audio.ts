@@ -1,8 +1,8 @@
 import type { AudioTrack, ProfileAsset, ProfileConfig } from "./types";
 
 export const DEFAULT_MAX_TRACKS = 8;
-export const DEFAULT_MAX_TRACK_BYTES = 8_000_000;
-export const DEFAULT_MAX_ARTWORK_BYTES = 3_000_000;
+export const DEFAULT_MAX_TRACK_BYTES = 40_000_000;
+export const DEFAULT_MAX_ARTWORK_BYTES = 15_000_000;
 export const KEEP_ASSET_URL = "misa:keep";
 export const REMOVE_ASSET_URL = "misa:remove";
 const MAX_SAVE_CHARS = 60_000_000;

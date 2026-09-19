@@ -48,7 +48,7 @@ export function SharingAppearance({
       <div className="overflow-hidden rounded-2xl border border-white/[.08] bg-[#0b0b10]">
         <div className="relative aspect-[1200/630] bg-[#08080d]">
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 22% 18%, ${config.settings.accentColor}66, transparent 36%), linear-gradient(135deg, ${config.settings.backgroundColor}, #07070a)` }} />
@@ -58,7 +58,7 @@ export function SharingAppearance({
           )}
           <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
             {overlayAvatar && avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
+
               <img src={avatar} alt="" className="h-12 w-12 shrink-0 rounded-full border border-white/20 object-cover" />
             ) : null}
             <div className="min-w-0 pb-0.5">
@@ -146,7 +146,7 @@ function ShareAssetRow({
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[.06] text-zinc-500">
           {thumb ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={thumb} alt="" className="h-full w-full object-cover" />
           ) : (
             <Share2 size={15} />

@@ -44,9 +44,10 @@ def _media_response(url: str) -> Response | None:
 
 
 ASSET_LIMITS = {
-    "avatar": 3_000_000, "background": 3_000_000, "banner": 3_000_000,
-    "ogImage": 3_000_000, "favicon": 1_100_000, "cursor": 3_000_000,
-    "backgroundVideo": 20_000_000, "audio": 8_000_000, "audioArtwork": 3_000_000,
+    "avatar": 25_000_000, "background": 40_000_000, "banner": 25_000_000,
+    "ogImage": 25_000_000, "favicon": 5_000_000, "cursor": 5_000_000,
+    "backgroundVideo": 110_000_000, "backgroundEffectVideo": 110_000_000,
+    "audio": 40_000_000, "audioArtwork": 15_000_000,
     "clickSound": 400_000, "customFont": 2_000_000, "cover": 3_000_000,
     "socialIcon": 512_000,
 }
@@ -54,7 +55,7 @@ ASSET_LIMITS = {
 def _asset_content_allowed(kind: str, content_type: str) -> bool:
     if kind in {"avatar", "background", "banner", "ogImage", "favicon", "audioArtwork", "cover", "socialIcon", "cursor"}:
         return content_type in {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"}
-    if kind == "backgroundVideo":
+    if kind in {"backgroundVideo", "backgroundEffectVideo"}:
         return content_type in {"video/mp4", "video/webm", "video/quicktime"}
     if kind in {"audio", "clickSound"}:
         return content_type.startswith("audio/")
@@ -77,11 +78,11 @@ async def upload_asset(
     if kind not in ASSET_LIMITS:
         raise HTTPException(status_code=400, detail="Unsupported asset type.")
     content_type = (file.content_type or "").lower()
-    if not content_type:
+    if not content_type or content_type == "application/octet-stream":
         content_type = {
             ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon",
-            ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg",
+            ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mp3": "audio/mpeg",
             ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4",
             ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf",
             ".otf": "font/otf",
@@ -107,7 +108,7 @@ async def profile_limits() -> dict[str, int]:
     return {
         "maxTracks": max(1, min(20, settings.max_profile_tracks)),
         "maxTrackBytes": max(500_000, settings.max_track_upload_bytes),
-        "maxArtworkBytes": 3_000_000,
+        "maxArtworkBytes": 15_000_000,
     }
 
 
@@ -302,6 +303,8 @@ async def my_profile(user: User = Depends(require_user)) -> dict[str, Any]:
         cleaned = apply_badge_ownership(sanitize_profile_config(stamp_join_date(default_public_profile(user), user)), None, grants)
     else:
         cleaned = apply_badge_ownership(sanitize_profile_config(stamp_join_date(profile, user)), profile, grants)
+    from app.db import achievements
+    cleaned["rank"] = await achievements.current_rank_for_user(user.id)
     identity = cleaned.get("profile")
     if isinstance(identity, dict):
         identity["views"] = await data_api.get_profile_view_count(user.id)
@@ -333,8 +336,18 @@ async def save_my_profile(payload: dict[str, Any], user: User = Depends(require_
         if updated is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated.")
         saved = await data_api.save_profile(user.id, payload)
+        from app.db import achievements
+        await achievements.evaluate_user(user.id)
+        response_profile = saved
+        if isinstance(saved, dict):
+            response_profile = apply_badge_ownership(
+                sanitize_profile_config(saved),
+                saved,
+                await data_api.list_user_badge_grants(user.id),
+            )
+            response_profile["rank"] = await achievements.current_rank_for_user(user.id)
     except HTTPException:
         raise
     except (HTTPError, RuntimeError, ValueError, TimeoutError, OSError):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Profile storage is temporarily unavailable. Please try again.") from None
-    return {"profile": sanitize_profile_config(saved) if isinstance(saved, dict) else saved}
+    return {"profile": response_profile}

@@ -11,6 +11,7 @@ from app.core.feature_flags import FEATURE_FLAG_CATALOG
 
 STAFF_SECTIONS = (
     "users",
+    "constellations",
     "bans",
     "reserved",
     "banned",
@@ -47,7 +48,6 @@ async def init_admin_db(
     )
     if not initialize_schema:
         return
-    await ensure_official_badges()
     await ensure_badge_icons()
     await ensure_verification_requests()
     await ensure_discord_links()
@@ -60,7 +60,10 @@ async def init_admin_db(
     await ensure_staff_access()
     await ensure_feature_flags()
     await ensure_premium_ranks()
+    from app.db import achievements
+    await achievements.ensure_schema()
     await ensure_default_fonts()
+    await ensure_constellation_tables()
     await ensure_apple_support()
     await ensure_admin_auth_tables(root_email)
 
@@ -81,6 +84,134 @@ def _get_pool() -> asyncpg.Pool:
 def has_pool() -> bool:
     return _pool is not None
 
+
+def database_pool() -> asyncpg.Pool:
+    """Return the application's shared PostgreSQL pool for integrated domains."""
+    return _get_pool()
+
+
+async def ensure_constellation_tables() -> None:
+    """Install the production Constellations schema in the existing database."""
+    if _pool is None:
+        return
+    statements = (
+        """
+        CREATE TABLE IF NOT EXISTS constellations (
+            id UUID PRIMARY KEY,
+            owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(60) NOT NULL,
+            slug VARCHAR(32) NOT NULL UNIQUE,
+            description VARCHAR(500) NOT NULL DEFAULT '',
+            capacity SMALLINT NOT NULL CHECK (capacity BETWEEN 2 AND 4),
+            assignment_mode VARCHAR(16) NOT NULL DEFAULT 'owner'
+                CHECK (assignment_mode IN ('owner', 'self')),
+            global_font VARCHAR(120) NOT NULL DEFAULT 'Inter',
+            allow_member_fonts BOOLEAN NOT NULL DEFAULT TRUE,
+            allow_member_move BOOLEAN NOT NULL DEFAULT TRUE,
+            allow_member_resize BOOLEAN NOT NULL DEFAULT TRUE,
+            frame_mode VARCHAR(16) NOT NULL DEFAULT 'member'
+                CHECK (frame_mode IN ('member', 'framed', 'frameless')),
+            background JSONB NOT NULL DEFAULT '{"type":"color","color":"#08080d"}'::jsonb,
+            shared_assets JSONB NOT NULL DEFAULT '{"cursor":null,"audio":null}'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft', 'published', 'suspended')),
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        ALTER TABLE constellations
+        ADD COLUMN IF NOT EXISTS shared_assets JSONB NOT NULL
+        DEFAULT '{"cursor":null,"audio":null}'::jsonb
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS constellation_members (
+            constellation_id UUID NOT NULL REFERENCES constellations(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role VARCHAR(16) NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+            slot SMALLINT NOT NULL CHECK (slot >= 1 AND slot <= 4),
+            position_x NUMERIC(6,3) NOT NULL DEFAULT 50,
+            position_y NUMERIC(6,3) NOT NULL DEFAULT 50,
+            scale NUMERIC(5,3) NOT NULL DEFAULT 1,
+            frame_override VARCHAR(16) NOT NULL DEFAULT 'inherit'
+                CHECK (frame_override IN ('inherit', 'framed', 'frameless')),
+            profile_config JSONB,
+            joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (constellation_id, user_id),
+            UNIQUE (constellation_id, slot)
+        )
+        """,
+        """
+        ALTER TABLE constellation_members
+        ADD COLUMN IF NOT EXISTS profile_config JSONB
+        """,
+        """
+        UPDATE constellation_members AS member
+        SET profile_config = profile.config
+        FROM profiles AS profile
+        WHERE profile.user_id = member.user_id
+          AND profile.disabled_at IS NULL
+          AND member.profile_config IS NULL
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS constellation_invitations (
+            id UUID PRIMARY KEY,
+            constellation_id UUID NOT NULL REFERENCES constellations(id) ON DELETE CASCADE,
+            token_hash CHAR(64) NOT NULL UNIQUE,
+            invited_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            invited_username VARCHAR(32),
+            invited_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            revoked_at TIMESTAMPTZ,
+            accepted_at TIMESTAMPTZ,
+            accepted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        DO $constellation_limit$
+        DECLARE capacity_definition TEXT;
+        BEGIN
+            SELECT pg_get_constraintdef(oid) INTO capacity_definition
+            FROM pg_constraint
+            WHERE conrelid = 'constellations'::regclass
+              AND conname = 'constellations_capacity_check';
+            IF capacity_definition IS NULL OR capacity_definition NOT LIKE '%4%' THEN
+                ALTER TABLE constellations DROP CONSTRAINT IF EXISTS constellations_capacity_check;
+                ALTER TABLE constellations ADD CONSTRAINT constellations_capacity_check
+                    CHECK (capacity BETWEEN 2 AND 4) NOT VALID;
+            END IF;
+        END;
+        $constellation_limit$;
+        """,
+        """
+        DO $constellation_slot_limit$
+        DECLARE slot_definition TEXT;
+        BEGIN
+            SELECT pg_get_constraintdef(oid) INTO slot_definition
+            FROM pg_constraint
+            WHERE conrelid = 'constellation_members'::regclass
+              AND conname = 'constellation_members_slot_check';
+            IF slot_definition IS NULL OR slot_definition NOT LIKE '%4%' THEN
+                ALTER TABLE constellation_members DROP CONSTRAINT IF EXISTS constellation_members_slot_check;
+                ALTER TABLE constellation_members ADD CONSTRAINT constellation_members_slot_check
+                    CHECK (slot BETWEEN 1 AND 4) NOT VALID;
+            END IF;
+        END;
+        $constellation_slot_limit$;
+        """,
+        "CREATE INDEX IF NOT EXISTS constellations_owner_idx ON constellations (owner_id, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS constellations_status_idx ON constellations (status, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS constellation_members_user_idx ON constellation_members (user_id, joined_at DESC)",
+        "CREATE INDEX IF NOT EXISTS constellation_invites_target_idx ON constellation_invitations (invited_user_id, expires_at DESC)",
+        "CREATE INDEX IF NOT EXISTS constellation_invites_group_idx ON constellation_invitations (constellation_id, created_at DESC)",
+    )
+    async with _pool.acquire() as conn:
+        async with conn.transaction():
+            for statement in statements:
+                await conn.execute(statement)
 
 async def ensure_discord_links() -> None:
     if _pool is None:
@@ -881,24 +1012,31 @@ async def record_profile_event(
                 visitor_hash,
             )
             if kind == "view":
-                await conn.execute(
+                metric_value = await conn.fetchval(
                     """
                     INSERT INTO profile_stats (user_id, views, clicks)
                     VALUES ($1, 1, 0)
                     ON CONFLICT (user_id) DO UPDATE SET views = profile_stats.views + 1
+                    RETURNING views
                     """,
                     owner,
                 )
             else:
-                await conn.execute(
+                metric_value = await conn.fetchval(
                     """
                     INSERT INTO profile_stats (user_id, views, clicks)
                     VALUES ($1, 0, 1)
                     ON CONFLICT (user_id) DO UPDATE SET clicks = profile_stats.clicks + 1
+                    RETURNING clicks
                     """,
                     owner,
                 )
 
+    metric = "views" if kind == "view" else "clicks"
+    value = int(metric_value or 0)
+    from app.db import achievements
+    if await achievements.should_evaluate_metric(metric, value):
+        await achievements.evaluate_user(owner)
 
 async def analytics_window(user_id: str, start: Any, end: Any) -> dict[str, Any]:
     owner = UUID(user_id)
@@ -1837,21 +1975,6 @@ async def unban_ip(actor_id: UUID, ip: str) -> list[UUID] | None:
             return [row["id"] for row in users]
 
 
-async def ensure_official_badges() -> None:
-    if _pool is None:
-        return
-    from app.core.profile_sanitize import OFFICIAL_BADGES
-    try:
-        async with _pool.acquire() as conn:
-            for item in OFFICIAL_BADGES:
-                await conn.execute(
-                    "INSERT INTO badges (id, name, description, color) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING",
-                    item["id"], item["name"], item["description"], item["color"],
-                )
-    except (asyncpg.UndefinedTableError, asyncpg.UndefinedColumnError):
-        return
-
-
 async def ensure_badge_icons() -> None:
     if _pool is None:
         return
@@ -1862,29 +1985,11 @@ async def ensure_badge_icons() -> None:
 
 
 async def list_user_badge_grants(user_id: str) -> list[dict[str, Any]]:
-    query = """
-        SELECT ub.badge_id AS id,
-               COALESCE(b.name, ub.badge_id) AS name,
-               COALESCE(b.description, '') AS description,
-               COALESCE(b.color, '#d8d3ff') AS color,
-               COALESCE(b.icon, '') AS icon,
-               ub.enabled
-        FROM user_badges ub
-        LEFT JOIN badges b ON b.id = ub.badge_id
-        WHERE ub.user_id = $1
-    """
+    from app.db import achievements
     try:
-        rows = await _get_pool().fetch(query, UUID(user_id))
-    except asyncpg.UndefinedTableError:
+        return await achievements.list_user_badge_grants(user_id)
+    except (asyncpg.UndefinedTableError, asyncpg.UndefinedColumnError):
         return []
-    except asyncpg.UndefinedColumnError:
-        await ensure_badge_icons()
-        try:
-            rows = await _get_pool().fetch(query, UUID(user_id))
-        except asyncpg.UndefinedColumnError:
-            return []
-    return [dict(row) for row in rows]
-
 
 async def list_badges() -> list[dict[str, Any]]:
     query = "SELECT id, name, description, color, created_at, (COALESCE(icon, '') <> '') AS has_icon FROM badges ORDER BY name"
@@ -1926,9 +2031,6 @@ async def revoke_badge(actor_id: UUID, user_id: UUID, badge_id: str) -> bool:
 
 
 async def delete_custom_badge(actor_id: UUID, badge_id: str) -> bool:
-    from app.core.profile_sanitize import OFFICIAL_BADGES
-    if badge_id in {item["id"] for item in OFFICIAL_BADGES}:
-        raise ValueError("official")
     async with _get_pool().acquire() as conn:
         async with conn.transaction():
             await conn.execute("DELETE FROM user_badges WHERE badge_id = $1", badge_id)
@@ -2232,16 +2334,6 @@ async def review_verification_request(actor_id: UUID, request_id: UUID, status: 
             )
             if row is None:
                 return None
-            if status == "approved":
-                await conn.execute(
-                    """
-                    INSERT INTO user_badges (user_id, badge_id, enabled, granted_by)
-                    VALUES ($1, 'verified', TRUE, $2)
-                    ON CONFLICT (user_id, badge_id) DO UPDATE SET enabled = TRUE
-                    """,
-                    row["user_id"],
-                    actor_id,
-                )
             await _audit(conn, actor_id, f"verification.{status}", "user", str(row["user_id"]), {"request_id": str(request_id)})
     return dict(row)
 

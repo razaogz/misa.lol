@@ -2,19 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Ban, Database, Flag, KeyRound, Search, ShieldCheck, ShieldOff, Type, Upload, Users } from "lucide-react";
+import { Ban, Database, Flag, KeyRound, Orbit, Search, ShieldCheck, ShieldOff, Type, Upload, Users } from "lucide-react";
 import { Button, FieldLabel, Modal, PageHeader, SectionTitle, TextInput } from "@/components/ui";
-import { BADGE_CATALOG } from "@/lib/badges";
+import { AchievementAdmin } from "@/components/admin/AchievementAdmin";
 import { useT } from "@/lib/i18n";
-import { iconFromFile } from "@/lib/socials";
 import { assetFromFile } from "@/lib/profile-store";
 import { FONT_ACCEPT } from "@/lib/typography";
 
-type Tab = "users" | "bans" | "reserved" | "banned" | "badges" | "premium" | "reports" | "flags" | "bakaboost" | "themes" | "templates" | "fonts" | "audit" | "staff" | "roles";
+type Tab = "users" | "bans" | "reserved" | "banned" | "badges" | "premium" | "reports" | "flags" | "bakaboost" | "themes" | "templates" | "fonts" | "audit" | "staff" | "roles" | "constellations";
 type StaffRole = "owner" | "admin" | "moderator";
 type AdminSession = { id: string; email: string; name: string; role: string; permissions: Record<string, boolean>; status: string; suspended: boolean };
-const SECTION_TABS: Tab[] = ["users", "bans", "reserved", "banned", "badges", "premium", "reports", "flags", "bakaboost", "themes", "templates", "fonts", "audit"];
-const tabs: Array<[Tab, string]> = [["users", "Users"], ["bans", "Bans"], ["reserved", "Reserved names"], ["banned", "Banned words"], ["badges", "Badges"], ["premium", "Premium"], ["reports", "Reports"], ["flags", "Feature flags"], ["bakaboost", "BakaBoost"], ["themes", "Themes"], ["templates", "Templates"], ["fonts", "Default fonts"], ["audit", "Audit logs"], ["staff", "Staff"], ["roles", "Roles"]];
+const SECTION_TABS: Tab[] = ["users", "constellations", "bans", "reserved", "banned", "badges", "premium", "reports", "flags", "bakaboost", "themes", "templates", "fonts", "audit"];
+const tabs: Array<[Tab, string]> = [["users", "Users"], ["constellations", "Constellations"], ["bans", "Bans"], ["reserved", "Reserved names"], ["banned", "Banned words"], ["badges", "Badges"], ["premium", "Premium"], ["reports", "Reports"], ["flags", "Feature flags"], ["bakaboost", "BakaBoost"], ["themes", "Themes"], ["templates", "Templates"], ["fonts", "Default fonts"], ["audit", "Audit logs"], ["staff", "Staff"], ["roles", "Roles"]];
 
 function adminLoginPath(): string {
   const host = window.location.hostname;
@@ -36,7 +35,7 @@ export function AdminView() {
   const [role, setRole] = useState<StaffRole | null>(null);
   const [sections, setSections] = useState<Tab[]>(SECTION_TABS);
   const [accessReady, setAccessReady] = useState(false);
-  const tabLabel: Record<Tab, string> = { users: t("admin.users"), bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), fonts: "Default fonts", audit: t("admin.audit"), staff: t("admin.staff"), roles: t("admin.roles") };
+  const tabLabel: Record<Tab, string> = { users: t("admin.users"), constellations: "Constellations", bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), fonts: "Default fonts", audit: t("admin.audit"), staff: t("admin.staff"), roles: t("admin.roles") };
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/v1/admin-auth/session", { credentials: "include", cache: "no-store", headers: { "Cache-Control": "no-store" } })
@@ -78,7 +77,7 @@ export function AdminView() {
     if (!visible.some(([id]) => id === tab)) setTab(visible[0][0]);
   }, [accessReady, tab, visible]);
   if (!adminReady || !admin) return <main className="mx-auto max-w-[1200px] px-5 py-12 text-zinc-500">{t("admin.loading")}</main>;
-  return <main className="mx-auto min-h-screen max-w-[1400px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12"><PageHeader eyebrow={t("admin.eyebrow")} title={t("admin.title")} description={t("admin.description")} /><div className="mb-8 flex flex-wrap gap-2">{visible.map(([id]) => <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-xl border px-3 py-2 text-xs ${tab === id ? "border-[#e11d48]/50 bg-[#e11d48]/15 text-white" : "border-white/[.08] text-zinc-500 hover:text-white"}`}>{tabLabel[id]}</button>)}</div>{tab === "users" && <UsersPanel staffRole={role} />}{tab === "bans" && <BansPanel />}{tab === "reserved" && <ReservedPanel />}{tab === "banned" && <BannedPanel />}{tab === "badges" && <BadgesPanel />}{tab === "premium" && <PremiumPanel />}{tab === "reports" && <ReportsPanel />}{tab === "flags" && <FlagsPanel />}{tab === "bakaboost" && <BakaBoostPanel />}{tab === "themes" && <ThemesPanel />}{tab === "templates" && <TemplatesPanel />}{tab === "fonts" && <DefaultFontsPanel />}{tab === "audit" && <AuditPanel />}{tab === "staff" && (role === "owner" || role === "admin") && <StaffPanel staffRole={role} />}{tab === "roles" && role === "owner" && <RolesPanel />}</main>;
+  return <main className="mx-auto min-h-screen max-w-[1400px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12"><PageHeader eyebrow={t("admin.eyebrow")} title={t("admin.title")} description={t("admin.description")} /><div className="mb-8 flex flex-wrap gap-2">{visible.map(([id]) => <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-xl border px-3 py-2 text-xs ${tab === id ? "border-[#e11d48]/50 bg-[#e11d48]/15 text-white" : "border-white/[.08] text-zinc-500 hover:text-white"}`}>{tabLabel[id]}</button>)}</div>{tab === "users" && <UsersPanel staffRole={role} />}{tab === "constellations" && <ConstellationsPanel staffRole={role} />}{tab === "bans" && <BansPanel />}{tab === "reserved" && <ReservedPanel />}{tab === "banned" && <BannedPanel />}{tab === "badges" && <AchievementAdmin />}{tab === "premium" && <PremiumPanel />}{tab === "reports" && <ReportsPanel />}{tab === "flags" && <FlagsPanel />}{tab === "bakaboost" && <BakaBoostPanel />}{tab === "themes" && <ThemesPanel />}{tab === "templates" && <TemplatesPanel />}{tab === "fonts" && <DefaultFontsPanel />}{tab === "audit" && <AuditPanel />}{tab === "staff" && (role === "owner" || role === "admin") && <StaffPanel staffRole={role} />}{tab === "roles" && role === "owner" && <RolesPanel />}</main>;
 }
 
 function UsersPanel({ staffRole }: { staffRole: StaffRole | null }) {
@@ -150,7 +149,7 @@ function StaffPanel({ staffRole }: { staffRole: StaffRole }) {
 
 function RolesPanel() {
   const t = useT();
-  const labels: Record<string, string> = { users: t("admin.users"), bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), audit: t("admin.audit") };
+  const labels: Record<string, string> = { users: t("admin.users"), constellations: "Constellations", bans: t("admin.bans"), reserved: t("admin.reserved"), banned: t("admin.banned"), badges: t("admin.badges"), premium: t("admin.premium"), reports: t("admin.reports"), flags: t("admin.flags"), bakaboost: t("admin.bakaboost"), themes: t("admin.themes"), templates: t("admin.templates"), audit: t("admin.audit") };
   const empty = { admin: Object.fromEntries(SECTION_TABS.map((id) => [id, true])), moderator: Object.fromEntries(SECTION_TABS.map((id) => [id, true])) };
   const [access, setAccess] = useState<Record<string, Record<string, boolean>>>(empty);
   const [error, setError] = useState("");
@@ -343,185 +342,6 @@ function BannedPanel() {
   );
 }
 
-function BadgesPanel() {
-  const t = useT();
-  const official = new Set(BADGE_CATALOG.map((item) => item.id));
-  const [items, setItems] = useState<any[]>([]);
-  const [queue, setQueue] = useState<any[]>([]);
-  const [form, setForm] = useState({ id: "", name: "", description: "", color: "#e11d48", icon: "" });
-  const [iconName, setIconName] = useState("");
-  const [grant, setGrant] = useState<{ id: string; name: string; granted: boolean } | null>(null);
-  const [target, setTarget] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const iconInput = useRef<HTMLInputElement>(null);
-  const canCreate = /^[a-z0-9-]{2,64}$/.test(form.id) && form.name.trim().length > 0 && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(form.color) && Boolean(form.icon);
-  const load = () => {
-    void api("/badges").then((result) => setItems(result.badges || [])).catch((err) => setError(err.message));
-    void api("/verification?status=pending").then((result) => setQueue(result.requests || [])).catch((err) => setError(err.message));
-  };
-  useEffect(load, []);
-  const add = async () => {
-    setError("");
-    setNotice("");
-    try {
-      await api("/badges", { method: "POST", body: JSON.stringify(form) });
-      setForm({ id: "", name: "", description: "", color: "#e11d48", icon: "" });
-      setIconName("");
-      setNotice("Custom badge created.");
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create badge.");
-    }
-  };
-  const submitGrant = async () => {
-    if (!grant) return;
-    setError("");
-    setNotice("");
-    setBusy(true);
-    try {
-      await api(`/badges/${grant.id}/grants`, { method: "PUT", body: JSON.stringify({ user: target.trim(), granted: grant.granted }) });
-      setNotice(grant.granted ? `Granted ${grant.name} to that user.` : `Revoked ${grant.name} from that user.`);
-      setGrant(null);
-      setTarget("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update that badge grant.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const remove = async (id: string) => {
-    if (!window.confirm(`Delete ${id}? Anyone who has it will lose it.`)) return;
-    setError("");
-    setNotice("");
-    try {
-      await api(`/badges/${id}`, { method: "DELETE" });
-      setNotice("Custom badge deleted.");
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete badge.");
-    }
-  };
-  const review = async (id: string, status: "approved" | "rejected") => {
-    setError("");
-    setNotice("");
-    try {
-      await api(`/verification/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
-      setNotice(status === "approved" ? "Verification approved." : "Verification rejected.");
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not review that request.");
-    }
-  };
-  return (
-    <section>
-      <SectionTitle icon={ShieldCheck} title={t("admin.badgesTitle")} description={t("admin.badgesDesc")} />
-      {error && <p className="mb-3 text-xs text-red-300">{error}</p>}
-      {notice && <p className="mb-3 text-xs text-emerald-300">{notice}</p>}
-      <div className="surface mb-8 space-y-4 rounded-2xl p-4">
-        <FieldLabel>Verification queue</FieldLabel>
-        {queue.length === 0 && <p className="text-xs text-zinc-600">No pending requests.</p>}
-        {queue.map((item) => (
-          <div key={item.id} className="rounded-xl border border-white/[.06] p-3">
-            <p className="text-sm text-zinc-200">@{item.username || "unknown"} <span className="text-xs text-zinc-600">{item.display_name || ""}</span></p>
-            <p className="mt-1 text-xs text-zinc-400">{item.reason}</p>
-            {item.proof_url && <a href={item.proof_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-[#b6aaff] underline">{item.proof_url}</a>}
-            <div className="mt-3 flex gap-2">
-              <Button variant="accent" className="h-8 min-h-0 px-3 text-xs" onClick={() => void review(item.id, "approved")}>Approve</Button>
-              <Button variant="ghost" className="h-8 min-h-0 px-3 text-xs" onClick={() => void review(item.id, "rejected")}>Reject</Button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="surface mb-5 space-y-4 rounded-2xl p-4">
-        <FieldLabel>New custom badge</FieldLabel>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <FieldLabel>Badge id</FieldLabel>
-            <TextInput value={form.id} onChange={(value) => setForm({ ...form, id: value.trim().toLowerCase() })} placeholder="custom-badge-id" />
-          </div>
-          <div>
-            <FieldLabel>Name</FieldLabel>
-            <TextInput value={form.name} onChange={(value) => setForm({ ...form, name: value })} placeholder="My badge" />
-          </div>
-          <div className="sm:col-span-2">
-            <FieldLabel>Description</FieldLabel>
-            <TextInput value={form.description} onChange={(value) => setForm({ ...form, description: value })} placeholder="Shown on the badges page" />
-          </div>
-          <div>
-            <FieldLabel>Color</FieldLabel>
-            <div className="flex gap-2">
-              <input aria-label="Badge color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(form.color) ? form.color : "#e11d48"} onChange={(event) => setForm({ ...form, color: event.target.value })} className="h-11 w-12 cursor-pointer rounded-xl border-0 bg-transparent p-0" />
-              <TextInput value={form.color} onChange={(value) => setForm({ ...form, color: value })} placeholder="#e11d48" />
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Icon</FieldLabel>
-            <div className="flex items-center gap-3 rounded-xl border border-white/[.08] bg-white/[.025] p-3">
-              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl" style={{ color: form.color, background: `${form.color}16` }}>
-                {form.icon ? <img src={form.icon} alt="" className="h-6 w-6 object-contain" /> : <ShieldCheck size={16} />}
-              </span>
-              <p className="min-w-0 flex-1 text-xs text-zinc-400">{iconName || "PNG, JPG, WebP, or GIF. 512KB max."}</p>
-              <input ref={iconInput} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                void iconFromFile(file).then((asset) => {
-                  setForm((current) => ({ ...current, icon: asset.url || "" }));
-                  setIconName(asset.name || file.name);
-                  setError("");
-                }).catch((err) => setError(err instanceof Error ? err.message : "That icon could not be used."));
-                event.target.value = "";
-              }} />
-              <Button variant="subtle" className="h-9 min-h-0 px-3 text-xs" onClick={() => iconInput.current?.click()}><Upload size={13} />{form.icon ? "Replace" : "Upload"}</Button>
-            </div>
-          </div>
-        </div>
-        <Button variant="accent" onClick={() => void add()} disabled={!canCreate}>Create custom badge</Button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => (
-          <div key={item.id} className="surface rounded-2xl p-4">
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl" style={{ color: item.color, background: `${item.color || "#e11d48"}16` }}>
-                {item.has_icon ? <img src={`/api/v1/badges/${item.id}/icon`} alt="" className="h-6 w-6 object-contain" /> : <ShieldCheck size={18} />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-zinc-200">{item.name}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.description || item.id}</p>
-                <p className="mt-1 font-mono text-[10px] text-zinc-600">{item.id}</p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="subtle" className="h-8 min-h-0 px-2 text-xs" onClick={() => { setGrant({ id: item.id, name: item.name, granted: true }); setTarget(""); setError(""); }}>Grant</Button>
-              <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => { setGrant({ id: item.id, name: item.name, granted: false }); setTarget(""); setError(""); }}>Revoke</Button>
-              {!official.has(item.id) && <Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item.id)}>Delete</Button>}
-            </div>
-          </div>
-        ))}
-      </div>
-      <Modal
-        open={Boolean(grant)}
-        title={grant?.granted ? `Grant ${grant?.name}` : `Revoke ${grant?.name}`}
-        description="Enter the user ID from Admin → Users. Username also works."
-        onClose={() => { if (!busy) { setGrant(null); setTarget(""); } }}
-      >
-        <div className="space-y-4">
-          <div>
-            <FieldLabel>User ID</FieldLabel>
-            <TextInput value={target} onChange={setTarget} placeholder="user id or @username" />
-          </div>
-          {error && <p className="text-xs text-red-300">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setGrant(null); setTarget(""); }} disabled={busy}>Cancel</Button>
-            <Button variant="accent" onClick={() => void submitGrant()} disabled={busy || target.trim().length < 3}>{busy ? "Saving…" : grant?.granted ? "Grant badge" : "Revoke badge"}</Button>
-          </div>
-        </div>
-      </Modal>
-    </section>
-  );
-}
-
 function PremiumPanel() {
   const t = useT();
   const [ranks, setRanks] = useState<any[]>([]);
@@ -649,4 +469,42 @@ function TemplatesPanel() {
   const toggle = async (item: any) => { try { await api(`/templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ published: !item.published }) }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update template."); } };
   const remove = async (item: any) => { if (!window.confirm(`Delete ${item.name}?`)) return; try { await api(`/templates/${item.id}`, { method: "DELETE" }); load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not delete template."); } };
   return <section><SectionTitle icon={Database} title={t("admin.templatesTitle")} description={t("admin.templatesDesc")} />{error && <p className="mb-3 text-xs text-red-300">{error}</p>}<div className="surface divide-y divide-white/[.06] rounded-2xl">{items.map((item) => <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"><div className="flex-1"><p className="text-sm text-zinc-200">{item.name}</p><p className="mt-1 text-xs text-zinc-500">{item.slug} · {item.creator_username ? `@${item.creator_username}` : "system"} · {item.published ? "Published" : "Unpublished"}</p></div><div className="flex gap-2"><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs" onClick={() => void toggle(item)}>{item.published ? "Unpublish" : "Publish"}</Button><Button variant="ghost" className="h-8 min-h-0 px-2 text-xs text-red-300" onClick={() => void remove(item)}>Delete</Button></div></div>)}{!items.length && <p className="p-8 text-center text-xs text-zinc-600">No templates yet.</p>}</div></section>;
+}
+
+
+function ConstellationsPanel({ staffRole }: { staffRole: StaffRole | null }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const canDestroy = staffRole === "owner" || staffRole === "admin";
+  const load = () => void api(`/constellations?search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`).then((result) => setItems(result.constellations || [])).catch((reason) => setError(reason.message));
+  useEffect(load, []);
+  const inspect = async (id: string) => {
+    try { const result = await api(`/constellations/${encodeURIComponent(id)}`); setSelected(result.constellation || null); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load Constellation."); }
+  };
+  const moderate = async (item: any) => {
+    try {
+      await api(`/constellations/${encodeURIComponent(item.id)}/status`, { method: "PATCH", body: JSON.stringify({ suspended: item.status !== "suspended" }) });
+      await inspect(item.id); load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Moderation failed."); }
+  };
+  const removeMember = async (member: any) => {
+    if (!selected || !window.confirm(`Remove @${member.username} from this Constellation?`)) return;
+    try { const result = await api(`/constellations/${selected.id}/members/${member.userId}`, { method: "DELETE" }); setSelected(result.constellation); load(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not remove member."); }
+  };
+  const revokeInvite = async (invite: any) => {
+    if (!selected) return;
+    try { const result = await api(`/constellations/${selected.id}/invitations/${invite.id}`, { method: "DELETE" }); setSelected(result.constellation); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not revoke invite."); }
+  };
+  const removeConstellation = async () => {
+    if (!selected || !window.confirm(`Permanently delete “${selected.name}”?`)) return;
+    try { await api(`/constellations/${selected.id}`, { method: "DELETE" }); setSelected(null); load(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Constellation."); }
+  };
+  return <section><SectionTitle icon={Orbit} title="Constellations" description="Inspect shared pages, members, assignments, media, status, and audit-backed moderation." /><div className="mb-4 grid gap-2 sm:grid-cols-[1fr_180px_auto]"><TextInput value={search} onChange={setSearch} placeholder="ID, name, owner, or slug" /><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-white/[.08] bg-[#0d0d12] px-3 text-xs text-zinc-300"><option value="">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="suspended">Suspended</option></select><Button variant="accent" onClick={load}><Search size={14} />Search</Button></div>{error ? <p className="mb-3 text-xs text-red-300">{error}</p> : null}<div className="surface overflow-x-auto rounded-2xl"><table className="w-full min-w-[780px] text-left text-xs"><thead className="border-b border-white/[.06] text-zinc-600"><tr><th className="p-4">Constellation</th><th className="p-4">Owner</th><th className="p-4">Members</th><th className="p-4">Status</th><th className="p-4">Updated</th></tr></thead><tbody className="divide-y divide-white/[.06]">{items.map((item) => <tr key={item.id} className="cursor-pointer hover:bg-white/[.025]" onClick={() => void inspect(item.id)}><td className="p-4"><p className="text-zinc-200">{item.name}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{item.id}</p></td><td className="p-4 text-zinc-400">@{item.ownerUsername || "unknown"}</td><td className="p-4 text-zinc-400">{item.memberCount}/{item.capacity}</td><td className="p-4 text-zinc-400">{item.status}</td><td className="p-4 text-zinc-600">{new Date(item.updatedAt).toLocaleString()}</td></tr>)}</tbody></table>{!items.length ? <p className="p-8 text-center text-xs text-zinc-600">No Constellations found.</p> : null}</div>{selected ? <div className="surface mt-5 rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-lg text-white">{selected.name}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{selected.id} · /c/{selected.slug}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => void moderate(selected)}>{selected.status === "suspended" ? "Restore to draft" : "Suspend"}</Button>{canDestroy ? <Button variant="ghost" className="text-red-300" onClick={() => void removeConstellation()}>Delete</Button> : null}</div></div><div className="mt-5 grid gap-3 text-xs text-zinc-400 sm:grid-cols-3"><p>Owner<br /><span className="text-zinc-200">@{selected.ownerUsername}</span></p><p>Assignment<br /><span className="text-zinc-200">{selected.assignmentMode}</span></p><p>Background<br /><span className="text-zinc-200">{selected.background?.type || "color"}{selected.background?.key ? ` · ${selected.background.key}` : ""}</span></p><p>Global font<br /><span className="text-zinc-200">{selected.globalFont}</span></p><p>Member movement<br /><span className="text-zinc-200">{selected.allowMemberMove ? "Allowed" : "Owner only"}</span></p><p>Frame mode<br /><span className="text-zinc-200">{selected.frameMode}</span></p></div><h3 className="mt-6 text-sm text-zinc-200">Members and assignments</h3><div className="mt-2 divide-y divide-white/[.06]">{(selected.members || []).map((member: any) => <div key={member.userId} className="flex items-center gap-3 py-3 text-xs"><span className="flex-1 text-zinc-300">@{member.username} · {member.role}</span><span className="text-zinc-600">slot {member.slot} · {Math.round(member.scale * 100)}% · {member.position.x.toFixed(1)}, {member.position.y.toFixed(1)}</span>{canDestroy && member.role !== "owner" ? <Button variant="ghost" className="h-8 min-h-0 px-2 text-[10px]" onClick={() => void removeMember(member)}>Remove</Button> : null}</div>)}</div>{(selected.invitations || []).some((invite: any) => invite.status === "pending") ? <><h3 className="mt-6 text-sm text-zinc-200">Pending invites</h3>{selected.invitations.filter((invite: any) => invite.status === "pending").map((invite: any) => <div key={invite.id} className="mt-2 flex items-center gap-3 text-xs"><span className="flex-1 text-zinc-500">{invite.username ? `@${invite.username}` : "Share link"} · expires {new Date(invite.expiresAt).toLocaleDateString()}</span><Button variant="ghost" className="h-8 min-h-0 px-2 text-[10px]" onClick={() => void revokeInvite(invite)}>Revoke</Button></div>)}</> : null}</div> : null}</section>;
 }

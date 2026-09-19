@@ -121,6 +121,70 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
+export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, onSave, children }: { initialConfig: ProfileConfig; draftKey: string; onDraftChange?: (config: ProfileConfig) => void; onSave: (config: ProfileConfig) => Promise<void>; children: React.ReactNode }) {
+  const [config, setConfig] = useState<ProfileConfig>(() => normalizeDashboardProfile(initialConfig));
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState("");
+  const initialRef = useRef(normalizeDashboardProfile(initialConfig));
+
+  useEffect(() => {
+    const next = normalizeDashboardProfile(initialConfig);
+    initialRef.current = next;
+    setConfig(next);
+    setSaveState("idle");
+    setSaveError("");
+    onDraftChange?.(next);
+  }, [draftKey]);
+
+  const update = (updater: (current: ProfileConfig) => ProfileConfig) => {
+    setConfig((current) => {
+      const next = updater(current);
+      onDraftChange?.(next);
+      return next;
+    });
+    setSaveState("idle");
+    setSaveError("");
+  };
+  const save = async (nextConfig?: ProfileConfig) => {
+    const next = normalizeDashboardProfile(nextConfig || config);
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      await onSave(next);
+      initialRef.current = next;
+      setConfig(next);
+      onDraftChange?.(next);
+      setSaveState("saved");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "Constellation design save failed.");
+    }
+  };
+  const value = useMemo<ProfileContextValue>(() => ({
+    config,
+    updateConfig: update,
+    resetConfig: () => {
+      const next = initialRef.current;
+      setConfig(next);
+      onDraftChange?.(next);
+      setSaveState("idle");
+      setSaveError("");
+    },
+    saveProfile: save,
+    hydrateFromServer: (nextConfig) => {
+      const next = normalizeDashboardProfile(nextConfig);
+      initialRef.current = next;
+      setConfig(next);
+      onDraftChange?.(next);
+      setSaveState("saved");
+      setSaveError("");
+    },
+    saveState,
+    saveError,
+    profileReady: true,
+  }), [config, saveState, saveError, onSave, onDraftChange]);
+  return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
+}
 export function useProfile() {
   const value = useContext(ProfileContext);
   if (!value) throw new Error("useProfile must be used inside ProfileProvider");
@@ -132,7 +196,7 @@ function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
   const incoming = (input && typeof input === "object" ? input : {}) as Partial<ProfileConfig>;
   const assets = (incoming.assets && typeof incoming.assets === "object" ? incoming.assets : {}) as Partial<ProfileConfig["assets"]>;
   const normalizedAssets = { ...defaults.assets, ...assets } as ProfileConfig["assets"];
-  for (const key of ["avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound"] as const) {
+  for (const key of ["avatar", "banner", "background", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound"] as const) {
     if (!normalizedAssets[key] || typeof normalizedAssets[key] !== "object") normalizedAssets[key] = defaults.assets[key] || { url: null };
   }
   return normalizeProfileSocials({

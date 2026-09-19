@@ -83,16 +83,8 @@ html.live-card body::-webkit-scrollbar {
 .animate-aurora { animation: aurora 9s ease-in-out infinite; }
 @keyframes background-drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(1.5%, -1.5%, 0) scale(1.03); } }
 @keyframes background-glow { 0%,100% { opacity: .72; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
-@keyframes background-stars { 0%,100% { opacity: .35; } 50% { opacity: .8; } }
-@keyframes background-waves { 0% { transform: translate3d(-4%, -2%, 0) rotate(0deg); background-position: 0 0; } 50% { transform: translate3d(4%, 2%, 0) rotate(3deg); background-position: 120px 80px; } 100% { transform: translate3d(-4%, -2%, 0) rotate(0deg); background-position: 240px 0; } }
-@keyframes background-particle { 0%,100% { transform: translate3d(0,0,0); opacity: .25; } 50% { transform: translate3d(16px,-22px,0) scale(1.35); opacity: .9; } }
-@keyframes background-ember { 0%,100% { transform: translate3d(0,18px,0) scale(.65); opacity: .2; } 50% { transform: translate3d(-12px,-28px,0) scale(1.3); opacity: .95; } }
-@keyframes background-rain { 0% { transform: translate3d(0,-20vh,0); opacity: 0; } 15% { opacity: .7; } 100% { transform: translate3d(18px,130vh,0); opacity: 0; } }
-@keyframes background-snow { 0% { transform: translate3d(0,-12vh,0) rotate(0deg); opacity: 0; } 15% { opacity: .75; } 100% { transform: translate3d(24px,120vh,0) rotate(180deg); opacity: 0; } }
 .animate-background-drift { animation: background-drift 18s ease-in-out infinite; }
 .animate-background-glow { animation: background-glow 7s ease-in-out infinite; }
-.animate-background-stars { animation: background-stars 5s ease-in-out infinite; }
-.animate-background-waves { background-size: 180px 180px; animation: background-waves 15s ease-in-out infinite; }
 
 @keyframes name-rainbow { 0% { background-position: 0 50%; } 100% { background-position: 200% 50%; } }
 @keyframes name-fuzzy { 0%,100% { filter: blur(0); } 50% { filter: blur(1.6px); } }

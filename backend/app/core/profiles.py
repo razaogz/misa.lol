@@ -35,6 +35,7 @@ def default_public_profile(user: User) -> dict[str, Any]:
             "showSocials": True,
             "showJoinDate": False,
             "showDiscordStatus": True,
+            "showUsername": True,
             "socialAlign": "center",
             "cardAlign": "center",
             "showProfileFrame": True,
@@ -82,6 +83,7 @@ def default_public_profile(user: User) -> dict[str, Any]:
             "banner": {"url": None},
             "background": {"url": None},
             "backgroundVideo": {"url": None},
+            "backgroundEffectVideo": {"url": None},
             "audio": {"url": None},
             "audioArtwork": {"url": None},
             "audioTitle": "",
@@ -151,6 +153,8 @@ async def resolve_public_profile(username: str) -> dict[str, Any] | None:
         identity["displayName"] = user.display_name or user.username
     grants = await data_api.list_user_badge_grants(user.id)
     cleaned = apply_badge_ownership(sanitize_profile_config(config), stored, grants)
+    from app.db import achievements
+    cleaned["rank"] = await achievements.current_rank_for_user(user.id)
     from app.core.discord_live import public_card_discord
     live = await public_card_discord(user)
     if live:

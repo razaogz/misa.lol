@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { audioArtworkUrl, playlistTracks, publicTrackUrls, trackTitle, usesUploadedProfileAudio } from "@/lib/audio";
 import { usePreviewPlayer } from "@/lib/preview-player";
@@ -8,7 +8,7 @@ import type { ProfileConfig } from "@/lib/types";
 
 type RepeatMode = "off" | "all" | "one";
 
-export function ProfileMusicPlayer({ config, preview = false, autoplay = false }: { config: ProfileConfig; preview?: boolean; autoplay?: boolean }) {
+export function ProfileMusicPlayer({ config, preview = false, autoplay = false, compact = false }: { config: ProfileConfig; preview?: boolean; autoplay?: boolean; compact?: boolean }) {
   const tracks = useMemo(() => playlistTracks(config.assets), [config.assets]);
   const trackKey = useMemo(() => tracks.map((item) => item.id).join("|"), [tracks]);
   const { requestedId, requestNonce, pauseNonce, notify } = usePreviewPlayer();
@@ -17,9 +17,9 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
   const srcRef = useRef("");
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [repeat, setRepeat] = useState<RepeatMode>("all");
-  const [shuffle, setShuffle] = useState(false);
+  const [muted] = useState(false);
+  const [repeat] = useState<RepeatMode>("all");
+  const [shuffle] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [level, setLevel] = useState(config.assets.volume);
@@ -182,69 +182,42 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
         onPause={() => setPlaying(false)}
         onEnded={ended}
       />
-      <div className="flex items-center gap-3">
-        <div className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
+      <div className={compact ? "flex min-w-0 items-center gap-3 sm:grid sm:grid-cols-[3rem_minmax(0,1fr)] sm:gap-x-2 sm:gap-y-1.5" : "flex min-w-0 items-center gap-3"}>
+        <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:h-14 sm:w-14 ${compact ? "sm:row-span-2 sm:h-12 sm:w-12" : ""} ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
           {artwork ? <img src={artwork} alt="" className="h-full w-full object-cover" /> : <Volume2 size={18} className={swap ? "" : "text-white/40"} style={swap ? { color: ink } : undefined} />}
         </div>
         <div className="min-w-0 flex-1">
           <p className={`truncate text-sm font-medium ${swap ? "" : "text-white"}`}>{trackTitle(track)}</p>
-          <p className={`mt-0.5 text-[11px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.66 } : undefined}>{safeIndex + 1} / {tracks.length}</p>
+          <div className="mt-2 flex min-w-0 items-center gap-2">
+            <span className={`shrink-0 font-mono text-[10px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(currentTime)}</span>
+            <input
+              aria-label="Seek"
+              type="range"
+              min={0}
+              max={Math.max(1, Math.floor(duration))}
+              value={Math.floor(currentTime)}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (audioRef.current) audioRef.current.currentTime = next;
+                setCurrentTime(next);
+              }}
+              className={`h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`}
+              style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }}
+            />
+            <span className={`shrink-0 font-mono text-[10px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(duration)}</span>
+          </div>
         </div>
-      </div>
-      <input
-        aria-label="Seek"
-        type="range"
-        min={0}
-        max={Math.max(1, Math.floor(duration))}
-        value={Math.floor(currentTime)}
-        onChange={(event) => {
-          const next = Number(event.target.value);
-          if (audioRef.current) audioRef.current.currentTime = next;
-          setCurrentTime(next);
-        }}
-        className={`mt-3 h-1.5 w-full cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`}
-        style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }}
-      />
-      <div className={`mt-1 flex justify-between font-mono text-[10px] ${swap ? "" : "text-white/35"}`} style={swap ? { opacity: 0.55 } : undefined}>
-        <span>{formatTime(currentTime)}</span>
-        <span>{formatTime(duration)}</span>
-      </div>
-      <div className="mt-2 flex flex-nowrap items-center justify-between gap-1">
-        <IconButton label={shuffle ? "Disable shuffle" : "Shuffle"} active={shuffle} ink={swap ? ink : undefined} onClick={() => setShuffle((value) => !value)}><Shuffle size={12} /></IconButton>
-        <IconButton label="Previous track" ink={swap ? ink : undefined} onClick={() => step(-1)}><SkipBack size={13} /></IconButton>
-        <button type="button" onClick={toggle} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${swap ? "" : "bg-white/[.12] text-white hover:bg-white/[.18]"}`} style={swap ? { backgroundColor: `${ink}22`, color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
-          {playing ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
-        </button>
-        <IconButton label="Next track" ink={swap ? ink : undefined} onClick={() => step(1)}><SkipForward size={13} /></IconButton>
-        <IconButton label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"} active={repeat !== "off"} ink={swap ? ink : undefined} onClick={() => setRepeat((value) => value === "off" ? "all" : value === "all" ? "one" : "off")}>
-          <Repeat size={12} />
-          {repeat === "one" && <span className="absolute -right-0.5 -top-0.5 text-[8px]">1</span>}
-        </IconButton>
-      </div>
-      <div className="mt-2 flex items-center gap-1">
-        <button type="button" onClick={() => setMuted((value) => !value)} className={`rounded-lg p-1.5 ${swap ? "" : "text-white/60 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={muted ? "Unmute" : "Mute"}>
-          {muted || level === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
-        </button>
-        <input aria-label="Volume" type="range" min={0} max={100} value={level} onChange={(event) => setLevel(Number(event.target.value))} className={`h-1.5 w-full cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`} style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }} />
+        <div className={`flex shrink-0 items-center gap-0.5 ${compact ? "sm:col-start-2 sm:justify-end" : ""}`}>
+          <button type="button" onClick={() => step(-1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Previous track"><SkipBack size={15} fill="currentColor" /></button>
+          <button type="button" onClick={toggle} className={`grid h-9 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/80 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
+            {playing ? <Pause size={20} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
+          </button>
+          <button type="button" onClick={() => step(1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Next track"><SkipForward size={15} fill="currentColor" /></button>
+        </div>
       </div>
     </div>
   );
 }
-
-function IconButton({ children, label, onClick, active = false, ink }: { children: React.ReactNode; label: string; onClick: () => void; active?: boolean; ink?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${ink ? "" : active ? "bg-[#e11d48]/20 text-[#fecdd3]" : "bg-white/[.08] text-white/70 hover:bg-white/[.14] hover:text-white"}`}
-      style={ink ? { color: ink, backgroundColor: active ? `${ink}22` : "transparent" } : undefined}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function ProfileVideoAudioControl({ config }: { config: ProfileConfig }) {
   const videoEl = () => document.querySelector<HTMLVideoElement>("[data-bg-video]");
   const [muted, setMuted] = useState(true);

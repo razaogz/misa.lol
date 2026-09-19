@@ -12,7 +12,7 @@ const nextConfig = {
   basePath: "/dashboard",
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons"],
-    middlewareClientMaxBodySize: "64mb",
+    middlewareClientMaxBodySize: "128mb",
   },
   images: {
     remotePatterns: mediaHosts.map((hostname) => ({ protocol: "https", hostname, pathname: "/**" })),
@@ -21,6 +21,11 @@ const nextConfig = {
   async rewrites() {
     return {
       afterFiles: [
+        {
+          source: "/constellation-assets/:path*",
+          destination: `${apiOrigin}/constellation-assets/:path*`,
+          basePath: false,
+        },
         {
           source: "/api/:path*",
           destination: `${apiOrigin}/api/:path*`,

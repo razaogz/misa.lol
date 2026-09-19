@@ -106,7 +106,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MISA_EMAIL_FROM", "EMAIL_FROM"),
     )
     max_profile_tracks: int = 8
-    max_track_upload_bytes: int = 8_000_000
+    max_track_upload_bytes: int = 40_000_000
 
     switcher_cookie_name: str = "misa_switcher"
     switcher_ttl_seconds: int = 60 * 60 * 24 * 90

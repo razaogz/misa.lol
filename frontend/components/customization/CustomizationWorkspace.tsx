@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Type, Upload, UsersRound, Video, Volume2, WandSparkles, Music, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Trash2, Type, Upload, UsersRound, Volume2, WandSparkles, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { PortfolioPanel } from "@/components/customization/PortfolioPanel";
 import { WidgetsPanel } from "@/components/customization/WidgetsPanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -9,6 +9,8 @@ import { ImageCropModal } from "@/components/customization/ImageCropModal";
 import { AudioCropModal } from "@/components/customization/AudioCropModal";
 import { PlaylistEditor } from "@/components/customization/PlaylistEditor";
 import { ProfileRenderer } from "@/components/profile/ProfileRenderer";
+import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
+import { BACKGROUND_EFFECTS } from "@/lib/background-effects";
 import { SharingAppearance } from "@/components/sharing/SharingAppearance";
 import { sharePageCopy } from "@/lib/share";
 import { Button, FieldLabel, PageHeader, RangeControl, SelectBox, SectionTitle, TextArea, TextInput, Toggle } from "@/components/ui";
@@ -16,7 +18,7 @@ import { canCropAsset, IMAGE_ACCEPT, isAnimatedAsset, prepareCursorAsset } from 
 import { syncPlaylist } from "@/lib/audio";
 import { PreviewPlayerProvider } from "@/lib/preview-player";
 import { assetFromFile, dataUrlToFile, mimeTypeForFile, uploadProfileAsset, useProfile } from "@/lib/profile-store";
-import type { AudioTrack, ButtonStyle, PageEnter, ProfileAsset, ProfileFont, ProfileShape, SocialAlign, UsernameEffect } from "@/lib/types";
+import type { AudioTrack, BackgroundEffect, ButtonStyle, PageEnter, ProfileAsset, ProfileFont, ProfileShape, SocialAlign, UsernameEffect } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { useFeatureFlags } from "@/lib/feature-flags";
@@ -66,7 +68,7 @@ export function CustomizationWorkspace() {
   const resetFramePosition = () => setSettings({ profileFrameScale: 100, profileFrameX: 0, profileFrameY: 0 });
   const adjustFrameScale = (delta: number) => setSettings({ profileFrameScale: Math.min(150, Math.max(50, (config.settings.profileFrameScale ?? 100) + delta)) });
   const uploadAsset = async (key: keyof typeof config.assets, file: File) => {
-    const maxBytes = key === "backgroundVideo" ? 20_000_000 : key === "audio" ? 8_000_000 : key === "clickSound" ? 400_000 : key === "customFont" ? 2_000_000 : 3_000_000;
+    const maxBytes = key === "backgroundVideo" || key === "backgroundEffectVideo" ? 110_000_000 : key === "audio" ? 40_000_000 : key === "clickSound" ? 2_000_000 : key === "customFont" ? 5_000_000 : key === "cursor" ? 5_000_000 : 25_000_000;
     const type = mimeTypeForFile(file).toLowerCase();
     const imageKeys = new Set(["avatar", "background", "banner", "ogImage", "favicon"]);
     if (!file || file.size <= 0) { window.alert("That file is empty. Please choose it again."); return; }
@@ -88,7 +90,6 @@ export function CustomizationWorkspace() {
           ...(key === "audio" ? { audioSource: "standalone", tracks: [] } : {}),
         },
       }));
-      if ((key === "avatar" || key === "background" || key === "banner" || key === "ogImage" || key === "favicon") && canCropAsset(source)) setCrop({ key, asset: source });
     } catch (error) {
       console.error("Asset upload failed", error);
       window.alert(error instanceof Error ? error.message : "The file could not be uploaded. Please try again.");
@@ -157,45 +158,128 @@ export function CustomizationWorkspace() {
   </main></PreviewPlayerProvider>;
 }
 
+export function ConstellationProfileControls() {
+  const t = useT();
+  const { config, updateConfig, resetConfig, saveProfile, saveState, profileReady } = useProfile();
+  const [tab, setTab] = useState<Tab>("assets");
+  const [crop, setCrop] = useState<{ key: CropKey; asset: ProfileAsset } | null>(null);
+  const setSettings = (patch: Partial<typeof config.settings>) => updateConfig((current) => ({ ...current, settings: { ...current.settings, ...patch } }));
+  const setProfile = (patch: Partial<typeof config.profile>) => updateConfig((current) => ({ ...current, profile: { ...current.profile, ...patch } }));
+  const setAsset = (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => updateConfig((current) => ({ ...current, assets: { ...current.assets, [key]: asset } }));
+  const uploadAsset = async (key: keyof typeof config.assets, file: File) => {
+    const maxBytes = key === "backgroundVideo" || key === "backgroundEffectVideo" ? 110_000_000 : key === "audio" ? 40_000_000 : key === "clickSound" ? 2_000_000 : key === "customFont" ? 5_000_000 : key === "cursor" ? 5_000_000 : 25_000_000;
+    const type = mimeTypeForFile(file).toLowerCase();
+    const imageKeys = new Set(["avatar", "banner", "ogImage", "favicon"]);
+    if (!file || file.size <= 0) { window.alert("That file is empty. Please choose it again."); return; }
+    if (file.size > maxBytes) { window.alert(t("customize.fileTooLarge", { mb: Math.round(maxBytes / 1_000_000) })); return; }
+    if (imageKeys.has(String(key)) && !type.startsWith("image/")) { window.alert("Please choose a PNG, JPEG, WebP, or GIF image."); return; }
+    try {
+      const source = await assetFromFile(file);
+      const uploaded = await uploadProfileAsset(String(key), file);
+      setAsset(key, uploaded);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "The file could not be uploaded. Please try again.");
+    }
+  };
+  const labels: Record<Tab, string> = { assets: t("customize.tabAssets"), layout: t("customize.tabLayout"), widgets: t("customize.tabWidgets"), portfolio: t("customize.tabPortfolio"), general: t("customize.tabGeneral"), colors: t("customize.tabColors"), effects: t("customize.tabEffects"), sharing: t("customize.sharingTitle") };
+  const personalAssets: Array<{ key: keyof typeof config.assets; title: string; description: string; icon: typeof ImageIcon; accept: string }> = [
+    { key: "avatar", title: t("customize.avatar"), description: t("customize.avatarDesc"), icon: CircleDot, accept: IMAGE_ACCEPT },
+    { key: "banner", title: t("customize.banner"), description: t("customize.bannerDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
+  ];
+  return <div className="mt-2 border-t border-white/[.07] pt-5">
+    <SectionTitle title="Your profile design" description="These controls save a separate Constellation design and never change your normal Customize profile. Background, cursor, and audio are shared by the whole Constellation." />
+    <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl bg-white/[.035] p-1.5 sm:grid-cols-4">{tabs.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition ${tab === id ? "bg-white/[.12] text-white" : "text-zinc-500 hover:bg-white/[.04] hover:text-zinc-200"}`}><Icon size={14} className="shrink-0" /><span className="truncate">{labels[id]}</span></button>)}</div>
+    <motion.div key={tab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .2 }}>
+      {tab === "assets" && <div><SectionTitle icon={Brush} title={t("customize.assetsTitle")} description="Avatar and banner stay personal. Use Shared for the common background, cursor, and audio." /><div className="space-y-3">{personalAssets.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={uploadAsset} onCrop={setCrop} />)}</div></div>}
+      {tab === "layout" && <LayoutsPanel config={config} setSettings={setSettings} onManualMove={() => window.alert("Use Move profiles in the Constellation preview to reposition your profile.")} onResetFrame={() => setSettings({ profileFrameScale: 100, profileFrameX: 0, profileFrameY: 0 })} />}
+      {tab === "widgets" && <WidgetsPanel />}
+      {tab === "portfolio" && <PortfolioPanel />}
+      {tab === "general" && <GeneralPanel config={config} setSettings={setSettings} setProfile={setProfile} />}
+      {tab === "sharing" && <SharingAppearance config={config} setSettings={setSettings} setAsset={(key, asset) => setAsset(key, asset)} onUpload={uploadAsset} onCrop={setCrop} />}
+      {tab === "colors" && <ColorsPanel config={config} setSettings={setSettings} />}
+      {tab === "effects" && <EffectsPanel config={config} setSettings={setSettings} setAsset={setAsset} onUpload={uploadAsset} showBackgroundEffect={false} />}
+    </motion.div>
+    <div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="ghost" onClick={resetConfig}><RotateCcw size={14} />Reset design draft</Button><Button variant="accent" disabled={!profileReady || saveState === "saving"} onClick={() => void saveProfile()}><Check size={14} />{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Design saved" : "Save design"}</Button></div>
+    <ImageCropModal open={Boolean(crop)} title={crop ? cropSpec[crop.key].title : "Crop image"} src={crop?.asset.url || ""} aspect={crop ? cropSpec[crop.key].aspect : 1} outputWidth={crop ? cropSpec[crop.key].width : 512} outputHeight={crop ? cropSpec[crop.key].height : 512} mime={crop ? cropSpec[crop.key].mime : "image/jpeg"} onCancel={() => setCrop(null)} onApply={async (url) => { const current = crop; if (!current) return; try { const spec = cropSpec[current.key]; setAsset(current.key, await uploadProfileAsset(current.key, await dataUrlToFile(url, "cropped-" + current.key + ".jpg", spec.mime))); } catch (error) { window.alert(error instanceof Error ? error.message : "The cropped image could not be uploaded."); } finally { setCrop(null); } }} />
+  </div>;
+}
 function AssetsPanel({ config, setAsset, onUpload, onCrop, onAudioCrop, onTracks }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void>; onCrop: (next: { key: CropKey; asset: ProfileAsset }) => void; onAudioCrop: (asset: ProfileAsset) => void; onTracks: (tracks: AudioTrack[]) => void }) {
   const t = useT();
   const { enabled } = useFeatureFlags();
   const items: Array<{ key: keyof typeof config.assets; title: string; description: string; icon: typeof ImageIcon; accept: string }> = [
-    { key: "background", title: t("customize.bgImage"), description: t("customize.bgImageDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
     { key: "banner", title: t("customize.banner"), description: t("customize.bannerDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
-    { key: "backgroundVideo", title: t("customize.bgVideo"), description: t("customize.bgVideoDesc"), icon: Video, accept: "video/mp4,video/webm" },
-    { key: "audio", title: "Audio", description: "Standalone audio upload", icon: Music, accept: "audio/*" },
     { key: "avatar", title: t("customize.avatar"), description: t("customize.avatarDesc"), icon: CircleDot, accept: IMAGE_ACCEPT },
     { key: "cursor", title: t("customize.cursor"), description: t("customize.cursorDesc"), icon: MousePointer2, accept: "image/png,image/gif,image/x-icon" },
   ];
-  return <div><SectionTitle icon={Brush} title={t("customize.assetsTitle")} description={t("customize.assetsDesc")} /><div className="space-y-3">{items.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={onUpload} onCrop={onCrop} />)}</div><div className="mt-4"><PlaylistEditor config={config} onChange={onTracks} /></div>{enabled("customize.assets.audioCrop") && config.assets.backgroundVideo?.url && <Button variant="subtle" className="mt-3 w-full text-xs" onClick={() => onAudioCrop(config.assets.backgroundVideo)}>Extract and crop audio from video</Button>}<div className="mt-4 space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4"><ToggleRow label={t("customize.enableAudio")} checked={config.assets.audioEnabled} onChange={(checked) => { setAsset("audioEnabled", checked); setAsset("audioSource", checked ? "video" : config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video"); }} onReset={() => setAsset("audioEnabled", true)} /><div className="py-3"><RangeControl label={t("customize.volume")} value={config.assets.volume} min={0} max={100} suffix="%" onChange={(value) => setAsset("volume", value)} onReset={() => setAsset("volume", 65)} /></div></div></div>;
+  const hasBackgroundVideo = Boolean(config.assets.backgroundVideo?.url);
+  return <div>
+    <SectionTitle icon={Brush} title={t("customize.assetsTitle")} description={t("customize.assetsDesc")} />
+    <div className="space-y-3">
+      <BackgroundAssetRow config={config} setAsset={setAsset} onUpload={onUpload} onCrop={onCrop} />
+      {items.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={onUpload} onCrop={onCrop} />)}
+      <PlaylistEditor config={config} onChange={onTracks} />
+    </div>
+    {hasBackgroundVideo ? <div className="mt-4 space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4">
+      <ToggleRow label="Use background video audio" checked={config.assets.audioEnabled && config.assets.audioSource === "video"} onChange={(checked) => { setAsset("audioEnabled", checked); setAsset("audioSource", checked ? "video" : config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video"); }} onReset={() => { setAsset("audioEnabled", false); setAsset("audioSource", config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video"); }} />
+      <div className="py-3"><RangeControl label="Default volume" value={config.assets.volume} min={0} max={100} suffix="%" onChange={(value) => setAsset("volume", value)} onReset={() => setAsset("volume", 65)} /></div>
+    </div> : null}
+    {enabled("customize.assets.audioCrop") && hasBackgroundVideo ? <Button variant="subtle" className="mt-3 w-full text-xs" onClick={() => onAudioCrop(config.assets.backgroundVideo)}>Extract and crop audio from video</Button> : null}
+  </div>;
 }
 
+function BackgroundAssetRow({ config, setAsset, onUpload }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void>; onCrop: (next: { key: CropKey; asset: ProfileAsset }) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const video = config.assets.backgroundVideo;
+  const image = config.assets.background;
+  const hasBackground = Boolean(video?.url || image?.url);
+  const upload = async (file: File) => {
+    const type = mimeTypeForFile(file).toLowerCase();
+    const nextIsVideo = type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(file.name);
+    if (!nextIsVideo && !type.startsWith("image/")) { window.alert("Choose an image, GIF, MP4, WebM, or MOV file."); return; }
+    await onUpload(nextIsVideo ? "backgroundVideo" : "background", file);
+    if (nextIsVideo) {
+      setAsset("background", { url: null, remove: true });
+      setAsset("audioSource", "video");
+    } else {
+      setAsset("backgroundVideo", { url: null, remove: true });
+      setAsset("audioEnabled", false);
+      setAsset("audioSource", config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video");
+    }
+  };
+  const removeBackground = () => {
+    if (video?.url) setAsset("backgroundVideo", { url: null, remove: true });
+    if (image?.url) setAsset("background", { url: null, remove: true });
+    setAsset("audioEnabled", false);
+    setAsset("audioSource", config.assets.tracks?.length ? "tracks" : config.assets.audio?.url ? "standalone" : "video");
+  };
+  return <div className="relative isolate flex h-[220px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/[.08] bg-white/[.025] px-5 text-center sm:h-[250px] sm:px-8">
+    {hasBackground ? <div className="absolute inset-0 -z-10">{video?.url ? <video src={video.url} className="h-full w-full object-cover" muted loop autoPlay playsInline preload="metadata" /> : image?.url ? <img src={image.url} alt="Current background" className="h-full w-full object-cover" /> : null}<div className="absolute inset-0 bg-black/50" /></div> : null}
+    <p className="text-xl font-medium text-white drop-shadow-lg">Background</p>
+    <input ref={input} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.mov" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const element = event.currentTarget; const file = element.files?.[0]; if (file) void upload(file).finally(() => { element.value = ""; }); }} />
+    <div className="mt-5 flex items-center justify-center gap-2"><Button variant="subtle" className="h-11 min-h-0 px-6 backdrop-blur-md" onClick={() => input.current?.click()}><Upload size={16} />{hasBackground ? "Replace" : "Upload"}</Button>{hasBackground ? <Button variant="subtle" className="h-11 min-h-0 px-4 backdrop-blur-md" onClick={removeBackground}><Trash2 size={15} />Remove</Button> : null}</div>
+    {hasBackground ? <p className="absolute inset-x-4 bottom-3 truncate text-[11px] text-white/55">{video?.name || image?.name || "Current background"}</p> : null}
+  </div>;
+}
 function AssetRow({ item, asset, setAsset, onUpload, onCrop }: { item: { key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"]; title: string; description: string; icon: typeof ImageIcon; accept: string }; asset: ProfileAsset; setAsset: (key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"], asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>["assets"], file: File) => Promise<void>; onCrop: (next: { key: CropKey; asset: ProfileAsset }) => void }) {
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const isImage = item.key === "avatar" || item.key === "background" || item.key === "banner";
   const croppable = isImage && canCropAsset(asset);
-  return <div className="rounded-2xl border border-white/[.07] bg-white/[.02] p-3.5">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[.06] text-zinc-500">{asset?.url && isImage ? <img src={asset.url} alt="" className="h-full w-full object-cover" /> : <item.icon size={17} />}</div>
-        <div className="min-w-0 flex-1">
-          <p className="break-words text-sm font-medium text-zinc-200 sm:truncate">{item.title}</p>
-          <p className="mt-1 truncate text-xs text-zinc-600">{asset?.url ? (isAnimatedAsset(asset) ? t("customize.animated") : asset.name || t("customize.uploaded")) : item.description}</p>
-        </div>
-      </div>
-      <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:ms-auto sm:justify-end">
-        <input ref={input} className="hidden" type="file" accept={item.accept} onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const inputElement = event.currentTarget; const file = inputElement.files?.[0]; if (file) void onUpload(item.key, file).finally(() => { inputElement.value = ""; }); }} />
-        <Button variant="subtle" className="h-9 min-h-0 shrink-0 whitespace-nowrap px-3 text-xs" onClick={() => input.current?.click()}>{asset?.url ? t("common.replace") : <><Upload size={13} />{t("common.upload")}</>}</Button>
-        {croppable && <Button variant="ghost" className="h-9 min-h-0 shrink-0 whitespace-nowrap px-3 text-xs" onClick={() => onCrop({ key: item.key as CropKey, asset })}><Crop size={13} />{t("common.crop")}</Button>}
-        {asset?.url && <button type="button" onClick={() => setAsset(item.key, { url: null, remove: true })} className="shrink-0 px-1 text-xs text-zinc-600 hover:text-red-300">{t("common.remove")}</button>}
-      </div>
+  const hasAsset = Boolean(asset?.url);
+  const previewClass = item.key === "cursor" ? "h-full w-full object-contain p-10 sm:p-12" : "h-full w-full object-cover";
+  return <div className="relative isolate flex h-[220px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/[.08] bg-white/[.025] px-5 text-center sm:h-[250px] sm:px-8">
+    {hasAsset ? <div className="absolute inset-0 -z-10"><img src={asset.url!} alt="" className={previewClass} /><div className="absolute inset-0 bg-black/50" /></div> : <item.icon size={34} className="mb-3 text-zinc-500" />}
+    <p className="text-xl font-medium text-white drop-shadow-lg">{item.title}</p>
+    {!hasAsset ? <p className="mt-2 text-xs text-zinc-500">{item.description}</p> : null}
+    <input ref={input} className="hidden" type="file" accept={item.accept} onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const inputElement = event.currentTarget; const file = inputElement.files?.[0]; if (file) void onUpload(item.key, file).finally(() => { inputElement.value = ""; }); }} />
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+      <Button variant="subtle" className="h-11 min-h-0 shrink-0 whitespace-nowrap px-5 backdrop-blur-md" onClick={() => input.current?.click()}><Upload size={15} />{hasAsset ? t("common.replace") : t("common.upload")}</Button>
+      {croppable && <Button variant="subtle" className="h-11 min-h-0 shrink-0 whitespace-nowrap px-4 backdrop-blur-md" onClick={() => onCrop({ key: item.key as CropKey, asset })}><Crop size={15} />{t("common.crop")}</Button>}
+      {hasAsset && <Button variant="subtle" className="h-11 min-h-0 shrink-0 whitespace-nowrap px-4 backdrop-blur-md" onClick={() => setAsset(item.key, { url: null, remove: true })}><Trash2 size={15} />{t("common.remove")}</Button>}
     </div>
-    {asset?.url && item.key === "backgroundVideo" && <video src={asset.url} muted loop autoPlay playsInline className="mt-3 h-24 w-full rounded-xl object-cover opacity-75" />}
+    {hasAsset ? <p className="absolute inset-x-4 bottom-3 truncate text-[11px] text-white/55">{isAnimatedAsset(asset) ? t("customize.animated") : asset.name || t("customize.uploaded")}</p> : null}
   </div>;
 }
-
 function LayoutsPanel({ config, setSettings, onManualMove, onResetFrame }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; onManualMove: () => void; onResetFrame: () => void }) {
   const t = useT();
   return (
@@ -247,7 +331,7 @@ function LayoutsPanel({ config, setSettings, onManualMove, onResetFrame }: { con
 
 function GeneralPanel({ config, setSettings, setProfile }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setProfile: (patch: Partial<typeof config.profile>) => void }) {
   const t = useT();
-  return <div><SectionTitle icon={SlidersHorizontal} title={t("customize.generalTitle")} description={t("customize.generalDesc")} /><div className="space-y-6"><div className="grid gap-3 sm:grid-cols-2"><div><FieldLabel>{t("customize.displayName")}</FieldLabel><TextInput value={config.profile.displayName} onChange={(value) => setProfile({ displayName: value })} /></div><div><FieldLabel>{t("customize.username")}</FieldLabel><TextInput value={`@${config.profile.username}`} onChange={() => undefined} disabled /></div></div><p className="-mt-3 text-xs text-zinc-600">{t("customize.usernameHint")}</p><div><FieldLabel>{t("customize.fieldDesc")}</FieldLabel><TextArea value={config.profile.description} onChange={(value) => setProfile({ description: value })} placeholder={t("customize.descriptionPh")} /><p className="mt-1 text-[11px] text-zinc-600">{t("customize.descriptionHint")}</p></div><div><FieldLabel>{t("customize.location")}</FieldLabel><TextInput value={config.profile.location} onChange={(value) => setProfile({ location: value })} placeholder={t("customize.locationPh")} /></div><div className="space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4"><ToggleRow icon={CircleDot} label={t("customize.gradient")} checked={config.settings.profileGradient} onChange={(checked) => setSettings({ profileGradient: checked })} onReset={() => setSettings({ profileGradient: true })} /><ToggleRow icon={Eye} label={t("customize.showViews")} checked={config.settings.showViews} onChange={(checked) => setSettings({ showViews: checked })} onReset={() => setSettings({ showViews: true })} /><ToggleRow icon={CalendarDays} label={t("customize.showJoin")} checked={Boolean(config.settings.showJoinDate)} onChange={(checked) => setSettings({ showJoinDate: checked })} onReset={() => setSettings({ showJoinDate: false })} /><ToggleRow icon={Shield} label={t("customize.showBadges")} checked={config.settings.showBadges} onChange={(checked) => setSettings({ showBadges: checked })} onReset={() => setSettings({ showBadges: true })} /><ToggleRow icon={UsersRound} label={t("customize.showSocials")} checked={config.settings.showSocials} onChange={(checked) => setSettings({ showSocials: checked })} onReset={() => setSettings({ showSocials: true })} /><ToggleRow label={t("customize.showDiscordStatus", undefined, "Show Discord status")} checked={config.settings.showDiscordStatus !== false} onChange={(checked) => setSettings({ showDiscordStatus: checked })} onReset={() => setSettings({ showDiscordStatus: true })} /><ToggleRow icon={Laptop} label={t("customize.entryScreen")} checked={config.settings.entryScreen} onChange={(checked) => setSettings({ entryScreen: checked })} onReset={() => setSettings({ entryScreen: true })} /></div><div><FieldLabel>{t("customize.iconAlign")}</FieldLabel><div className="grid grid-cols-3 gap-2">{([{ id: "left", label: t("common.left"), icon: AlignLeft }, { id: "center", label: t("common.center"), icon: AlignCenter }, { id: "right", label: t("common.right"), icon: AlignRight }] as Array<{ id: SocialAlign; label: string; icon: typeof AlignLeft }>).map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSettings({ socialAlign: id })} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs ${(config.settings.socialAlign || "center") === id ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}><Icon size={14} />{label}</button>)}</div></div><div className="flex justify-end"><ResetButton label={t("customize.iconAlign")} onClick={() => setSettings({ socialAlign: "center" })} /></div><div><FieldLabel>{t("customize.entryText")}</FieldLabel><TextInput value={config.settings.entryText} onChange={(value) => setSettings({ entryText: value })} /><p className="mt-1 text-[11px] text-zinc-600">{t("customize.entryHint")}</p></div></div></div>;
+  return <div><SectionTitle icon={SlidersHorizontal} title={t("customize.generalTitle")} description={t("customize.generalDesc")} /><div className="space-y-6"><div className="grid gap-3 sm:grid-cols-2"><div><FieldLabel>{t("customize.displayName")}</FieldLabel><TextInput value={config.profile.displayName} onChange={(value) => setProfile({ displayName: value })} /></div><div><FieldLabel>{t("customize.username")}</FieldLabel><TextInput value={`@${config.profile.username}`} onChange={() => undefined} disabled /></div></div><p className="-mt-3 text-xs text-zinc-600">{t("customize.usernameHint")}</p><div><FieldLabel>{t("customize.fieldDesc")}</FieldLabel><TextArea value={config.profile.description} onChange={(value) => setProfile({ description: value })} placeholder={t("customize.descriptionPh")} /><p className="mt-1 text-[11px] text-zinc-600">{t("customize.descriptionHint")}</p></div><div><FieldLabel>{t("customize.location")}</FieldLabel><TextInput value={config.profile.location} onChange={(value) => setProfile({ location: value })} placeholder={t("customize.locationPh")} /></div><div className="space-y-1 divide-y divide-white/[.06] rounded-2xl border border-white/[.07] bg-white/[.02] px-4"><ToggleRow icon={CircleDot} label={t("customize.gradient")} checked={config.settings.profileGradient} onChange={(checked) => setSettings({ profileGradient: checked })} onReset={() => setSettings({ profileGradient: true })} /><ToggleRow icon={Eye} label={t("customize.showViews")} checked={config.settings.showViews} onChange={(checked) => setSettings({ showViews: checked })} onReset={() => setSettings({ showViews: true })} /><ToggleRow icon={CalendarDays} label={t("customize.showJoin")} checked={Boolean(config.settings.showJoinDate)} onChange={(checked) => setSettings({ showJoinDate: checked })} onReset={() => setSettings({ showJoinDate: false })} /><ToggleRow icon={Shield} label={t("customize.showBadges")} checked={config.settings.showBadges} onChange={(checked) => setSettings({ showBadges: checked })} onReset={() => setSettings({ showBadges: true })} /><ToggleRow icon={UsersRound} label={t("customize.showSocials")} checked={config.settings.showSocials} onChange={(checked) => setSettings({ showSocials: checked })} onReset={() => setSettings({ showSocials: true })} /><ToggleRow icon={Eye} label="Show username" checked={config.settings.showUsername !== false} onChange={(checked) => setSettings({ showUsername: checked })} onReset={() => setSettings({ showUsername: true })} /><ToggleRow label={t("customize.showDiscordStatus", undefined, "Show Discord status")} checked={config.settings.showDiscordStatus !== false} onChange={(checked) => setSettings({ showDiscordStatus: checked })} onReset={() => setSettings({ showDiscordStatus: true })} /><ToggleRow icon={Laptop} label={t("customize.entryScreen")} checked={config.settings.entryScreen} onChange={(checked) => setSettings({ entryScreen: checked })} onReset={() => setSettings({ entryScreen: true })} /></div><div><FieldLabel>{t("customize.iconAlign")}</FieldLabel><div className="grid grid-cols-3 gap-2">{([{ id: "left", label: t("common.left"), icon: AlignLeft }, { id: "center", label: t("common.center"), icon: AlignCenter }, { id: "right", label: t("common.right"), icon: AlignRight }] as Array<{ id: SocialAlign; label: string; icon: typeof AlignLeft }>).map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSettings({ socialAlign: id })} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs ${(config.settings.socialAlign || "center") === id ? "border-[#e11d48]/50 bg-[#e11d48]/10 text-white" : "border-white/[.08] text-zinc-500"}`}><Icon size={14} />{label}</button>)}</div></div><div className="flex justify-end"><ResetButton label={t("customize.iconAlign")} onClick={() => setSettings({ socialAlign: "center" })} /></div><div><FieldLabel>{t("customize.entryText")}</FieldLabel><TextInput value={config.settings.entryText} onChange={(value) => setSettings({ entryText: value })} /><p className="mt-1 text-[11px] text-zinc-600">{t("customize.entryHint")}</p></div></div></div>;
 }
 
 function ColorsPanel({ config, setSettings }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void }) {
@@ -289,9 +373,9 @@ function UsernameEffectPicker({ label, value, onChange, name, usernameColor, eff
         <div className="flex min-h-20 items-center justify-center overflow-hidden rounded-xl border border-white/[.06] bg-black/20 px-4 py-5">
           <UsernameEffectPreview effect={value} name={name} usernameColor={usernameColor} effectColor={effectColor} large />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
           {USERNAME_EFFECTS.map((effect) => (
-            <button key={effect} type="button" onClick={() => onChange(effect)} aria-pressed={value === effect} className={"flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border px-2 py-3 transition " + (value === effect ? "border-[#e11d48]/60 bg-[#e11d48]/10" : "border-white/[.07] bg-white/[.02] hover:border-white/20 hover:bg-white/[.05]")}>
+            <button key={effect} type="button" onClick={() => onChange(effect)} aria-pressed={value === effect} className={"flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-2 py-3 transition " + (value === effect ? "border-[#e11d48]/60 bg-[#e11d48]/10" : "border-white/[.07] bg-white/[.02] hover:border-white/20 hover:bg-white/[.05]")}>
               <UsernameEffectPreview effect={effect} name={name} usernameColor={usernameColor} effectColor={effectColor} />
               <span className={"text-[10px] uppercase tracking-[.12em] " + (value === effect ? "text-[#fecdd3]" : "text-zinc-600")}>{effect}</span>
             </button>
@@ -302,7 +386,25 @@ function UsernameEffectPicker({ label, value, onChange, name, usernameColor, eff
   );
 }
 
-function EffectsPanel({ config, setSettings, setAsset, onUpload }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void> }) {
+function BackgroundEffectPicker({ value, onChange }: { value: BackgroundEffect; onChange: (value: BackgroundEffect) => void }) {
+  const selected = BACKGROUND_EFFECTS.find((item) => item.value === value) || BACKGROUND_EFFECTS[0];
+  return <div>
+    <FieldLabel>Background effect</FieldLabel>
+    <div className="relative z-20 rounded-2xl border border-white/[.07] bg-white/[.02]">
+      <div className="relative isolate h-32 overflow-hidden bg-[radial-gradient(circle_at_30%_20%,rgba(225,29,72,.16),transparent_42%),#09090d]">
+        <BackgroundEffectLayer effect={value} className="z-0" />
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-8">
+          <strong className="text-sm text-white">{selected.label}</strong>
+          <p className="mt-1 text-xs text-zinc-400">{selected.description}</p>
+        </div>
+      </div>
+      <div className="p-3">
+        <SelectBox value={value} options={BACKGROUND_EFFECTS.map((item) => item.value)} onChange={(next) => onChange(next as BackgroundEffect)} onReset={() => onChange("None")} />
+      </div>
+    </div>
+  </div>;
+}
+function EffectsPanel({ config, setSettings, setAsset, onUpload, showBackgroundEffect = true }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void>; showBackgroundEffect?: boolean }) {
   const t = useT();
   const defaultFonts = useDefaultFonts();
   const { enabled } = useFeatureFlags();
@@ -315,14 +417,14 @@ function EffectsPanel({ config, setSettings, setAsset, onUpload }: { config: Ret
     <div>
       <SectionTitle icon={Sparkles} title={t("customize.effectsTitle")} description={t("customize.effectsDesc")} />
       <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-3">
-        <div><FieldLabel>{t("customize.bgEffect")}</FieldLabel><SelectBox value={config.settings.backgroundEffect} options={["None", "Rain", "Raindrops", "Snow", "Snowflakes", "Stars", "Ocean waves", "Old TV", "Sun effect", "Paper texture"]} onChange={(value) => setSettings({ backgroundEffect: value as typeof config.settings.backgroundEffect })} onReset={() => setSettings({ backgroundEffect: "None" })} /></div>
-        <div className="col-span-2"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "Glow" })} /></div>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+        {showBackgroundEffect ? <div className="min-w-0 sm:col-span-2"><BackgroundEffectPicker value={config.settings.backgroundEffect || "None"} onChange={(value) => setSettings({ backgroundEffect: value })} /></div> : null}
+        <div className="min-w-0 sm:col-span-2"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "Glow" })} /></div>
         <div><FieldLabel>{t("customize.pageEnter")}</FieldLabel><SelectBox value={config.settings.pageEnter || "Fade"} options={[...PAGE_ENTERS]} onChange={(value) => setSettings({ pageEnter: value as PageEnter })} onReset={() => setSettings({ pageEnter: "Fade" })} /></div>
         <div><FieldLabel>{t("customize.font")}</FieldLabel><SelectBox value={selectedFont?.name || "Inter"} options={defaultFonts.map((font) => font.name)} onChange={(value) => { const next = defaultFonts.find((font) => font.name === value); if (next) setSettings({ profileFont: next.id }); }} onReset={() => setSettings({ profileFont: "Inter" })} /></div>
 
         </div>
-        {config.settings.usernameEffect !== "Rainbow" && <div className="grid grid-cols-2 gap-3">
+        {config.settings.usernameEffect !== "Rainbow" && <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <div><FieldLabel>{t("customize.usernameColor", undefined, "Username color")}</FieldLabel><div className="flex gap-2"><input aria-label="Username color" type="color" value={config.settings.usernameColor || "#ffffff"} onChange={(event) => setSettings({ usernameColor: event.target.value })} className="h-10 w-11 cursor-pointer rounded-xl border-0 bg-transparent p-0" /><TextInput value={config.settings.usernameColor || "#ffffff"} onChange={(value) => setSettings({ usernameColor: value })} /></div></div>
           <div><FieldLabel>{t("customize.usernameEffectColor", undefined, "Effect color")}</FieldLabel><div className="flex gap-2"><input aria-label="Username effect color" type="color" value={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onChange={(event) => setSettings({ usernameEffectColor: event.target.value })} className="h-10 w-11 cursor-pointer rounded-xl border-0 bg-transparent p-0" /><TextInput value={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onChange={(value) => setSettings({ usernameEffectColor: value })} /></div></div>
         </div>}

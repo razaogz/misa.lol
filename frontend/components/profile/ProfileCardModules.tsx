@@ -1,8 +1,9 @@
 "use client";
 
-import { AtSign, BadgeCheck, Sparkles, Zap } from "lucide-react";
+import { BadgeCheck, Crown, MapPin, Sparkles, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProfileMusicPlayer, ProfileVideoAudioControl } from "@/components/profile/ProfileMusicPlayer";
+import { BadgeArtwork } from "@/components/badges/BadgeArtwork";
 import { ProfileSections } from "@/components/profile/ProfileSections";
 import { ProfileWidgets } from "@/components/profile/ProfileWidgets";
 import { SocialLinks } from "@/components/socials/SocialLinks";
@@ -71,12 +72,13 @@ export function ProfileIdentity({ config, align = "center" }: { config: ProfileC
   const guild = useCardDiscord(config)?.guildTag;
   return (
     <div style={{ textAlign: align }}>
-      <div className={`flex items-center gap-2 ${justify}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${justify}`}>
         {config.settings.showDisplayName !== false && <ProfileDisplayName config={config} />}
         {guild?.tag && guild.badge && <span className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white/90"><img src={guild.badge} alt="" className="h-4 w-4 rounded-sm object-cover" />{guild.tag}</span>}
         {hasVerifiedBadge(config.badges) && <span className="text-[#fb7185]" title="Verified"><BadgeCheck size={19} fill="currentColor" strokeWidth={1.4} /></span>}
+        <ProfileBadges config={config} className="" />
       </div>
-      <p className="mt-1 text-xs text-white/35">@{config.profile.username}</p>
+      {config.settings.showUsername !== false ? <p className="mt-1 text-xs text-white/35">@{config.profile.username}</p> : null}
     </div>
   );
 }
@@ -182,25 +184,26 @@ export function ProfileBio({ config, align = "center" }: { config: ProfileConfig
   return (
     <>
       {config.profile.description && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-white/65">{config.settings.bioTypewriter ? typed : config.profile.description}</p>}
-      {config.profile.location && <p className={`mt-3 flex items-center gap-1.5 text-xs text-white/40 ${justify}`}><AtSign size={12} />{config.profile.location}</p>}
+      {config.profile.location && <p className={`mt-3 flex items-center gap-1.5 text-xs text-white/40 ${justify}`}><MapPin size={12} />{config.profile.location}</p>}
     </>
   );
 }
 
-export function ProfileBadges({ config, className = "mt-6" }: { config: ProfileConfig; className?: string }) {
-  const visible = config.badges.filter((badge) => badge.owned && badge.enabled);
-  if (!config.settings.showBadges || visible.length === 0) return null;
+export function ProfileBadges({ config, className = "" }: { config: ProfileConfig; className?: string }) {
+  const visible = config.settings.showBadges !== false ? config.badges.filter((badge) => badge.owned && badge.enabled).slice(0, 5) : [];
+  if (!config.rank && visible.length === 0) return null;
   const justify = config.settings.socialAlign === "left" ? "justify-start" : config.settings.socialAlign === "right" ? "justify-end" : "justify-center";
   return (
-    <div className={`${className} flex flex-wrap gap-2 ${justify}`}>
+    <div className={`${className} inline-flex flex-wrap items-center gap-1.5 ${justify}`}>
+      {config.rank && <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[.07] px-3 text-[11px] font-medium" style={{ color: config.rank.color }} title={config.rank.description || config.rank.name}><Crown size={15} />{config.rank.name}</span>}
       {visible.map((badge) => (
         <span
           key={badge.id}
           title={badge.name}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[.07] text-xs"
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[.07] text-sm"
           style={badgePaint(badge, config.settings)}
         >
-          <BadgeIcon name={badge.name} icon={badge.icon} />
+          <BadgeIcon badge={badge} />
         </span>
       ))}
     </div>
@@ -221,7 +224,7 @@ export function ProfileMeta({ config, align = "center" }: { config: ProfileConfi
   );
 }
 
-function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
+function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfig; compact?: boolean }) {
   const discord = useCardDiscord(config);
   const src = discord?.accountAvatar || undefined;
   if (!src && !discord?.status) return null;
@@ -232,29 +235,12 @@ function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
   const discordName = (discord?.globalName || discord?.username || "").trim();
   const statusLabel = status ? DISCORD_STATUS_LABELS[status] : "";
   return (
-    <div
-      className={`relative flex min-h-0 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl border px-2 pb-3 pt-8 ${swap ? "" : "border-white/[.1] bg-black/25"}`}
-      style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}
-    >
-      <p className={`absolute left-1 right-1 top-2.5 text-center text-[10px] font-semibold leading-tight tracking-wide ${swap ? "" : "text-white/80"}`}>Discord Status</p>
-      <div className="flex flex-col items-center gap-1.5">
-        <div className="relative h-11 w-11 shrink-0">
-          {src ? (
-            <img src={src} alt="" className="h-full w-full rounded-full object-cover" />
-          ) : (
-            <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
-              {(discordName || config.profile.displayName).slice(0, 1)}
-            </div>
-          )}
-          {status && (
-            <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4">
-              <DiscordStatusGlyph status={status} className="block h-full w-full" />
-            </span>
-          )}
-        </div>
-        {discordName ? <p className={`max-w-full truncate text-center text-[11px] font-semibold leading-tight ${swap ? "" : "text-white"}`}>{discordName}</p> : null}
-        {statusLabel ? <p className={`max-w-full text-center text-[9px] leading-tight ${swap ? "opacity-70" : "text-white/55"}`}>{statusLabel}</p> : null}
+    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 ${compact ? "flex-1 sm:flex-[0_0_8.5rem]" : "flex-1"} ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
+      <div className="relative h-12 w-12 shrink-0">
+        {src ? <img src={src} alt="" className="h-full w-full rounded-full object-cover" /> : <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>{(discordName || config.profile.displayName).slice(0, 1)}</div>}
+        {status ? <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4"><DiscordStatusGlyph status={status} className="block h-full w-full" /></span> : null}
       </div>
+      <div className="min-w-0 flex-1 text-left">{discordName ? <p className={`truncate text-sm font-semibold ${swap ? "" : "text-white"}`}>{discordName}</p> : null}{statusLabel ? <p className={`mt-0.5 truncate text-[11px] ${swap ? "opacity-70" : "text-white/55"}`}>{statusLabel}</p> : null}</div>
     </div>
   );
 }
@@ -267,23 +253,22 @@ export function ProfileModules({ config, preview, align = "center" }: { config: 
   const audio = (
     <>
       {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
-      {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} />}
+      {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile} />}
     </>
   );
   return (
     <div style={{ textAlign: align }}>
       <ProfileBio config={config} align={align} />
-      <ProfileBadges config={config} />
       <SocialLinks config={config} />
       <ProfileWidgets config={config} preview={preview} />
       <ProfileSections config={config} preview={preview} />
       {showDiscordTile && (hasPlaylist || hasVideoAudio) ? (
-        <div className="mt-6 flex items-stretch gap-2.5">
-          <DiscordPresenceTile config={config} />
+        <div className="mt-6 flex min-w-0 flex-col items-stretch gap-2.5 sm:flex-row">
+          <DiscordPresenceTile config={config} compact />
           <div className="min-w-0 flex-1 [&>div]:mt-0">{audio}</div>
         </div>
       ) : showDiscordTile ? (
-        <div className="mt-6 flex items-stretch gap-2.5">
+        <div className="mt-6 flex min-w-0 flex-col items-stretch gap-2.5 sm:flex-row">
           <DiscordPresenceTile config={config} />
         </div>
       ) : (
@@ -298,9 +283,9 @@ function profileLayoutIsSleek(config: ProfileConfig) {
   return config.settings.layout === "Sleek";
 }
 
-function BadgeIcon({ name, icon }: { name: string; icon?: string }) {
-  if (icon) return <img src={icon} alt="" className="h-3.5 w-3.5 object-contain" />;
-  return name === "Premium" ? <Sparkles size={14} fill="currentColor" /> : name === "OG" ? <Zap size={14} fill="currentColor" /> : <BadgeCheck size={15} />;
+function BadgeIcon({ badge }: { badge: ProfileConfig["badges"][number] }) {
+  if (badge.previewUrl || badge.icon) return <BadgeArtwork badge={badge} className="h-6 w-6 object-contain" />;
+  return badge.name === "Premium" ? <Sparkles size={22} fill="currentColor" /> : badge.name === "OG" ? <Zap size={22} fill="currentColor" /> : <BadgeCheck size={22} />;
 }
 
 function EyeIcon() {

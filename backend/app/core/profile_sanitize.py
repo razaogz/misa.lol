@@ -34,29 +34,17 @@ WIDGET_ID = re.compile(r"^[a-zA-Z0-9_-]{2,40}$")
 WIDGET_HANDLE = re.compile(r"^[A-Za-z0-9_.-]{2,64}$")
 WIDGET_INVITE = re.compile(r"^[A-Za-z0-9-]{2,32}$")
 WIDGET_CITY = re.compile(r"^[A-Za-z0-9 .,'-]{2,80}$")
-OFFICIAL_BADGES = (
-    {"id": "verified", "name": "Verified", "description": "Verified creator", "color": "#8f8dff"},
-    {"id": "premium", "name": "Premium", "description": "Premium member", "color": "#d9a4ff"},
-    {"id": "staff", "name": "Staff", "description": "Misa.lol staff", "color": "#ff9fcf"},
-    {"id": "helper", "name": "Helper", "description": "Community helper", "color": "#76d9c8"},
-    {"id": "donor", "name": "Donor", "description": "Generous supporter", "color": "#ffcb71"},
-    {"id": "gifter", "name": "Gifter", "description": "Community gifter", "color": "#ff8f9d"},
-    {"id": "og", "name": "OG", "description": "Original member", "color": "#98adff"},
-    {"id": "server-booster", "name": "Server Booster", "description": "Server booster", "color": "#f69bd7"},
-    {"id": "bug-hunter", "name": "Bug Hunter", "description": "Bug hunter", "color": "#bbd968"},
-    {"id": "winner", "name": "Winner", "description": "Event winner", "color": "#ffcf76"},
-    {"id": "second-place", "name": "Second Place", "description": "Second place", "color": "#bbc6d8"},
-    {"id": "third-place", "name": "Third Place", "description": "Third place", "color": "#c69470"},
-)
 MAX_ICON = 1_100_000
-MAX_ASSET = 12_000_000
-# Data URLs expand during base64 encoding; allow headroom for a 20 MB video.
-MAX_VIDEO_ASSET = 28_000_000
+# R2 keeps the original bytes; these limits only protect the API from abusive uploads.
+MAX_ASSET = 40_000_000
+# Legacy data URLs need base64 headroom. New uploads are stored as untouched R2 objects.
+MAX_VIDEO_ASSET = 145_000_000
 MAX_FONT = 2_800_000
 KEEP_ASSET_URL = "misa:keep"
 REMOVE_ASSET_URL = "misa:remove"
-ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
-ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
+ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
+ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
+BACKGROUND_EFFECTS = {"None", "Snowflakes", "Snow", "Sakura", "Rain", "Fireflies"}
 USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave", "Shadow"}
 PROFILE_FONTS = {"Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"}
 PAGE_ENTERS = {"None", "Fade", "Unfold", "Pop"}
@@ -66,6 +54,7 @@ ASSET_KIND_TYPES = {
     "background": "image",
     "cursor": "image",
     "backgroundVideo": "video",
+    "backgroundEffectVideo": "video",
     "audio": "audio",
     "audioArtwork": "image",
     "ogImage": "image",
@@ -78,6 +67,7 @@ ASSET_KIND_TYPES = {
 def sanitize_profile_config(payload: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(payload)
     cleaned.pop("discord", None)
+    cleaned.pop("rank", None)
     settings = cleaned.get("settings")
     cleaned["settings"] = _sanitize_settings(settings if isinstance(settings, dict) else {})
     profile = cleaned.get("profile")
@@ -104,7 +94,7 @@ def sanitize_profile_config(payload: dict[str, Any]) -> dict[str, Any]:
             if len(next_socials) >= MAX_SOCIALS:
                 break
         cleaned["socials"] = next_socials
-    cleaned["badges"] = _fill_badge_catalog(_sanitize_badges(cleaned.get("badges")))
+    cleaned["badges"] = _sanitize_badges(cleaned.get("badges"))
     cleaned["widgets"] = sanitize_widgets(cleaned.get("widgets"))
     cleaned["sections"] = sanitize_sections(cleaned.get("sections"))
     return cleaned
@@ -135,7 +125,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     ):
         value = cleaned.get(key)
         cleaned[key] = value if isinstance(value, str) and HEX_COLOR.match(value) else default
-    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in {"None", "Rain", "Raindrops", "Snow", "Snowflakes", "Stars", "Ocean waves", "Old TV", "Sun effect", "Paper texture"} else "None"
+    cleaned["backgroundEffect"] = cleaned.get("backgroundEffect") if cleaned.get("backgroundEffect") in BACKGROUND_EFFECTS else "None"
     cleaned["usernameEffect"] = cleaned.get("usernameEffect") if cleaned.get("usernameEffect") in USERNAME_EFFECTS else "Glow"
     for key, default in (
         ("usernameGlow", True),
@@ -147,6 +137,7 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
         ("showSocials", True),
         ("showJoinDate", False),
         ("showDiscordStatus", True),
+        ("showUsername", True),
         ("showProfileFrame", True),
         ("showAvatar", True),
         ("showAvatarBorder", True),
@@ -195,12 +186,13 @@ def _sanitize_assets(assets: dict[str, Any]) -> dict[str, Any]:
         ("customFont", "font"),
         ("clickSound", "audio"),
         ("backgroundVideo", "video"),
+        ("backgroundEffectVideo", "video"),
         ("audio", "audio"),
         ("audioArtwork", "image"),
     ):
         item = cleaned.get(key)
         if not isinstance(item, dict):
-            if key in {"audioArtwork", "ogImage", "favicon", "customFont", "clickSound"}:
+            if key in {"audioArtwork", "ogImage", "favicon", "customFont", "clickSound", "backgroundEffectVideo"}:
                 cleaned[key] = {"url": None, "name": "", "type": ""}
             continue
         cleaned[key] = {
@@ -478,87 +470,42 @@ def _sanitize_badges(raw: Any) -> list[dict[str, Any]]:
     return cleaned
 
 
-def _fill_badge_catalog(badges: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen = {item["id"] for item in badges}
-    filled = list(badges)
-    for item in OFFICIAL_BADGES:
-        if item["id"] in seen:
-            continue
-        filled.append({
-            "id": item["id"],
-            "name": item["name"],
-            "description": item["description"],
-            "owned": False,
-            "enabled": False,
-            "color": item["color"],
-            "monochrome": False,
-            "icon": "",
-        })
-        seen.add(item["id"])
-        if len(filled) >= MAX_BADGES:
-            break
-    return filled
-
-
 def apply_badge_ownership(
     config: dict[str, Any],
     stored: dict[str, Any] | None = None,
     grants: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    incoming = _sanitize_badges(config.get("badges"))
-    stored_owned = {item["id"] for item in _sanitize_badges((stored or {}).get("badges")) if item["owned"]}
-    grant_items = [item for item in grants or [] if isinstance(item, dict) and item.get("id")]
-    grant_owned = {str(item["id"]) for item in grant_items if item.get("enabled", True)}
-    allowed = stored_owned | grant_owned
-    prefs = {item["id"]: item for item in incoming}
-    catalog = {item["id"]: dict(item) for item in OFFICIAL_BADGES}
-    for item in incoming:
-        catalog.setdefault(item["id"], dict(item))
-    for item in grant_items:
-        badge_id = str(item["id"])
-        catalog.setdefault(badge_id, {
-            "id": badge_id,
-            "name": str(item.get("name") or badge_id)[:40],
-            "description": str(item.get("description") or "")[:160],
-            "color": css_hex_color(item.get("color"), "#d8d3ff"),
-        })
-        if is_safe_social_icon(str(item.get("icon") or "")):
-            catalog[badge_id]["icon"] = item["icon"]
-    ordered: list[str] = []
-    for item in incoming:
-        if item["id"] in allowed and item["id"] not in ordered:
-            ordered.append(item["id"])
-    for badge_id in allowed:
-        if badge_id not in ordered:
-            ordered.append(badge_id)
+    """Replace client badge data with authoritative active awards and definitions."""
+    del stored
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for badge_id in ordered:
+    for item in grants or []:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        badge_id = str(item["id"])
         if badge_id in seen:
             continue
         seen.add(badge_id)
-        base = catalog.get(badge_id) or {}
-        pref = prefs.get(badge_id) or {}
+        preview_url = str(item.get("preview_url") or "")
+        asset_url = str(item.get("asset_url") or "")
         result.append({
             "id": badge_id,
-            "name": str(pref.get("name") or base.get("name") or "Badge")[:40],
-            "description": str(pref.get("description") or base.get("description") or "")[:160],
+            "name": str(item.get("name") or badge_id)[:40],
+            "description": str(item.get("description") or "")[:160],
             "owned": True,
-            "enabled": bool(pref.get("enabled")) if pref.get("owned") else True,
-            "color": css_hex_color(pref.get("color") or base.get("color"), "#d8d3ff"),
-            "monochrome": bool(pref.get("monochrome")),
-            "icon": public_badge_icon(badge_id, base.get("icon") or pref.get("icon")),
+            "enabled": bool(item.get("enabled")),
+            "color": css_hex_color(item.get("color"), "#d8d3ff"),
+            "monochrome": False,
+            "icon": public_badge_icon(badge_id, preview_url or item.get("icon")),
+            "previewUrl": public_badge_icon_path(badge_id),
+            "assetUrl": asset_url if asset_url.startswith("https://") else "",
+            "animated": bool(item.get("animated")),
+            "rarity": str(item.get("rarity") or "COMMON")[:32],
         })
-    leftover = _fill_badge_catalog(result)
-    seen.update(item["id"] for item in leftover)
-    for item in incoming:
-        if item["id"] in seen:
-            continue
-        leftover.append({**item, "owned": False, "enabled": False})
-        seen.add(item["id"])
-    config["badges"] = leftover[:MAX_BADGES]
+        if len(result) >= MAX_BADGES:
+            break
+    config["badges"] = result
     return config
-
 
 def _sanitize_social(item: dict[str, Any], index: int) -> dict[str, Any]:
     platform = str(item.get("platform") or "Custom URL")[:32]

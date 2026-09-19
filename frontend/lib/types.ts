@@ -6,7 +6,7 @@ export type SocialPlatform =
   | "Patreon" | "Bitcoin" | "Ethereum" | "Litecoin" | "Solana" | "Email" | "Custom URL";
 
 export type BadgeName = "Verified" | "Premium" | "Staff" | "Helper" | "Donor" | "Gifter" | "OG" | "Server Booster" | "Bug Hunter" | "Winner" | "Second Place" | "Third Place";
-export type BackgroundEffect = "None" | "Rain" | "Raindrops" | "Snow" | "Snowflakes" | "Stars" | "Ocean waves" | "Old TV" | "Sun effect" | "Paper texture";
+export type BackgroundEffect = "None" | "Snowflakes" | "Snow" | "Sakura" | "Rain" | "Fireflies";
 export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Wave" | "Shadow";
 export type SocialAlign = "left" | "center" | "right";
 export type SocialAction = "open" | "copy";
@@ -88,6 +88,10 @@ export interface ProfileBadge {
   color: string;
   monochrome?: boolean;
   icon?: string;
+  previewUrl?: string;
+  assetUrl?: string;
+  animated?: boolean;
+  rarity?: string;
 }
 
 export interface ProfileConfig {
@@ -118,6 +122,7 @@ export interface ProfileConfig {
     showSocials: boolean;
     showJoinDate?: boolean;
     showDiscordStatus?: boolean;
+    showUsername?: boolean;
     socialAlign?: SocialAlign;
     cardAlign?: SocialAlign;
     showProfileFrame?: boolean;
@@ -165,6 +170,7 @@ export interface ProfileConfig {
     banner?: ProfileAsset;
     background: ProfileAsset;
     backgroundVideo: ProfileAsset;
+    backgroundEffectVideo?: ProfileAsset;
     audio: ProfileAsset;
     audioArtwork: ProfileAsset;
     audioTitle: string;
@@ -182,6 +188,14 @@ export interface ProfileConfig {
   badges: ProfileBadge[];
   widgets: ProfileWidget[];
   sections: ProfileSection[];
+  rank?: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    level: number;
+    color: string;
+  } | null;
   discord?: {
     avatar?: string | null;
     accountAvatar?: string | null;

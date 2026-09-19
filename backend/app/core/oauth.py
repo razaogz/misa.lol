@@ -31,9 +31,9 @@ def _state_key(state: str) -> str:
     return f"oauth:{state}"
 
 
-async def save_oauth_state(provider: str, next_path: str, nonce: str = "") -> str:
+async def save_oauth_state(provider: str, next_path: str, nonce: str = "", mode: str = "login") -> str:
     state = secrets.token_urlsafe(32)
-    payload = {"provider": provider, "next": next_path, "nonce": nonce}
+    payload = {"provider": provider, "next": next_path, "nonce": nonce, "mode": "link" if mode == "link" else "login"}
     await get_dragonfly().set(_state_key(state), json.dumps(payload), ex=600)
     return state
 

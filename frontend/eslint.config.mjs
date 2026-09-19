@@ -11,6 +11,6 @@ export default defineConfig([
       parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } },
     },
     plugins: { "@next/next": nextPlugin },
-    rules: nextPlugin.configs.recommended.rules,
+    rules: { ...nextPlugin.configs.recommended.rules, "@next/next/no-img-element": "off" },
   },
 ]);

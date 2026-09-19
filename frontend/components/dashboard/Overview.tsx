@@ -7,9 +7,26 @@ import { useDiscordLive } from "@/lib/discord-live";
 import { useFeatureFlags } from "@/lib/feature-flags";
 import { useI18n } from "@/lib/i18n";
 import { useProfile } from "@/lib/profile-store";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShareCard } from "@/components/sharing/ShareCard";
 import { Button, MiniBar, PageHeader, SectionTitle, StatusDot } from "@/components/ui";
+
+function oauthErrorMessage(code: string | null) {
+  if (!code) return "";
+  if (code === "google_not_configured") return "Google connection is not configured on the server.";
+  if (code === "discord_not_configured") return "Discord connection is not configured on the server.";
+  if (code === "already_linked") return "That provider account is already linked to another Misa account.";
+  if (code === "email_taken" || code === "account_exists") return "That provider email belongs to another Misa account.";
+  if (code === "not_authenticated") return "Your session expired. Sign in again before connecting an account.";
+  if (code === "oauth_denied") return "The provider connection was cancelled.";
+  return "The provider connection failed. Verify the provider credentials and callback URL.";
+}
+
+function ProviderIcon({ provider }: { provider: "google" | "discord" }) {
+  // Reuse the provider artwork served by the backend for the Security page.
+
+  return <img src={`/icons/${provider}.webp`} alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-xl object-cover" />;
+}
 
 export function Overview() {
   const { config } = useProfile();
@@ -45,6 +62,10 @@ function ConnectionsCard() {
   const { t } = useI18n();
   const discord = useDiscordLive();
   const { enabled } = useFeatureFlags();
+  const [oauthError, setOauthError] = useState("");
+  useEffect(() => {
+    setOauthError(oauthErrorMessage(new URLSearchParams(window.location.search).get("error")));
+  }, []);
   const discordOn = Boolean(user?.providers?.discord);
   const discordSubtitle = !discordOn
     ? t("overview.discordHint")
@@ -53,15 +74,16 @@ function ConnectionsCard() {
       : discord?.state?.username
         ? t("settings.discordAs", { name: discord.state.username })
         : t("common.connected");
-  const connectDiscord = () => window.location.assign("/api/v1/auth/discord?next=/dashboard");
+  const connectDiscord = () => window.location.assign("/api/v1/auth/discord?next=/dashboard&mode=link");
 
   return (
     <section>
       <SectionTitle icon={Cloud} title={t("overview.connections")} description={t("overview.connectionsDesc")} />
+      {oauthError && <p role="alert" className="mb-3 rounded-xl border border-red-400/20 bg-red-400/[.05] px-3 py-2.5 text-xs text-red-200">{oauthError}</p>}
       <div className="surface divide-y divide-white/[.06] rounded-2xl">
         {enabled("integrations.discord") && (
           <div className="flex items-center gap-3 p-4">
-            <span className="icon-glass flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold" style={{ color: "#7289da", background: "#7289da16" }}>D</span>
+            <ProviderIcon provider="discord" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-zinc-200">Discord</span>
               <span className="mt-1 block truncate text-xs text-zinc-600">{discordSubtitle}</span>
@@ -76,7 +98,7 @@ function ConnectionsCard() {
           </div>
         )}
         <div className="flex items-center gap-3 p-4">
-          <span className="icon-glass flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold" style={{ color: "#f1a37c", background: "#f1a37c16" }}>G</span>
+          <ProviderIcon provider="google" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium text-zinc-200">Google</span>
             <span className="mt-1 block truncate text-xs text-zinc-600">{user?.providers?.google ? (user.email || t("common.connected")) : t("common.notConnected")}</span>
@@ -84,7 +106,7 @@ function ConnectionsCard() {
           {user?.providers?.google ? (
             <span className="flex items-center gap-1.5 text-xs text-emerald-400"><StatusDot />{t("common.connected")}</span>
           ) : (
-            <Button variant="ghost" className="h-8 min-h-0 px-2.5 text-xs" onClick={() => window.location.assign("/api/v1/auth/google?next=/dashboard")}>{t("common.connect")}</Button>
+            <Button variant="ghost" className="h-8 min-h-0 px-2.5 text-xs" onClick={() => window.location.assign("/api/v1/auth/google?next=/dashboard&mode=link")}>{t("common.connect")}</Button>
           )}
         </div>
       </div>
