@@ -170,6 +170,8 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
 
   const entry = document.getElementById("entry");
   const card = document.getElementById("profile-card");
+  const mediaDock = document.querySelector(".media-dock");
+  const profileMeta = document.querySelector(".meta");
 
   if (player) {
     player.addEventListener("click", keepOnCard);
@@ -302,11 +304,15 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
   const reveal = () => {
     if (!card) return;
     card.hidden = false;
+    if (mediaDock) mediaDock.hidden = false;
+    if (profileMeta) profileMeta.hidden = false;
     if (!reduced && pageEnter !== "None") card.classList.add("enter-" + pageEnter.toLowerCase());
     startMedia();
   };
   if (entry && card) {
     card.hidden = true;
+    if (mediaDock) mediaDock.hidden = true;
+    if (profileMeta) profileMeta.hidden = true;
     entry.addEventListener("click", () => {
       entry.hidden = true;
       reveal();
@@ -329,16 +335,6 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
   }
   const nameEl = document.getElementById("display-name");
   const nameEffect = document.body.dataset.nameEffect || "";
-  if (nameEl && (document.body.dataset.typewriter === "1" || nameEffect === "Typewriter")) {
-    const full = nameEl.textContent || "";
-    nameEl.textContent = "";
-    let i = 0;
-    const tick = () => {
-      nameEl.textContent = full.slice(0, ++i);
-      if (i < full.length) window.setTimeout(tick, 38);
-    };
-    tick();
-  }
   if (nameEl && nameEffect === "Shuffle") {
     const full = nameEl.textContent || "";
     const glyphs = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -608,6 +604,10 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     show_display_name = bool(settings.get("showDisplayName", True))
     show_username = bool(settings.get("showUsername", True))
     frame_scale = _clamp(settings.get("profileFrameScale"), 100, 50, 150) / 100
+    frame_width = _clamp(settings.get("profileFrameWidth"), 430, 260, 800)
+    stored_frame_height = _clamp(settings.get("profileFrameHeight"), 0, 0, 1000)
+    frame_height = stored_frame_height if stored_frame_height >= 200 else 0
+    frame_height_css = f"height:{frame_height}px;" if frame_height else ""
     frame_x = _clamp(settings.get("profileFrameX"), 0, -45, 45)
     frame_y = _clamp(settings.get("profileFrameY"), 0, -45, 45)
     border_color = css_hex_color(settings.get("borderColor"), "#ffffff")
@@ -633,7 +633,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     has_banner = has_public_asset(assets, "banner", "image")
     username_glow = bool(settings.get("usernameGlow")) or username_effect == "Glow"
     name_class = "name"
-    if username_effect in {"Gradient", "Typewriter"}:
+    if username_effect == "Gradient":
         name_class += " name-gradient"
     elif username_effect == "Shimmer":
         name_class += " name-shimmer"
@@ -647,8 +647,8 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         name_class += " name-glitch"
     elif username_effect == "Pulse":
         name_class += " name-pulse"
-    elif username_effect == "Outline":
-        name_class += " name-outline"
+
+
 
     elif username_effect == "Wave":
         name_class += " name-wave"
@@ -656,11 +656,11 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         name_class += " name-shadow"
     name_style = f"font-size:{font_size + 8}px;letter-spacing:{letter_spacing}px;color:{username_color};"
     name_style += f"font-family:{font_stack};"
-    if username_effect in {"Gradient", "Typewriter", "Shimmer"}:
+    if username_effect in {"Gradient", "Shimmer"}:
         name_style += f"background:linear-gradient(90deg,{username_color},{username_effect_color},{username_color});-webkit-background-clip:text;background-clip:text;color:transparent;"
-    if username_effect == "Outline":
-        name_style += f"color:transparent;text-shadow:-1px -1px 0 {username_effect_color},1px -1px 0 {username_effect_color},-1px 1px 0 {username_effect_color},1px 1px 0 {username_effect_color};"
-    elif username_glow:
+
+
+    if username_glow:
         name_style += f"text-shadow:0 0 24px {username_effect_color}aa;"
     else:
         name_style += "text-shadow:none;"
@@ -769,7 +769,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if settings.get("showDiscordStatus", True) and (presence_pfp or discord_status)
         else ""
     )
-    if discord_tile:
+    if discord_tile or audio_controls:
         audio_controls = f'<div class="player-row">{discord_tile}{audio_controls}</div>'
     wash_style = (
         f"background-image:radial-gradient(circle at 19% 10%,{accent}4d,transparent 28%),"
@@ -834,7 +834,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     )
     joined = _join_label(profile.get("joinedAt"))
     join_tag = f'<span class="views">{joined}</span>' if settings.get("showJoinDate") and joined else ""
-    meta_tag = f'<div class="meta">{views_tag}{join_tag}</div>' if views_tag or join_tag else ""
+    meta_tag = f'<div class="meta"{" hidden" if entry_on else ""}>{views_tag}{join_tag}</div>' if views_tag or join_tag else ""
     banner_tag = (
         f'<div class="banner"><img src="{asset_src("banner")}" alt=""></div>'
         if has_banner
@@ -850,14 +850,15 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     identity = (
         f'<div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>'
         f'{handle_tag}{description_tag}{location_tag}'
-        f'<div class="socials">{links}</div>{_public_widgets_markup(widgets)}{_public_sections_markup(config, username_raw)}{audio_controls}{meta_tag}'
+        f'<div class="socials">{links}</div>{_public_widgets_markup(widgets)}{_public_sections_markup(config, username_raw)}'
     )
     if layout == "Sleek":
         card_inner = f'<div class="sleek-hero">{banner_tag}{avatar_tag}</div><div class="sleek-body">{identity}</div>'
     elif layout == "Simplistic":
         card_inner = f'{avatar_tag}{identity}'
     else:
-        card_inner = f'{banner_tag}<div class="{"card-body after-banner" if has_banner else "card-body"}">{avatar_tag}{identity}<div class="brand">misa.lol</div></div>'
+        card_inner = f'{banner_tag}<div class="{"card-body after-banner" if has_banner else "card-body"}">{avatar_tag}{identity}</div>'
+    media_dock = f'<div class="media-dock"{" hidden" if entry_on else ""}>{audio_controls}</div>' if audio_controls else ""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{page_title}</title>
 <meta name="description" content="{share_description}">
@@ -886,7 +887,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.lyrics::-webkit-scrollbar{{disp
 {cursor_css}
 .has-cursor,.has-cursor *{{cursor:var(--cursor, auto)}}
 body{{position:relative;display:flex;align-items:center;justify-content:{page_place};padding:32px 16px;overflow:auto{";perspective:900px" if card_tilt else ""}}}
-.card-stage{{position:relative;z-index:3;width:min(92vw,430px);transform:translate({frame_x}vw,{frame_y}vh) scale({frame_scale});transform-origin:center;}}
+.card-stage{{position:relative;z-index:3;width:min(92vw,{frame_width}px);transform:translate({frame_x}vw,{frame_y}vh) scale({frame_scale});transform-origin:center;}}
 #profile-audio{{position:absolute;width:0;height:0;opacity:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video,.bg-effect,.backdrop{{position:fixed;inset:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video{{z-index:0}}
@@ -894,7 +895,7 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .backdrop{{z-index:1}}
 .bg-effect{{z-index:2;background:transparent}}
 .codrops-rain-effect{{border:0}}
-.card{{position:relative;width:100%;margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
+.card{{position:relative;width:100%;{frame_height_css}margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
 .card.no-frame{{border-color:transparent;background:transparent;backdrop-filter:none;box-shadow:none}}
 .card.no-frame::before{{display:none}}
 .card-body.after-banner{{padding-top:20px}}
@@ -924,9 +925,9 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .layout-simplistic .avatar-ring{{width:80px;height:80px;margin-bottom:16px}}
 .avatar-placeholder{{display:grid;place-items:center;color:#fff;font-size:28px;font-weight:600}}
 .name-row{{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}}
-.content-left .name-row,.content-left .location,.content-left .meta{{justify-content:flex-start}}
-.content-right .name-row,.content-right .location,.content-right .meta{{justify-content:flex-end}}
-.content-center .location,.content-center .meta{{justify-content:center}}
+.content-left .name-row,.content-left .location{{justify-content:flex-start}}
+.content-right .name-row,.content-right .location{{justify-content:flex-end}}
+.content-center .location{{justify-content:center}}
 .verified{{display:inline-flex;color:#a99bff}}
 .verified svg{{display:block}}
 .guild-tag{{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border-radius:6px;border:1px solid #ffffff26;background:#ffffff1a;color:#ffffffe6;font-size:11px;letter-spacing:.04em;font-weight:600}}
@@ -939,7 +940,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .name-sparkle{{animation:name-sparkle 1.4s ease-in-out infinite}}
 .name-glitch{{animation:name-glitch .65s steps(2,end) infinite}}
 .name-pulse{{animation:name-pulse 1.8s ease-in-out infinite}}
-.name-outline{{background:none!important}}
+
 
 .name-wave{{animation:name-wave 1.4s ease-in-out infinite;transform-origin:center}}
 .name-shadow{{animation:name-shadow 1.8s ease-in-out infinite}}
@@ -954,7 +955,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .description{{margin:12px 0 0;max-width:none;color:#ffffff;opacity:.65;font-size:14px;line-height:1.5}}
 .location{{display:flex;align-items:center;justify-content:center;gap:6px;margin:12px 0 0;color:#ffffff;opacity:.4;font-size:12px}}
 .location svg{{flex-shrink:0}}
-.meta{{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 12px;margin-top:28px}}
+.meta{{position:fixed;left:20px;bottom:20px;z-index:3;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:4px 12px;margin:0;pointer-events:none}}
 .views{{display:inline-flex;align-items:center;gap:8px;margin:0;color:#ffffff;opacity:.35;font-size:12px}}
 .eye{{position:relative;display:inline-flex;width:20px;height:14px;border:1px solid currentColor;border-radius:50%}}
 .eye::after{{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;background:currentColor;transform:translate(-50%,-50%)}}
@@ -975,10 +976,10 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .entry-play{{width:48px;height:48px;border-radius:16px;border:1px solid #ffffff29;background:#ffffff12}}
 .entry small{{color:#ffffff66;font-size:12px}}
 #copy-toast{{position:fixed;bottom:24px;left:50%;z-index:5;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:#111118ee;color:#fff;font-size:12px}}
-#copy-toast[hidden],.card[hidden],.entry[hidden]{{display:none}}
-.brand{{display:block;margin-top:28px;color:#ffffff33;font-size:10px;letter-spacing:.23em;text-transform:uppercase}}
-.player-row{{display:flex;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin-top:24px;overflow:hidden}}
-.discord-presence{{position:relative;display:flex;flex:0 0 136px;width:136px;min-width:0;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
+#copy-toast[hidden],.card[hidden],.media-dock[hidden],.meta[hidden],.entry[hidden]{{display:none}}
+.media-dock{{width:100%;margin-top:12px;pointer-events:auto}}
+.player-row{{display:flex;min-height:80px;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden}}
+.discord-presence{{position:relative;display:flex;flex:0 0 42%;width:42%;min-width:0;min-height:80px;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
 .discord-presence-body{{display:grid;width:100%;min-width:0;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:2px 10px;overflow:hidden}}
 .discord-presence-avatar{{position:relative;grid-row:1/3;width:44px;height:44px;flex:none;overflow:visible}}
 .discord-presence-image,.discord-presence-fallback{{display:block;width:100%;height:100%;min-width:0;max-width:100%;overflow:hidden;border-radius:999px;object-fit:cover}}
@@ -987,7 +988,8 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .discord-presence-name,.discord-presence-status{{width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .discord-presence-name{{color:#fff;font-size:13px;font-weight:600;line-height:1.2;text-align:left}}
 .discord-presence-status{{color:#ffffff8c;font-size:10px;line-height:1.2;text-align:left}}
-.player-row>.player{{flex:1 1 auto;min-width:0;max-width:100%;margin-top:0;overflow:hidden}}
+.player-row>.player{{height:80px;flex:1 1 auto;min-width:0;max-width:100%;margin-top:0;overflow:hidden}}
+.discord-presence:only-child,.player-row>.player:only-child{{width:100%;flex:1 1 100%}}
 .player{{position:relative;z-index:5;width:100%;min-width:0;max-width:100%;margin-top:24px;padding:12px;overflow:hidden;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left;pointer-events:auto;isolation:isolate}}
 .player-layout{{display:flex;min-width:0;align-items:center;gap:12px;overflow:hidden}}
 .player-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
@@ -1004,7 +1006,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .player-row .player-layout{{display:grid;grid-template-columns:48px minmax(0,1fr);grid-template-rows:auto auto;gap:6px 8px}}
 .player-row .player-art{{grid-row:1/3;width:48px;height:48px;min-width:48px;min-height:48px}}
 .player-row .player-controls{{grid-column:2;justify-content:flex-end}}
-@media(max-width:639px){{.player-row{{flex-direction:column}}.discord-presence{{width:100%;flex:1 1 auto}}.player-row>.player{{width:100%}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
+@media(max-width:639px){{.player-row{{min-height:0;flex-direction:column}}.discord-presence{{width:100%;min-height:80px;flex:1 1 auto}}.player-row>.player{{width:100%;height:auto;min-height:80px}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
 .audio-btn::before,.audio-btn::after{{display:none!important;content:none!important}}
 .audio-icon{{display:block;width:16px;height:16px;flex:none;pointer-events:none}}
 .audio-btn.play .audio-icon{{width:17px;height:17px}}
@@ -1062,10 +1064,11 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .enter-pop{{animation:enter-pop .45s cubic-bezier(.22,1,.36,1) both}}
 @media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}.codrops-rain-effect{{display:none}}}}
 </style></head>
-<body{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-typewriter="{1 if username_effect == "Typewriter" else 0}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
+<body{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
 {background_tag}{video_tag}<div class="backdrop"></div>{effect_canvas_tag}{sakura_effect_tag}{rain_effect_tag}{effect_video_tag if background_effect == "None" else ""}
 {f'<button type="button" id="entry" class="entry"><span class="entry-play"></span><small>{entry_text}</small></button>' if entry_on else ""}
-<div class="card-stage"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main></div>
+<div class="card-stage"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main>{media_dock}</div>
+{meta_tag}
 {audio_tag}
 {playlist_data}
 {bio_data}

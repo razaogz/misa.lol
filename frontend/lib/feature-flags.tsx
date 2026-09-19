@@ -12,7 +12,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   "profile.frame": true, "profile.avatar": true, "profile.avatarBorder": true, "profile.displayName": true,
   "profile.socials": true, "profile.widgets": true, "profile.badges": true, "profile.audio": true,
   "profile.views": true, "profile.joinDate": true, "integrations.discord": true,
-  "feature.usernameEffects.glitch": true, "feature.usernameEffects.pulse": true, "feature.usernameEffects.outline": true,
+  "feature.usernameEffects.glitch": true, "feature.usernameEffects.pulse": true,
   "feature.usernameEffects.wave": true, "feature.usernameEffects.shadow": true,
 };
 

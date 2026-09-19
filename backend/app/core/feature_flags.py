@@ -37,7 +37,7 @@ FEATURE_FLAG_CATALOG: tuple[tuple[str, str], ...] = (
     ("integrations.discord", "Discord integration"),
     ("feature.usernameEffects.glitch", "Glitch username effect"),
     ("feature.usernameEffects.pulse", "Pulse username effect"),
-    ("feature.usernameEffects.outline", "Outline username effect"),
+
 
     ("feature.usernameEffects.wave", "Wave username effect"),
     ("feature.usernameEffects.shadow", "Shadow username effect"),

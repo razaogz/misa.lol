@@ -87,19 +87,10 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   const s = config.settings;
   const name = config.profile.displayName;
   const effect = s.usernameEffect;
-  const [typed, setTyped] = useState(effect === "Typewriter" || effect === "Shuffle" ? "" : name);
+  const [typed, setTyped] = useState(effect === "Shuffle" ? "" : name);
   useEffect(() => {
-    if (effect !== "Typewriter" && effect !== "Shuffle") { setTyped(name); return; }
+    if (effect !== "Shuffle") { setTyped(name); return; }
     setTyped("");
-    if (effect === "Typewriter") {
-      let index = 0;
-      const timer = window.setInterval(() => {
-        index += 1;
-        setTyped(name.slice(0, index));
-        if (index >= name.length) window.clearInterval(timer);
-      }, 38);
-      return () => window.clearInterval(timer);
-    }
     const glyphs = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let step = 0;
     const timer = window.setInterval(() => {
@@ -114,12 +105,9 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   }, [name, effect]);
   const usernameColor = s.usernameColor || s.textColor || "#ffffff";
   const effectColor = s.usernameEffectColor || s.accentColor || "#e11d48";
-  const gradientEffect = effect === "Gradient" || effect === "Typewriter" || effect === "Shimmer" || effect === "Rainbow";
+  const gradientEffect = effect === "Gradient" || effect === "Shimmer" || effect === "Rainbow";
   const effectClass = usernameEffectClass(effect);
   const rainbow = effect === "Rainbow" ? { backgroundImage: "linear-gradient(90deg, #ff3b6b, #ffcf4a, #61e294, #55b8ff, #b887ff, #ff3b6b)", backgroundSize: "200% 100%" } : {};
-  const outlineShadow = effect === "Outline"
-    ? "-1px -1px 0 " + effectColor + ", 1px -1px 0 " + effectColor + ", -1px 1px 0 " + effectColor + ", 1px 1px 0 " + effectColor
-    : undefined;
   return (
     <h1
       className={`font-semibold ${effectClass}`}
@@ -127,8 +115,8 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
         fontSize: typeSize(s.fontSize) + 8,
         letterSpacing: nameTracking(s.letterSpacing),
         fontFamily: "var(--misa-profile-font)",
-        color: gradientEffect ? undefined : effect === "Outline" ? "transparent" : usernameColor,
-        textShadow: outlineShadow || (s.usernameGlow || effect === "Glow" ? "0 0 24px " + effectColor + "aa" : undefined),
+        color: gradientEffect ? undefined : usernameColor,
+        textShadow: s.usernameGlow || effect === "Glow" ? "0 0 24px " + effectColor + "aa" : undefined,
         ["--username-color" as string]: usernameColor,
         ["--effect-color" as string]: effectColor,
         ...rainbow,
@@ -210,14 +198,14 @@ export function ProfileBadges({ config, className = "" }: { config: ProfileConfi
   );
 }
 
-export function ProfileMeta({ config, align = "center" }: { config: ProfileConfig; align?: "left" | "center" | "right" }) {
+export function ProfileMeta({ config, align = "center", floating = false }: { config: ProfileConfig; align?: "left" | "center" | "right"; floating?: boolean }) {
   const joined = formatJoinDate(config.profile.joinedAt);
   const showViews = config.settings.showViews;
   const showJoin = config.settings.showJoinDate && joined;
   const justify = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "justify-center";
   if (!showViews && !showJoin) return null;
   return (
-    <div className={`mt-7 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/35 ${justify}`}>
+    <div className={`${floating ? "pointer-events-none absolute bottom-5 left-5 z-10" : "mt-7"} flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/35 ${floating ? "justify-start" : justify}`}>
       {showViews && <span className="inline-flex items-center gap-2"><EyeIcon />{config.profile.views.toLocaleString()} profile views</span>}
       {showJoin && <span>{joined}</span>}
     </div>
@@ -235,7 +223,7 @@ function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfi
   const discordName = (discord?.globalName || discord?.username || "").trim();
   const statusLabel = status ? DISCORD_STATUS_LABELS[status] : "";
   return (
-    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 ${compact ? "flex-1 sm:flex-[0_0_8.5rem]" : "flex-1"} ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
+    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 sm:h-full ${compact ? "flex-1 sm:flex-[0_0_42%]" : "flex-1"} ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
       <div className="relative h-12 w-12 shrink-0">
         {src ? <img src={src} alt="" className="h-full w-full rounded-full object-cover" /> : <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>{(discordName || config.profile.displayName).slice(0, 1)}</div>}
         {status ? <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4"><DiscordStatusGlyph status={status} className="block h-full w-full" /></span> : null}
@@ -245,40 +233,38 @@ function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfi
   );
 }
 
-export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
+export function ProfileMediaModules({ config, preview }: { config: ProfileConfig; preview: boolean }) {
   const discord = useCardDiscord(config);
   const showDiscordTile = config.settings.showDiscordStatus !== false && Boolean(discord?.accountAvatar || discord?.status);
   const hasVideoAudio = usesBackgroundVideoAudio(config.assets);
   const hasPlaylist = usesUploadedProfileAudio(config.assets);
-  const audio = (
-    <>
-      {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
-      {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile} />}
-    </>
+  const showAudio = hasPlaylist || hasVideoAudio;
+
+  if (!showDiscordTile && !showAudio) return null;
+
+  return (
+    <div className="mt-3 flex w-full min-w-0 flex-col items-stretch gap-2.5 sm:h-20 sm:flex-row">
+      {showDiscordTile && <DiscordPresenceTile config={config} compact={showAudio} />}
+      {showAudio && (
+        <div className="min-w-0 flex-1 [&>div]:mt-0 sm:h-full sm:[&>div]:h-full">
+          {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
+          {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile} />}
+        </div>
+      )}
+    </div>
   );
+}
+
+export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
   return (
     <div style={{ textAlign: align }}>
       <ProfileBio config={config} align={align} />
       <SocialLinks config={config} />
       <ProfileWidgets config={config} preview={preview} />
       <ProfileSections config={config} preview={preview} />
-      {showDiscordTile && (hasPlaylist || hasVideoAudio) ? (
-        <div className="mt-6 flex min-w-0 flex-col items-stretch gap-2.5 sm:flex-row">
-          <DiscordPresenceTile config={config} compact />
-          <div className="min-w-0 flex-1 [&>div]:mt-0">{audio}</div>
-        </div>
-      ) : showDiscordTile ? (
-        <div className="mt-6 flex min-w-0 flex-col items-stretch gap-2.5 sm:flex-row">
-          <DiscordPresenceTile config={config} />
-        </div>
-      ) : (
-        audio
-      )}
-      <ProfileMeta config={config} align={align} />
     </div>
   );
 }
-
 function profileLayoutIsSleek(config: ProfileConfig) {
   return config.settings.layout === "Sleek";
 }

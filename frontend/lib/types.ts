@@ -7,7 +7,7 @@ export type SocialPlatform =
 
 export type BadgeName = "Verified" | "Premium" | "Staff" | "Helper" | "Donor" | "Gifter" | "OG" | "Server Booster" | "Bug Hunter" | "Winner" | "Second Place" | "Third Place";
 export type BackgroundEffect = "None" | "Snowflakes" | "Snow" | "Sakura" | "Rain" | "Fireflies";
-export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Typewriter" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Outline" | "Wave" | "Shadow";
+export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Wave" | "Shadow";
 export type SocialAlign = "left" | "center" | "right";
 export type SocialAction = "open" | "copy";
 export type ProfileLayout = "Modern" | "Simplistic" | "Sleek";
@@ -130,6 +130,8 @@ export interface ProfileConfig {
     showAvatarBorder?: boolean;
     showDisplayName?: boolean;
     profileFrameScale?: number;
+    profileFrameWidth?: number;
+    profileFrameHeight?: number;
     profileFrameX?: number;
     profileFrameY?: number;
     layout?: ProfileLayout;

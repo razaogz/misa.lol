@@ -45,7 +45,7 @@ REMOVE_ASSET_URL = "misa:remove"
 ASSET_KINDS = ("avatar", "banner", "background", "cursor", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "ogImage", "favicon", "customFont", "clickSound")
 ASSET_KEYS = ("avatar", "banner", "background", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound")
 BACKGROUND_EFFECTS = {"None", "Snowflakes", "Snow", "Sakura", "Rain", "Fireflies"}
-USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Typewriter", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Outline", "Wave", "Shadow"}
+USERNAME_EFFECTS = {"None", "Glow", "Gradient", "Shimmer", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Wave", "Shadow"}
 PROFILE_FONTS = {"Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"}
 PAGE_ENTERS = {"None", "Fade", "Unfold", "Pop"}
 ASSET_KIND_TYPES = {
@@ -160,6 +160,9 @@ def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     cleaned["profileRadius"] = _clamp_int(cleaned.get("profileRadius"), 24, 0, 40)
     cleaned["profileFrameOpacity"] = _clamp_int(cleaned.get("profileFrameOpacity"), 100, 0, 100)
     cleaned["profileFrameScale"] = _clamp_int(cleaned.get("profileFrameScale"), 100, 50, 150)
+    cleaned["profileFrameWidth"] = _clamp_int(cleaned.get("profileFrameWidth"), 430, 260, 800)
+    frame_height = _clamp_int(cleaned.get("profileFrameHeight"), 0, 0, 1000)
+    cleaned["profileFrameHeight"] = frame_height if frame_height >= 200 else 0
     cleaned["profileFrameX"] = _clamp_int(cleaned.get("profileFrameX"), 0, -45, 45)
     cleaned["profileFrameY"] = _clamp_int(cleaned.get("profileFrameY"), 0, -45, 45)
     cleaned["borderWidth"] = _clamp_int(cleaned.get("borderWidth"), 1, 0, 8)

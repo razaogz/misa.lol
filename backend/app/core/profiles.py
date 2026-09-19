@@ -43,6 +43,8 @@ def default_public_profile(user: User) -> dict[str, Any]:
             "showAvatarBorder": True,
             "showDisplayName": True,
             "profileFrameScale": 100,
+            "profileFrameWidth": 430,
+            "profileFrameHeight": 0,
             "profileFrameX": 0,
             "profileFrameY": 0,
             "layout": "Modern",

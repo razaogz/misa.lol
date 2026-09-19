@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { ProfileAvatar, ProfileBanner, ProfileIdentity, ProfileModules } from "@/components/profile/ProfileCardModules";
+import { ProfileAvatar, ProfileBanner, ProfileIdentity, ProfileMediaModules, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
 import { resolvedAudioSource } from "@/lib/audio";
@@ -21,7 +21,20 @@ function colorWithAlpha(value: string | undefined, alpha: number) {
   return "rgba(" + red + "," + green + "," + blue + "," + alpha.toFixed(3) + ")";
 }
 
-type FramePositionPatch = { profileFrameScale?: number; profileFrameX?: number; profileFrameY?: number };
+type FrameResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+type FrameDragMode = "move" | FrameResizeHandle;
+type FramePositionPatch = { profileFrameScale?: number; profileFrameWidth?: number; profileFrameHeight?: number; profileFrameX?: number; profileFrameY?: number };
+
+const FRAME_RESIZE_HANDLES: Array<{ id: FrameResizeHandle; className: string }> = [
+  { id: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
+  { id: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+  { id: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
+  { id: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+  { id: "se", className: "-bottom-2 -right-2 cursor-nwse-resize" },
+  { id: "s", className: "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize" },
+  { id: "sw", className: "-bottom-2 -left-2 cursor-nesw-resize" },
+  { id: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+];
 
 export function ProfileRenderer({ config, preview = false, screenshot = false, className = "", manualPositioning = false, onFramePositionChange, fitViewport = false, embedded = false }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onFramePositionChange?: (patch: FramePositionPatch) => void; fitViewport?: boolean; embedded?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -55,11 +68,14 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
         : { opacity: 0 };
   const frameAnchor = s.cardAlign === "left" ? 25 : s.cardAlign === "right" ? 75 : 50;
   const frameScale = Math.min(150, Math.max(50, s.profileFrameScale ?? 100)) / 100;
+  const frameWidth = Math.min(800, Math.max(260, s.profileFrameWidth ?? 430));
+  const storedFrameHeight = Math.min(1000, Math.max(0, s.profileFrameHeight ?? 0));
+  const frameHeight = storedFrameHeight >= 200 ? storedFrameHeight : 0;
   const frameX = Math.min(45, Math.max(-45, s.profileFrameX ?? 0));
   const frameY = Math.min(45, Math.max(-45, s.profileFrameY ?? 0));
   const showFrame = s.showProfileFrame !== false;
   const frameOpacity = Math.min(100, Math.max(0, s.profileFrameOpacity ?? 100)) / 100;
-  const frameDrag = useRef<{ mode: "move" | "resize"; pointerId: number; startX: number; startY: number; baseX: number; baseY: number; baseScale: number } | null>(null);
+  const frameDrag = useRef<{ mode: FrameDragMode; pointerId: number; startX: number; startY: number; baseX: number; baseY: number; baseWidth: number; baseHeight: number } | null>(null);
   const frameVisible = showFrame && frameOpacity > 0;
   const audioSource = resolvedAudioSource(config.assets);
 
@@ -80,11 +96,20 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     cardRef.current.style.transform = `rotateX(${(-y * 7).toFixed(2)}deg) rotateY(${(x * 9).toFixed(2)}deg)`;
   };
   const untilt = () => { if (cardRef.current) cardRef.current.style.transform = ""; };
-  const startFrameDrag = (event: React.PointerEvent<HTMLDivElement>, mode: "move" | "resize" = "move") => {
+  const startFrameDrag = (event: React.PointerEvent<HTMLDivElement>, mode: FrameDragMode = "move") => {
     if (!manualPositioning || !onFramePositionChange || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    frameDrag.current = { mode, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, baseX: frameX, baseY: frameY, baseScale: frameScale * 100 };
+    frameDrag.current = {
+      mode,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: frameX,
+      baseY: frameY,
+      baseWidth: cardRef.current?.offsetWidth || frameWidth,
+      baseHeight: cardRef.current?.offsetHeight || frameHeight || 360,
+    };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const moveFrameDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -94,9 +119,28 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     const viewportHeight = typeof window === "undefined" ? 1 : window.innerHeight;
     const deltaX = event.clientX - drag.startX;
     const deltaY = event.clientY - drag.startY;
-    if (drag.mode === "resize") {
-      const nextScale = Math.min(150, Math.max(50, drag.baseScale + Math.max(deltaX, deltaY) / 3));
-      onFramePositionChange({ profileFrameScale: Math.round(nextScale) });
+    if (drag.mode !== "move") {
+      const horizontalDelta = deltaX / frameScale;
+      const verticalDelta = deltaY / frameScale;
+      const changesWidth = drag.mode.includes("e") || drag.mode.includes("w");
+      const changesHeight = drag.mode.includes("n") || drag.mode.includes("s");
+      const nextWidth = changesWidth
+        ? Math.min(800, Math.max(260, drag.baseWidth + (drag.mode.includes("w") ? -horizontalDelta : horizontalDelta)))
+        : drag.baseWidth;
+      const nextHeight = changesHeight
+        ? Math.min(1000, Math.max(200, drag.baseHeight + (drag.mode.includes("n") ? -verticalDelta : verticalDelta)))
+        : drag.baseHeight;
+      const widthChange = nextWidth - drag.baseWidth;
+      const heightChange = nextHeight - drag.baseHeight;
+      const shiftX = drag.mode.includes("w") ? -widthChange / 2 : drag.mode.includes("e") ? widthChange / 2 : 0;
+      const shiftY = drag.mode.includes("n") ? -heightChange / 2 : drag.mode.includes("s") ? heightChange / 2 : 0;
+      const patch: FramePositionPatch = {
+        profileFrameX: Math.round(Math.min(45, Math.max(-45, drag.baseX + ((shiftX * frameScale) / viewportWidth) * 100)) * 10) / 10,
+        profileFrameY: Math.round(Math.min(45, Math.max(-45, drag.baseY + ((shiftY * frameScale) / viewportHeight) * 100)) * 10) / 10,
+      };
+      if (changesWidth) patch.profileFrameWidth = Math.round(nextWidth);
+      if (changesHeight) patch.profileFrameHeight = Math.round(nextHeight);
+      onFramePositionChange(patch);
       return;
     }
     onFramePositionChange({
@@ -107,7 +151,6 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const endFrameDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (frameDrag.current?.pointerId === event.pointerId) frameDrag.current = null;
   };
-
   return (
     <div className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-hidden bg-[#07070a]" : "min-h-[100svh] overflow-hidden bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
       {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
@@ -125,8 +168,8 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
         )}
         <AnimatePresence initial={false}>
           {entered && (
-            <div className={"absolute w-full max-w-[430px] " + (manualPositioning ? "cursor-move touch-none" : "")} onPointerDown={startFrameDrag} onPointerMove={moveFrameDrag} onPointerUp={endFrameDrag} onPointerCancel={endFrameDrag} style={{ left: (embedded ? 50 : frameAnchor) + "%", top: "50%", transform: embedded ? "translate(-50%, -50%) scale(" + frameScale + ")" : "translate(calc(-50% + " + frameX + "vw), calc(-50% + " + frameY + "vh)) scale(" + frameScale + ")" }}>
-              <motion.div key="profile-card" initial={motionStart} animate={{ opacity: 1, scale: 1, scaleY: 1 }} transition={{ duration: screenshot || quiet ? 0 : 0.55, ease: [0.22, 1, .36, 1] }} className="w-full" style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
+            <div className={"absolute " + (manualPositioning ? "cursor-move touch-none" : "")} onPointerDown={startFrameDrag} onPointerMove={moveFrameDrag} onPointerUp={endFrameDrag} onPointerCancel={endFrameDrag} style={{ width: frameWidth + "px", maxWidth: "calc(100% - 24px)", left: (embedded ? 50 : frameAnchor) + "%", top: "50%", transform: embedded ? "translate(-50%, -50%) scale(" + frameScale + ")" : "translate(calc(-50% + " + frameX + "vw), calc(-50% + " + frameY + "vh)) scale(" + frameScale + ")" }}>
+              <motion.div key="profile-card" initial={motionStart} animate={{ opacity: 1, scale: 1, scaleY: 1 }} transition={{ duration: screenshot || quiet ? 0 : 0.55, ease: [0.22, 1, .36, 1] }} className="relative w-full" style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
                 <div
                   ref={cardRef}
                   onPointerMove={manualPositioning ? undefined : tilt}
@@ -140,6 +183,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
                     border: frameVisible ? (s.borderWidth ?? 1) + "px solid " + colorWithAlpha(s.borderColor, frameOpacity) : "0 solid transparent",
                     boxShadow: embedded ? "none" : frameVisible ? (layout === "Simplistic" ? "0 12px 40px rgba(0,0,0," + (0.22 * frameOpacity).toFixed(3) + ")" : "0 25px 90px rgba(0,0,0," + (0.36 * frameOpacity).toFixed(3) + "), 0 0 70px " + colorWithAlpha(s.accentColor, 0.09 * frameOpacity)) : "none",
                     color: s.textColor,
+                    height: frameHeight ? frameHeight + "px" : undefined,
                   }}
                 >
                   {layout === "Modern" && frameVisible && <div className="absolute inset-x-8 top-0 h-px" style={{ background: "linear-gradient(90deg, transparent, " + s.accentColor + "aa, transparent)" }} />}
@@ -147,13 +191,17 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
                   {layout === "Simplistic" && <SimplisticCard config={config} preview={preview} align={align} />}
                   {layout === "Sleek" && <SleekCard config={config} preview={preview} align={align} />}
                 </div>
+                {manualPositioning && <>
+                  <div className="pointer-events-none absolute inset-0 border border-sky-300/80" style={{ borderRadius: s.profileRadius + "px" }} />
+                  {FRAME_RESIZE_HANDLES.map((handle) => <div key={handle.id} role="presentation" aria-label={`Resize profile frame ${handle.id}`} onPointerDown={(event) => startFrameDrag(event, handle.id)} className={`pointer-events-auto absolute z-30 h-4 w-4 rounded-full border-2 border-white bg-sky-500 shadow-lg ${handle.className}`} />)}
+                </>}
               </motion.div>
-              {manualPositioning && <div role="presentation" aria-label="Resize profile frame" onPointerDown={(event) => startFrameDrag(event, "resize")} className="pointer-events-auto absolute -bottom-2 -right-2 h-5 w-5 cursor-nwse-resize rounded-full border-2 border-white bg-[#e11d48] shadow-lg" />}
+              <ProfileMediaModules config={config} preview={preview} />
             </div>
           )}
         </AnimatePresence>
       </div>
-      {!preview && !embedded && <div className="absolute bottom-5 left-0 right-0 z-10 text-center text-[10px] tracking-[.18em] text-white/25">misa.lol / {config.profile.username}</div>}
+      {entered && <ProfileMeta config={config} align="left" floating />}
     </div>
   );
 }
@@ -166,7 +214,6 @@ function ModernCard({ config, preview, align }: { config: ProfileConfig; preview
         {config.settings.showAvatar !== false && <ProfileAvatar config={config} className="mb-5" />}
         <ProfileIdentity config={config} align={align} />
         <ProfileModules config={config} preview={preview} align={align} />
-        <div className="mt-7 text-[10px] uppercase tracking-[.23em] text-white/20">misa.lol</div>
       </div>
     </>
   );
