@@ -1,4 +1,4 @@
-.page { min-height: 100vh; max-width: 1540px; margin: 0 auto; padding: 34px 38px 48px; color: #f4f4f5; }
+.page { width: 100%; min-width: 0; min-height: 100vh; max-width: 1540px; margin: 0 auto; padding: 34px 38px 48px; overflow-x: clip; color: #f4f4f5; }
 .loading { display: grid; min-height: 70vh; place-items: center; color: #a1a1aa; }
 .headerActions, .publish > div:last-child, .actionGrid, .rowActions { display: flex; flex-wrap: wrap; gap: 9px; }
 .error, .notice { display: flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 12px 14px; border: 1px solid #fb71854d; border-radius: 12px; color: #fecdd3; background: #e11d4812; font-size: 12px; }
@@ -9,13 +9,13 @@
 .contextBar > span { color: #71717a; font-size: 11px; }
 .contextActions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .contextActions > a { display: inline-flex; align-items: center; gap: 6px; color: #fda4af; font-size: 12px; text-decoration: none; }
-.workspace { display: grid; min-width: 0; grid-template-columns: minmax(350px, .72fr) minmax(0, 1.45fr); align-items: start; gap: 22px; }
+.workspace { display: grid; width: 100%; min-width: 0; max-width: 100%; grid-template-columns: minmax(350px, .72fr) minmax(0, 1.45fr); align-items: start; gap: 22px; }
 .controls, .preview, .entryPanel, .empty, .publish { border: 1px solid #ffffff12; border-radius: 18px; background: #0d0d12; box-shadow: 0 24px 70px #0004; }
-.controls { min-width: 0; overflow: hidden; }
+.controls { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
 .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px; border-bottom: 1px solid #ffffff0d; background: #09090d; }
 .tabs button { min-height: 40px; border: 0; border-radius: 10px; color: #71717a; background: transparent; font-size: 11px; text-transform: capitalize; cursor: pointer; }
 .tabs button[data-active="true"] { color: #fff; background: #ffffff0d; box-shadow: inset 0 0 0 1px #ffffff0b; }
-.panelBody { display: grid; min-width: 0; gap: 17px; overflow: hidden; padding: 22px; }
+.panelBody { display: grid; width: 100%; min-width: 0; max-width: 100%; gap: 17px; overflow: hidden; padding: 22px; }
 .panelBody input[type="color"] { width: 44px; min-width: 44px; padding: 0; }
 .panelBody label, .form label, .form legend { display: grid; gap: 7px; color: #b5b5be; font-size: 11px; font-weight: 500; }
 .panelBody input, .panelBody textarea, .panelBody select, .form input, .form textarea, .form select, .memberRow select, .copyLink input, .inviteForm input {
@@ -116,6 +116,7 @@
 }
 @media (max-width: 700px) {
   .page { padding: 24px 15px 36px; }
+  .workspace { display: block; }
   .headerActions { width: 100%; }
   .headerActions > button { flex: 1; }
   .contextBar > label { width: 100%; }

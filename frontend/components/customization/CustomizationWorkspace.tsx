@@ -159,7 +159,13 @@ export function CustomizationWorkspace() {
   </main></PreviewPlayerProvider>;
 }
 
-export function ConstellationProfileControls() {
+export function ConstellationProfileControls({
+  backgroundEffect = "None",
+  onBackgroundEffectChange,
+}: {
+  backgroundEffect?: BackgroundEffect;
+  onBackgroundEffectChange?: (effect: BackgroundEffect) => void;
+}) {
   const t = useT();
   const { config, updateConfig, resetConfig, saveProfile, saveState, profileReady } = useProfile();
   const [tab, setTab] = useState<Tab>("assets");
@@ -187,10 +193,10 @@ export function ConstellationProfileControls() {
     { key: "avatar", title: t("customize.avatar"), description: t("customize.avatarDesc"), icon: CircleDot, accept: IMAGE_ACCEPT },
     { key: "banner", title: t("customize.banner"), description: t("customize.bannerDesc"), icon: ImageIcon, accept: IMAGE_ACCEPT },
   ];
-  return <div className="mt-2 border-t border-white/[.07] pt-5">
+  return <div className="mt-2 w-full min-w-0 max-w-full overflow-hidden border-t border-white/[.07] pt-5">
     <SectionTitle title="Your profile design" description="These controls save a separate Constellation design and never change your normal Customize profile. Background, cursor, and audio are shared by the whole Constellation." />
     <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl bg-white/[.035] p-1.5 sm:grid-cols-4">{tabs.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition ${tab === id ? "bg-white/[.12] text-white" : "text-zinc-500 hover:bg-white/[.04] hover:text-zinc-200"}`}><Icon size={14} className="shrink-0" /><span className="truncate">{labels[id]}</span></button>)}</div>
-    <motion.div key={tab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .2 }}>
+    <motion.div key={tab} className="w-full min-w-0 max-w-full overflow-hidden" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .2 }}>
       {tab === "assets" && <div><SectionTitle icon={Brush} title={t("customize.assetsTitle")} description="Avatar and banner stay personal. Use Shared for the common background, cursor, and audio." /><div className="space-y-3">{personalAssets.map((item) => <AssetRow key={item.key} item={item} asset={(config.assets[item.key] as ProfileAsset) || { url: null }} setAsset={setAsset} onUpload={uploadAsset} onCrop={setCrop} />)}</div></div>}
       {tab === "layout" && <LayoutsPanel config={config} setSettings={setSettings} onManualMove={() => window.alert("Use Move profiles in the Constellation preview to reposition your profile.")} onResetFrame={() => setSettings({ profileFrameScale: 100, profileFrameWidth: 430, profileFrameHeight: 0, profileFrameX: 0, profileFrameY: 0 })} />}
       {tab === "widgets" && <WidgetsPanel />}
@@ -198,7 +204,7 @@ export function ConstellationProfileControls() {
       {tab === "general" && <GeneralPanel config={config} setSettings={setSettings} setProfile={setProfile} />}
       {tab === "sharing" && <SharingAppearance config={config} setSettings={setSettings} setAsset={(key, asset) => setAsset(key, asset)} onUpload={uploadAsset} onCrop={setCrop} />}
       {tab === "colors" && <ColorsPanel config={config} setSettings={setSettings} />}
-      {tab === "effects" && <EffectsPanel config={config} setSettings={setSettings} setAsset={setAsset} onUpload={uploadAsset} showBackgroundEffect={false} />}
+      {tab === "effects" && <EffectsPanel config={config} setSettings={setSettings} setAsset={setAsset} onUpload={uploadAsset} backgroundEffectValue={backgroundEffect} onBackgroundEffectChange={onBackgroundEffectChange} />}
     </motion.div>
     <div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="ghost" onClick={resetConfig}><RotateCcw size={14} />Reset design draft</Button><Button variant="accent" disabled={!profileReady || saveState === "saving"} onClick={() => void saveProfile()}><Check size={14} />{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Design saved" : "Save design"}</Button></div>
     <ImageCropModal open={Boolean(crop)} title={crop ? cropSpec[crop.key].title : "Crop image"} src={crop?.asset.url || ""} aspect={crop ? cropSpec[crop.key].aspect : 1} outputWidth={crop ? cropSpec[crop.key].width : 512} outputHeight={crop ? cropSpec[crop.key].height : 512} mime={crop ? cropSpec[crop.key].mime : "image/jpeg"} onCancel={() => setCrop(null)} onApply={async (url) => { const current = crop; if (!current) return; try { const spec = cropSpec[current.key]; setAsset(current.key, await uploadProfileAsset(current.key, await dataUrlToFile(url, "cropped-" + current.key + ".jpg", spec.mime))); } catch (error) { window.alert(error instanceof Error ? error.message : "The cropped image could not be uploaded."); } finally { setCrop(null); } }} />
@@ -370,11 +376,11 @@ function UsernameEffectPicker({ label, value, onChange, name, usernameColor, eff
   return (
     <div>
       <div className="flex items-center justify-between"><FieldLabel>{label}</FieldLabel>{onReset && <ResetButton label={label} onClick={onReset} />}</div>
-      <div className="rounded-2xl border border-white/[.07] bg-white/[.02] p-3">
+      <div className="w-full min-w-0 max-w-full rounded-2xl border border-white/[.07] bg-white/[.02] p-3">
         <div className="flex min-h-20 items-center justify-center overflow-hidden rounded-xl border border-white/[.06] bg-black/20 px-4 py-5">
           <UsernameEffectPreview effect={value} name={name} usernameColor={usernameColor} effectColor={effectColor} large />
         </div>
-        <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid w-full min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
           {USERNAME_EFFECTS.map((effect) => (
             <button key={effect} type="button" onClick={() => onChange(effect)} aria-pressed={value === effect} className={"flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-2 py-3 transition " + (value === effect ? "border-[#e11d48]/60 bg-[#e11d48]/10" : "border-white/[.07] bg-white/[.02] hover:border-white/20 hover:bg-white/[.05]")}>
               <UsernameEffectPreview effect={effect} name={name} usernameColor={usernameColor} effectColor={effectColor} />
@@ -405,7 +411,7 @@ function BackgroundEffectPicker({ value, onChange }: { value: BackgroundEffect; 
     </div>
   </div>;
 }
-function EffectsPanel({ config, setSettings, setAsset, onUpload, showBackgroundEffect = true }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void>; showBackgroundEffect?: boolean }) {
+function EffectsPanel({ config, setSettings, setAsset, onUpload, showBackgroundEffect = true, backgroundEffectValue, onBackgroundEffectChange }: { config: ReturnType<typeof import("@/lib/mock-data").cloneMockProfile>; setSettings: (patch: Partial<typeof config.settings>) => void; setAsset: (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => void; onUpload: (key: keyof typeof config.assets, file: File) => Promise<void>; showBackgroundEffect?: boolean; backgroundEffectValue?: BackgroundEffect; onBackgroundEffectChange?: (value: BackgroundEffect) => void }) {
   const t = useT();
   const defaultFonts = useDefaultFonts();
   const { enabled } = useFeatureFlags();
@@ -418,9 +424,9 @@ function EffectsPanel({ config, setSettings, setAsset, onUpload, showBackgroundE
     <div>
       <SectionTitle icon={Sparkles} title={t("customize.effectsTitle")} description={t("customize.effectsDesc")} />
       <div className="space-y-6">
-        <div className="grid min-w-0 grid-cols-2 gap-3">
-        {showBackgroundEffect ? <div className="col-span-2 min-w-0"><BackgroundEffectPicker value={config.settings.backgroundEffect || "None"} onChange={(value) => setSettings({ backgroundEffect: value })} /></div> : null}
-        <div className="col-span-2 min-w-0"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "Glow" })} /></div>
+        <div className="grid w-full min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
+        {showBackgroundEffect ? <div className="col-span-full min-w-0"><BackgroundEffectPicker value={backgroundEffectValue ?? config.settings.backgroundEffect ?? "None"} onChange={onBackgroundEffectChange ?? ((value) => setSettings({ backgroundEffect: value }))} /></div> : null}
+        <div className="col-span-full min-w-0"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "Glow" })} /></div>
         <div className="min-w-0"><FieldLabel>{t("customize.pageEnter")}</FieldLabel><SelectBox value={config.settings.pageEnter || "Fade"} options={[...PAGE_ENTERS]} onChange={(value) => setSettings({ pageEnter: value as PageEnter })} onReset={() => setSettings({ pageEnter: "Fade" })} /></div>
         <div className="min-w-0"><FieldLabel>{t("customize.font")}</FieldLabel><SelectBox value={selectedFont?.name || "Inter"} options={defaultFonts.map((font) => font.name)} onChange={(value) => { const next = defaultFonts.find((font) => font.name === value); if (next) setSettings({ profileFont: next.id }); }} onReset={() => setSettings({ profileFont: "Inter" })} /></div>
 
