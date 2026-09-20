@@ -22,13 +22,19 @@ interface ProfileContextValue {
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
-  const { user, isReady: authReady } = useAuth();
-  const [config, setConfig] = useState<ProfileConfig>(() => cloneMockProfile());
+  const { user, isReady } = useAuth();
+  const sessionKey = user?.id || (isReady ? "signed-out" : "auth-pending");
+  return <SessionProfileProvider key={sessionKey} user={user} authReady={isReady}>{children}</SessionProfileProvider>;
+}
+
+function SessionProfileProvider({ children, user, authReady }: { children: React.ReactNode; user: AuthUser | null; authReady: boolean }) {
+  const [config, setConfig] = useState<ProfileConfig>(() => profileFromAuthenticatedUser(user));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
-  const [profileReady, setProfileReady] = useState(false);
-  const lastSavedRef = useRef("");
-  const hydratedUserRef = useRef<string | null>(null);
+  const hasAuthenticatedProfile = Boolean(user && user.profile !== undefined);
+  const [profileReady, setProfileReady] = useState(() => !user || hasAuthenticatedProfile);
+  const lastSavedRef = useRef(user?.username && hasAuthenticatedProfile ? JSON.stringify(profileFromAuthenticatedUser(user)) : "");
+  const hydratedUserRef = useRef<string | null>(hasAuthenticatedProfile ? user?.id || null : null);
 
   const persist = useCallback(async (nextConfig: ProfileConfig) => {
     if (!user) { setSaveState("error"); setSaveError("You are not signed in."); return; }
@@ -70,26 +76,35 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!authReady) return;
+    if (!user) {
+      hydratedUserRef.current = null;
+      setProfileReady(true);
+      return;
+    }
+    if (user.profile !== undefined) {
+      const next = profileFromAuthenticatedUser(user);
+      lastSavedRef.current = user.username ? JSON.stringify(next) : "";
+      hydratedUserRef.current = user.id;
+      setProfileReady(true);
+      return;
+    }
     let cancelled = false;
     hydratedUserRef.current = null;
+    setProfileReady(false);
     const load = async () => {
       try {
-        const next = user ? await loadProfileForUser(user) : cloneMockProfile();
+        const next = await loadProfileForUser(user);
         if (cancelled) return;
         const normalized = normalizeDashboardProfile(next);
         setConfig(normalized);
-        lastSavedRef.current = user?.username ? JSON.stringify(normalized) : "";
-        hydratedUserRef.current = user?.id || null;
+        lastSavedRef.current = user.username ? JSON.stringify(normalized) : "";
+        hydratedUserRef.current = user.id;
         setSaveState("idle");
         setSaveError("");
         setProfileReady(true);
       } catch (error) {
         if (cancelled) return;
-        // A temporary profile/API failure must not tear down the dashboard tree.
         console.error("Profile hydration failed", error);
-        // Never replace a real account with demo data after a failed load.
-        // Keep the current config untouched and let the dashboard show its
-        // loading state until the profile can be hydrated safely.
         lastSavedRef.current = "";
         hydratedUserRef.current = null;
         setSaveState("idle");
@@ -104,13 +119,14 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ProfileContextValue>(() => ({
     config,
     updateConfig: (updater) => { setConfig((current) => updater(current)); setSaveState("idle"); setSaveError(""); },
-    resetConfig: () => { setConfig(user ? profileForUser(user) : cloneMockProfile()); setSaveState("idle"); setSaveError(""); },
+    resetConfig: () => { setConfig(user ? profileForUser(user) : profileDefaults()); setSaveState("idle"); setSaveError(""); },
     saveProfile: async (nextConfig) => { await persist(nextConfig || config); },
     hydrateFromServer: (nextConfig) => {
-      setProfileReady(true);
       const normalized = normalizeDashboardProfile(nextConfig);
       lastSavedRef.current = JSON.stringify(normalized);
+      hydratedUserRef.current = user?.id || null;
       setConfig(normalized);
+      setProfileReady(true);
       setSaveState("saved");
       setSaveError("");
     },
@@ -120,7 +136,6 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   }), [config, persist, saveState, saveError, profileReady, user]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
-
 export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, onSave, children }: { initialConfig: ProfileConfig; draftKey: string; onDraftChange?: (config: ProfileConfig) => void; onSave: (config: ProfileConfig) => Promise<void>; children: React.ReactNode }) {
   const [config, setConfig] = useState<ProfileConfig>(() => normalizeDashboardProfile(initialConfig));
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -191,8 +206,26 @@ export function useProfile() {
   return value;
 }
 
-function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
+function profileDefaults(): ProfileConfig {
   const defaults = cloneMockProfile();
+  defaults.profile = {
+    username: "",
+    displayName: "",
+    description: "A little corner of the internet.",
+    location: "",
+    views: 0,
+    uid: "",
+    joinedAt: "",
+  };
+  defaults.socials = [];
+  defaults.badges = [];
+  defaults.widgets = [];
+  defaults.sections = [];
+  return defaults;
+}
+
+function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
+  const defaults = profileDefaults();
   const incoming = (input && typeof input === "object" ? input : {}) as Partial<ProfileConfig>;
   const assets = (incoming.assets && typeof incoming.assets === "object" ? incoming.assets : {}) as Partial<ProfileConfig["assets"]>;
   const normalizedAssets = { ...defaults.assets, ...assets } as ProfileConfig["assets"];
@@ -300,13 +333,18 @@ export async function uploadProfileAsset(kind: string, file: File): Promise<Prof
   }
   return result.asset;
 }
-function profileForUser(user: AuthUser) {
-  const profile = cloneMockProfile();
+function profileFromAuthenticatedUser(user: AuthUser | null): ProfileConfig {
+  if (!user) return profileDefaults();
+  if (user.profile) return normalizeDashboardProfile(user.profile);
+  const profile = profileDefaults();
   profile.profile.username = user.username || "choose-username";
   profile.profile.displayName = user.displayName;
   profile.profile.uid = user.id;
-  profile.socials = [];
   return profile;
+}
+
+function profileForUser(user: AuthUser): ProfileConfig {
+  return profileFromAuthenticatedUser({ ...user, profile: null });
 }
 
 async function loadProfileForUser(user: AuthUser) {

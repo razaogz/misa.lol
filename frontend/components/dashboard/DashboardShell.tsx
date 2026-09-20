@@ -187,7 +187,6 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, isReady } = useAuth();
-  const { profileReady } = useProfile();
   const { dir, locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -231,14 +230,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (!localPreview && !user?.username) return <UsernameClaimGate />;
   return (
     <div className="app-shell min-h-screen" dir={dir} lang={locale}>
-      {!profileReady && (
-        <div role="status" className="pointer-events-none fixed inset-x-0 top-3 z-[70] flex justify-center">
-          <div className="rounded-full border border-white/[.08] bg-[#0d0d12]/90 px-3 py-1.5 text-xs text-zinc-500 shadow-lg backdrop-blur">
-            Preview loaded · syncing your profile...
-          </div>
-        </div>
-      )}
-      {!sidebarCollapsed && <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[280px] border-e md:block"><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>}
+{!sidebarCollapsed && <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[280px] border-e md:block"><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>}
       {sidebarCollapsed && (
         <button type="button" className="sidebar-glass fixed start-3 top-4 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border text-zinc-300 shadow-lg hover:text-white md:flex" onClick={toggleSidebar} aria-label="Show navigation" title="Show navigation">
           <PanelLeftOpen size={17} />
