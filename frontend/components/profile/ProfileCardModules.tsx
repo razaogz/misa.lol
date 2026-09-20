@@ -9,7 +9,7 @@ import { ProfileWidgets } from "@/components/profile/ProfileWidgets";
 import { SocialLinks } from "@/components/socials/SocialLinks";
 import { badgePaint, hasVerifiedBadge } from "@/lib/badges";
 import { avatarRadius, formatJoinDate } from "@/lib/profile-layout";
-import { useAuth } from "@/lib/auth-store";
+import { useOptionalAuth } from "@/lib/auth-store";
 import { usesBackgroundVideoAudio, usesUploadedProfileAudio } from "@/lib/audio";
 import { DISCORD_STATUS_COLORS, DISCORD_STATUS_LABELS, DiscordStatusGlyph, type DiscordPresence, useDiscordLive } from "@/lib/discord-live";
 import type { ProfileConfig } from "@/lib/types";
@@ -17,7 +17,7 @@ import { bioLines, nameTracking, typeMs, typeSize, usernameEffectClass } from "@
 
 function useCardDiscord(config: ProfileConfig) {
   const live = useDiscordLive();
-  const username = useAuth().user?.username;
+  const username = useOptionalAuth()?.user?.username;
   const fromConfig = config.discord;
   if (fromConfig?.avatar || fromConfig?.accountAvatar || fromConfig?.decoration || fromConfig?.guildTag || fromConfig?.status || fromConfig?.username || fromConfig?.globalName) return fromConfig;
   if (username && username === config.profile.username && live?.state) {
