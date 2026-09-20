@@ -1,6 +1,7 @@
- "use client";
+"use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { dashboardRequest, peekDashboardCache } from "@/lib/dashboard-cache";
 
 export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   "nav.overview": true, "nav.analytics": true, "nav.badges": true, "nav.settings": true, "nav.security": true, "nav.constellations": true,
@@ -16,16 +17,23 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   "feature.usernameEffects.wave": true, "feature.usernameEffects.shadow": true,
 };
 
+const FEATURE_FLAGS_KEY = "feature-flags";
 const FeatureFlagsContext = createContext<Record<string, boolean>>(DEFAULT_FEATURE_FLAGS);
 
+function loadFeatureFlags() {
+  return dashboardRequest(FEATURE_FLAGS_KEY, async () => {
+    const response = await fetch("/api/v1/feature-flags", { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not load feature flags.");
+    const payload = await response.json() as { flags?: Record<string, boolean> };
+    return { ...DEFAULT_FEATURE_FLAGS, ...(payload.flags || {}) };
+  }, { maxAge: 5 * 60_000 });
+}
+
 export function FeatureFlagsProvider({ children }: { children: React.ReactNode }) {
-  const [flags, setFlags] = useState(DEFAULT_FEATURE_FLAGS);
+  const [flags, setFlags] = useState(() => peekDashboardCache<Record<string, boolean>>(FEATURE_FLAGS_KEY) || DEFAULT_FEATURE_FLAGS);
   useEffect(() => {
     let alive = true;
-    fetch("/api/v1/feature-flags", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("flags")))
-      .then((payload: { flags?: Record<string, boolean> }) => { if (alive && payload.flags) setFlags({ ...DEFAULT_FEATURE_FLAGS, ...payload.flags }); })
-      .catch(() => undefined);
+    void loadFeatureFlags().then((next) => { if (alive) setFlags(next); }).catch(() => undefined);
     return () => { alive = false; };
   }, []);
   const value = useMemo(() => flags, [flags]);

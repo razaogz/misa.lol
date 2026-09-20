@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-store";
 
 export type DiscordPresence = "online" | "idle" | "dnd" | "offline";
@@ -94,7 +95,9 @@ const empty: DiscordState = {
 
 export function DiscordLiveProvider({ children }: { children: React.ReactNode }) {
   const { user, isReady, refresh } = useAuth();
+  const pathname = usePathname();
   const [state, setState] = useState<DiscordState | null>(null);
+  const routeNeedsDiscord = pathname === "/" || pathname.startsWith("/customize") || pathname.startsWith("/security") || pathname.startsWith("/constellations");
 
   const reload = useCallback(async () => {
     if (!user) {
@@ -116,17 +119,19 @@ export function DiscordLiveProvider({ children }: { children: React.ReactNode })
   }, [user]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !routeNeedsDiscord) return;
     void reload();
-  }, [isReady, reload]);
+  }, [isReady, reload, routeNeedsDiscord]);
 
   useEffect(() => {
-    if (!state?.connected) return;
-    const timer = window.setInterval(() => {
+    if (!routeNeedsDiscord || !state?.connected) return;
+    let disposed = false;
+    const refreshStatus = () => {
+      if (document.visibilityState === "hidden") return;
       void fetch("/api/v1/discord/status", { credentials: "include", cache: "no-store" })
         .then((response) => response.ok ? response.json() as Promise<{ status?: DiscordPresence | null }> : null)
         .then((data) => {
-          if (!data) return;
+          if (!data || disposed) return;
           const nextStatus = data.status || null;
           setState((current) => {
             if (!current || current.status === nextStatus) return current;
@@ -134,9 +139,16 @@ export function DiscordLiveProvider({ children }: { children: React.ReactNode })
           });
         })
         .catch(() => {});
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [state?.connected]);
+    };
+    const timer = window.setInterval(refreshStatus, 15_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") refreshStatus(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [routeNeedsDiscord, state?.connected]);
 
   const value = useMemo<DiscordLiveValue>(() => ({
     state,

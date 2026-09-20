@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileIdentity, ProfileMediaModules, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
@@ -37,6 +37,8 @@ const FRAME_RESIZE_HANDLES: Array<{ id: FrameResizeHandle; className: string }> 
 ];
 
 export function ProfileRenderer({ config, preview = false, screenshot = false, className = "", manualPositioning = false, onFramePositionChange, fitViewport = false, embedded = false }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onFramePositionChange?: (patch: FramePositionPatch) => void; fitViewport?: boolean; embedded?: boolean }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const frameStageRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const s = config.settings;
@@ -78,6 +80,35 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const frameDrag = useRef<{ mode: FrameDragMode; pointerId: number; startX: number; startY: number; baseX: number; baseY: number; baseWidth: number; baseHeight: number } | null>(null);
   const frameVisible = showFrame && frameOpacity > 0;
   const audioSource = resolvedAudioSource(config.assets);
+  const [fit, setFit] = useState({ width: 0, height: 0, stageWidth: 0, stageHeight: 0 });
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const stage = frameStageRef.current;
+    if (!root || !stage || embedded) return;
+    const measure = () => {
+      const next = { width: root.clientWidth, height: root.clientHeight, stageWidth: stage.offsetWidth, stageHeight: stage.offsetHeight };
+      setFit((current) => current.width === next.width && current.height === next.height && current.stageWidth === next.stageWidth && current.stageHeight === next.stageHeight ? current : next);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    observer.observe(stage);
+    window.visualViewport?.addEventListener("resize", measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, [embedded, entered]);
+
+  const compactViewport = !embedded && fit.width > 0 && fit.width < 640;
+  const responsiveFrameScale = compactViewport && fit.stageWidth > 0 && fit.stageHeight > 0
+    ? Math.min(frameScale, Math.max(0.1, (fit.width - 24) / fit.stageWidth), Math.max(0.1, (fit.height - 24) / fit.stageHeight))
+    : frameScale;
+  const availableOffsetX = Math.max(0, (fit.width - fit.stageWidth * responsiveFrameScale) / 2 - 12);
+  const availableOffsetY = Math.max(0, (fit.height - fit.stageHeight * responsiveFrameScale) / 2 - 12);
+  const safeFrameX = Math.min(availableOffsetX, Math.max(-availableOffsetX, frameX / 100 * fit.width));
+  const safeFrameY = Math.min(availableOffsetY, Math.max(-availableOffsetY, frameY / 100 * fit.height));
 
   useEffect(() => {
     const video = videoRef.current;
@@ -152,7 +183,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     if (frameDrag.current?.pointerId === event.pointerId) frameDrag.current = null;
   };
   return (
-    <div className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-hidden bg-[#07070a]" : "min-h-[100svh] overflow-hidden bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
+    <div ref={rootRef} className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-hidden bg-[#07070a]" : "min-h-[100svh] overflow-hidden bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family } as CSSProperties}>
       {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
       {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:url("${selectedDefaultFont.url}");font-display:swap}`}</style> : null}
       {!embedded && <ProfileBackground config={config} videoRef={videoRef} reduceMotion={quiet} />}
@@ -168,7 +199,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
         )}
         <AnimatePresence initial={false}>
           {entered && (
-            <div className={"absolute " + (manualPositioning ? "cursor-move touch-none" : "")} onPointerDown={startFrameDrag} onPointerMove={moveFrameDrag} onPointerUp={endFrameDrag} onPointerCancel={endFrameDrag} style={{ width: frameWidth + "px", maxWidth: "calc(100% - 24px)", left: (embedded ? 50 : frameAnchor) + "%", top: "50%", transform: embedded ? "translate(-50%, -50%) scale(" + frameScale + ")" : "translate(calc(-50% + " + frameX + "vw), calc(-50% + " + frameY + "vh)) scale(" + frameScale + ")" }}>
+            <div ref={frameStageRef} className={"absolute " + (manualPositioning ? "cursor-move touch-none" : "")} onPointerDown={startFrameDrag} onPointerMove={moveFrameDrag} onPointerUp={endFrameDrag} onPointerCancel={endFrameDrag} style={{ width: frameWidth + "px", maxWidth: "calc(100% - 24px)", left: (embedded || compactViewport ? 50 : frameAnchor) + "%", top: "50%", transformOrigin: "center", transform: embedded ? "translate(-50%, -50%) scale(" + frameScale + ")" : compactViewport ? `translate(-50%, -50%) translate(${safeFrameX}px, ${safeFrameY}px) scale(${responsiveFrameScale})` : "translate(calc(-50% + " + frameX + "vw), calc(-50% + " + frameY + "vh)) scale(" + frameScale + ")" }}>
               <motion.div key="profile-card" initial={motionStart} animate={{ opacity: 1, scale: 1, scaleY: 1 }} transition={{ duration: screenshot || quiet ? 0 : 0.55, ease: [0.22, 1, .36, 1] }} className="relative w-full" style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
                 <div
                   ref={cardRef}

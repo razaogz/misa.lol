@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { SwitcherAccount } from "@/lib/account-security";
+import { clearDashboardCache } from "@/lib/dashboard-cache";
 
 export interface AuthUser {
   id: string;
@@ -38,8 +39,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const AUTH_CHANNEL_NAME = "misa-auth-state";
-
+const AUTH_MAX_AGE = 30_000;
 type AuthEvent = "signed-out" | "revalidate";
+
+let sharedUser: AuthUser | null | undefined;
+let sharedUserLoadedAt = 0;
+let sharedUserRequest: Promise<AuthUser | null> | null = null;
 
 function announceAuthEvent(event: AuthEvent) {
   try {
@@ -47,8 +52,7 @@ function announceAuthEvent(event: AuthEvent) {
     channel.postMessage(event);
     channel.close();
   } catch {
-    // BroadcastChannel is unavailable in older browsers; focus revalidation
-    // below still protects the session boundary.
+    // Focus revalidation still protects browsers without BroadcastChannel.
   }
 }
 
@@ -75,24 +79,56 @@ function normalizeUser(value: Record<string, unknown>): AuthUser {
   };
 }
 
+function storeSharedUser(user: AuthUser | null) {
+  sharedUser = user;
+  sharedUserLoadedAt = Date.now();
+  return user;
+}
+
+function resetSharedUser() {
+  sharedUser = undefined;
+  sharedUserLoadedAt = 0;
+  sharedUserRequest = null;
+}
+
+async function requestCurrentUser(force = false): Promise<AuthUser | null> {
+  if (!force && sharedUser !== undefined && Date.now() - sharedUserLoadedAt < AUTH_MAX_AGE) return sharedUser;
+  if (sharedUserRequest) return sharedUserRequest;
+  const request = (async () => {
+    const response = await fetch("/api/v1/me", { credentials: "include", cache: "no-store" });
+    if (response.status === 401 || response.status === 403) return storeSharedUser(null);
+    if (!response.ok) throw new Error(`Session request failed (${response.status}).`);
+    return storeSharedUser(normalizeUser(await response.json() as Record<string, unknown>));
+  })();
+  sharedUserRequest = request;
+  try {
+    return await request;
+  } finally {
+    if (sharedUserRequest === request) sharedUserRequest = null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const userRef = useRef<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => sharedUser ?? null);
+  const [isReady, setIsReady] = useState(() => sharedUser !== undefined);
+  const userRef = useRef<AuthUser | null>(sharedUser ?? null);
   const requestVersion = useRef(0);
 
-  const loadCurrentUser = useCallback(async () => {
+  const commitUser = useCallback((next: AuthUser | null) => {
+    storeSharedUser(next);
+    userRef.current = next;
+    setUser((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+  }, []);
+
+  const loadCurrentUser = useCallback(async (force = false) => {
     const version = ++requestVersion.current;
     try {
-      const response = await fetch("/api/v1/me", { credentials: "include", cache: "no-store" });
-      const next = response.ok ? normalizeUser(await response.json() as Record<string, unknown>) : null;
+      const next = await requestCurrentUser(force);
       if (version !== requestVersion.current) return;
       userRef.current = next;
-      setUser(next);
+      setUser((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
     } catch {
-      if (version !== requestVersion.current) return;
-      userRef.current = null;
-      setUser(null);
+      // Preserve the last valid user during transient network failures.
     } finally {
       if (version === requestVersion.current) setIsReady(true);
     }
@@ -108,7 +144,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
       channel.onmessage = (event) => {
-        if (event.data === "signed-out" || event.data === "revalidate") void loadCurrentUser();
+        if (event.data === "signed-out") {
+          resetSharedUser();
+          clearDashboardCache();
+        }
+        if (event.data === "signed-out" || event.data === "revalidate") void loadCurrentUser(true);
       };
     } catch {
       channel = null;
@@ -135,6 +175,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
       } finally {
+        resetSharedUser();
+        clearDashboardCache();
         userRef.current = null;
         setUser(null);
         announceAuthEvent("signed-out");
@@ -145,18 +187,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch("/api/v1/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ display_name: displayName }) });
       const result = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new Error(String(result.detail || result.error || "Could not update your display name."));
-      setUser(normalizeUser(result));
+      commitUser(normalizeUser(result));
     },
     updateUsername: async (username) => {
       const response = await fetch("/api/v1/me/username", { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ username }) });
       const result = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new Error(String(result.detail || result.error || "Could not change that username."));
-      setUser(normalizeUser(result));
+      commitUser(normalizeUser(result));
     },
     refresh: async () => {
-      await loadCurrentUser();
+      await loadCurrentUser(true);
     },
-  }), [isReady, loadCurrentUser, user]);
+  }), [commitUser, isReady, loadCurrentUser, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -166,4 +208,3 @@ export function useAuth() {
   if (!value) throw new Error("useAuth must be used inside AuthProvider");
   return value;
 }
-

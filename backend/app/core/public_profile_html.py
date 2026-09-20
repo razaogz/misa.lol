@@ -59,6 +59,39 @@ PUBLIC_ANALYTICS_SCRIPT = """<script>
 </script>
 """
 
+PUBLIC_RESPONSIVE_FRAME_SCRIPT = """<script>
+(() => {
+  const stage = document.querySelector(".card-stage");
+  if (!stage) return;
+  const mobile = window.matchMedia("(max-width: 639px)");
+  let queued = 0;
+  const fit = () => {
+    cancelAnimationFrame(queued);
+    queued = requestAnimationFrame(() => {
+      if (!mobile.matches) {
+        stage.style.removeProperty("--mobile-frame-scale");
+        return;
+      }
+      const viewport = window.visualViewport;
+      const width = Math.max(1, viewport?.width || window.innerWidth);
+      const height = Math.max(1, viewport?.height || window.innerHeight);
+      const stageWidth = Math.max(1, stage.offsetWidth);
+      const stageHeight = Math.max(1, stage.offsetHeight);
+      const wanted = Math.max(0.1, Number(stage.dataset.frameScale || "1"));
+      const scale = Math.max(0.1, Math.min(wanted, (width - 24) / stageWidth, (height - 24) / stageHeight));
+      stage.style.setProperty("--mobile-frame-scale", String(scale));
+    });
+  };
+  new ResizeObserver(fit).observe(stage);
+  mobile.addEventListener("change", fit);
+  window.addEventListener("resize", fit, { passive: true });
+  window.visualViewport?.addEventListener("resize", fit, { passive: true });
+  document.fonts?.ready.then(fit).catch(() => {});
+  fit();
+})();
+</script>
+"""
+
 PUBLIC_BADGE_SCRIPT = """<script>
 (() => {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -887,7 +920,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.lyrics::-webkit-scrollbar{{disp
 {cursor_css}
 .has-cursor,.has-cursor *{{cursor:var(--cursor, auto)}}
 body{{position:relative;display:flex;align-items:center;justify-content:{page_place};padding:32px 16px;overflow:auto{";perspective:900px" if card_tilt else ""}}}
-.card-stage{{position:relative;z-index:3;width:min(92vw,{frame_width}px);transform:translate({frame_x}vw,{frame_y}vh) scale({frame_scale});transform-origin:center;}}
+.card-stage{{--frame-scale:{frame_scale};position:relative;z-index:3;width:min(92vw,{frame_width}px);transform:translate({frame_x}vw,{frame_y}vh) scale(var(--frame-scale));transform-origin:center;}}
 #profile-audio{{position:absolute;width:0;height:0;opacity:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video,.bg-effect,.backdrop{{position:fixed;inset:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video{{z-index:0}}
@@ -977,7 +1010,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .entry small{{color:#ffffff66;font-size:12px}}
 #copy-toast{{position:fixed;bottom:24px;left:50%;z-index:5;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:#111118ee;color:#fff;font-size:12px}}
 #copy-toast[hidden],.card[hidden],.media-dock[hidden],.meta[hidden],.entry[hidden]{{display:none}}
-.media-dock{{width:100%;margin-top:12px;pointer-events:auto;container-type:inline-size}}
+.media-dock{{position:relative;z-index:4;width:100%;margin-top:24px;pointer-events:auto;container-type:inline-size}}
 .player-row{{display:flex;min-height:80px;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden}}
 .discord-presence{{position:relative;display:flex;flex:0 0 42%;width:42%;min-width:0;min-height:80px;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
 .discord-presence-body{{display:grid;width:100%;min-width:0;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:2px 10px;overflow:hidden}}
@@ -1063,17 +1096,19 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .enter-fade{{animation:enter-fade .55s ease both}}
 .enter-unfold{{transform-origin:top center;animation:enter-unfold .55s ease both}}
 .enter-pop{{animation:enter-pop .45s cubic-bezier(.22,1,.36,1) both}}
+@media(max-width:639px){{body{{height:100vh;height:100dvh;min-height:100dvh;justify-content:center;padding:0;overflow:hidden}}.card-stage{{position:fixed;left:50%;top:50%;width:min(calc(100vw - 24px),{frame_width}px);max-width:calc(100vw - 24px);transform:translate(-50%,-50%) scale(var(--mobile-frame-scale,var(--frame-scale)));transform-origin:center}}}}
 @media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}.codrops-rain-effect{{display:none}}}}
 </style></head>
 <body{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
 {background_tag}{video_tag}<div class="backdrop"></div>{effect_canvas_tag}{sakura_effect_tag}{rain_effect_tag}{effect_video_tag if background_effect == "None" else ""}
 {f'<button type="button" id="entry" class="entry"><span class="entry-play"></span><small>{entry_text}</small></button>' if entry_on else ""}
-<div class="card-stage"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main>{media_dock}</div>
+<div class="card-stage" data-frame-scale="{frame_scale}"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main>{media_dock}</div>
 {meta_tag}
 {audio_tag}
 {playlist_data}
 {bio_data}
 {title_data}
+{PUBLIC_RESPONSIVE_FRAME_SCRIPT}
 {PUBLIC_COPY_SCRIPT}
 {PUBLIC_ANALYTICS_SCRIPT}
 {PUBLIC_BACKGROUND_EFFECT_SCRIPT if effect_canvas_tag else ""}

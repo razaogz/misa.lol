@@ -1,4 +1,5 @@
 import type { BackgroundEffect, ProfileConfig } from "./types";
+import { dashboardRequest, peekDashboardCache, setDashboardCache } from "./dashboard-cache";
 
 export type ConstellationAssignmentMode = "owner" | "self";
 export type ConstellationFrameMode = "member" | "framed" | "frameless";
@@ -109,6 +110,29 @@ export interface ConstellationMutation {
   left?: boolean;
 }
 
+export type ConstellationDashboardData = ConstellationBootstrap & ConstellationList;
+
+const CONSTELLATION_BOOTSTRAP_KEY = "constellations:bootstrap";
+const CONSTELLATION_LIST_KEY = "constellations:list";
+
+export function peekConstellationDashboard(): ConstellationDashboardData | undefined {
+  const boot = peekDashboardCache<ConstellationBootstrap>(CONSTELLATION_BOOTSTRAP_KEY);
+  const list = peekDashboardCache<ConstellationList>(CONSTELLATION_LIST_KEY);
+  return boot && list ? { ...boot, ...list } : undefined;
+}
+
+export function cacheConstellationDashboard(data: ConstellationDashboardData) {
+  setDashboardCache(CONSTELLATION_BOOTSTRAP_KEY, { me: data.me });
+  setDashboardCache(CONSTELLATION_LIST_KEY, { groups: data.groups, invitations: data.invitations });
+}
+
+export async function loadConstellationDashboard(force = false): Promise<ConstellationDashboardData> {
+  const [boot, list] = await Promise.all([
+    dashboardRequest(CONSTELLATION_BOOTSTRAP_KEY, () => constellationApi.bootstrap(), { maxAge: 2 * 60_000, force }),
+    dashboardRequest(CONSTELLATION_LIST_KEY, () => constellationApi.list(), { maxAge: 2 * 60_000, force }),
+  ]);
+  return { ...boot, ...list };
+}
 async function request<T>(path = "", method = "GET", body?: unknown, signal?: AbortSignal): Promise<T> {
   const form = typeof FormData !== "undefined" && body instanceof FormData;
   const response = await fetch(`/api/constellations${path}`, {

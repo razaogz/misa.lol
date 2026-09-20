@@ -11,7 +11,7 @@
   window.__misaTabState = true;
 
   var SLEEP_TITLE = "zzz... come back — misa.lol";
-  var SLEEP_FILE = "favicon-sleep.svg";
+  var SLEEP_FILE = "favicon-sleep.png";
 
   function iconLinks() {
     return Array.prototype.slice.call(
@@ -45,7 +45,7 @@
     saved.forEach(function (s) {
       if (sleeping) {
         s.el.setAttribute("href", sleepHref);
-        s.el.setAttribute("type", "image/svg+xml");
+        s.el.setAttribute("type", "image/png");
       } else {
         s.el.setAttribute("href", s.href);
         if (s.type === null) s.el.removeAttribute("type");

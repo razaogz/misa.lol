@@ -1,3 +1,5 @@
+import { dashboardRequest, peekDashboardCache, setDashboardCache } from "./dashboard-cache";
+
 export interface AccountSession {
   id: string;
   created_at?: string | null;
@@ -42,9 +44,17 @@ export async function changePassword(currentPassword: string, password: string, 
   }));
 }
 
-export async function fetchSessions() {
-  const data = await readJson(await fetch("/api/v1/me/sessions", { credentials: "include", cache: "no-store" }));
-  return (Array.isArray(data.sessions) ? data.sessions : []) as AccountSession[];
+const SESSIONS_CACHE_KEY = "security:sessions";
+
+export function peekSessions() {
+  return peekDashboardCache<AccountSession[]>(SESSIONS_CACHE_KEY);
+}
+
+export function fetchSessions(force = false) {
+  return dashboardRequest(SESSIONS_CACHE_KEY, async () => {
+    const data = await readJson(await fetch("/api/v1/me/sessions", { credentials: "include", cache: "no-store" }));
+    return (Array.isArray(data.sessions) ? data.sessions : []) as AccountSession[];
+  }, { maxAge: 60_000, force });
 }
 
 export async function revokeSessions(input: { sessionId?: string; others?: boolean }) {
@@ -54,7 +64,8 @@ export async function revokeSessions(input: { sessionId?: string; others?: boole
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: input.sessionId || "", others: Boolean(input.others) }),
   }));
-  return (Array.isArray(data.sessions) ? data.sessions : []) as AccountSession[];
+  const sessions = (Array.isArray(data.sessions) ? data.sessions : []) as AccountSession[];
+  return setDashboardCache(SESSIONS_CACHE_KEY, sessions);
 }
 
 export async function rotateBackupCodes(password: string) {

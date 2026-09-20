@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; resetKey?: string };
 type State = { hasError: boolean };
 
 export class RuntimeErrorBoundary extends Component<Props, State> {
@@ -11,6 +11,10 @@ export class RuntimeErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(): State {
     return { hasError: true };
+  }
+
+  componentDidUpdate(previous: Props) {
+    if (this.state.hasError && previous.resetKey !== this.props.resetKey) this.setState({ hasError: false });
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {

@@ -25,7 +25,7 @@ export function SakuraEffectLayer({ className = "" }: { className?: string }) {
     const swayAnimations = Array.from({ length: 9 }, (_, index) => `sway-${index}`);
 
     const createPetal = () => {
-      if (stopped) return;
+      if (stopped || document.visibilityState === "hidden") return;
       timer = window.setTimeout(() => {
         animation = window.requestAnimationFrame(createPetal);
       }, 300);
@@ -55,11 +55,19 @@ export function SakuraEffectLayer({ className = "" }: { className?: string }) {
       layer.appendChild(petal);
     };
 
+    const onVisibility = () => {
+      window.cancelAnimationFrame(animation);
+      window.clearTimeout(timer);
+      if (document.visibilityState === "hidden") layer.replaceChildren();
+      else animation = window.requestAnimationFrame(createPetal);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     animation = window.requestAnimationFrame(createPetal);
     return () => {
       stopped = true;
       window.cancelAnimationFrame(animation);
       window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
       layer.replaceChildren();
     };
   }, []);

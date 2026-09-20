@@ -2,8 +2,8 @@
 
 import { ArrowDownRight, ArrowUpRight, BarChart3, Globe2, MousePointerClick, Smartphone, Sparkles, Users, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
-import { MiniBar, PageHeader, SectionTitle, SelectBox } from "@/components/ui";
-import { emptyAnalytics, formatChange, loadAnalytics, socialColor, type AnalyticsRange, type AnalyticsSummary } from "@/lib/analytics";
+import { Button, MiniBar, PageHeader, SectionTitle, SelectBox } from "@/components/ui";
+import { emptyAnalytics, formatChange, loadAnalytics, peekAnalytics, socialColor, type AnalyticsRange, type AnalyticsSummary } from "@/lib/analytics";
 import { useT } from "@/lib/i18n";
 
 const RANGES: AnalyticsRange[] = ["3D", "7D", "30D", "90D"];
@@ -11,23 +11,30 @@ const RANGES: AnalyticsRange[] = ["3D", "7D", "30D", "90D"];
 export function AnalyticsView() {
   const t = useT();
   const [range, setRange] = useState<AnalyticsRange>("7D");
-  const [data, setData] = useState<AnalyticsSummary>(emptyAnalytics("7D"));
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [data, setData] = useState<AnalyticsSummary>(() => peekAnalytics("7D") || emptyAnalytics("7D"));
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(() => peekAnalytics("7D") ? "ready" : "loading");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setStatus("loading");
+    const cached = peekAnalytics(range);
+    if (cached) {
+      setData(cached);
+      setStatus("ready");
+    } else {
+      setData(emptyAnalytics(range));
+      setStatus("loading");
+    }
     void loadAnalytics(range).then((next) => {
       if (cancelled) return;
       setData(next);
       setStatus("ready");
     }).catch(() => {
       if (cancelled) return;
-      setData(emptyAnalytics(range));
-      setStatus("error");
+      if (!cached) setStatus("error");
     });
     return () => { cancelled = true; };
-  }, [range]);
+  }, [range, reloadKey]);
 
   const empty = status === "ready" && data.views === 0 && data.clicks === 0;
   const deviceTotal = data.devices.desktop + data.devices.mobile + data.devices.tablet;
@@ -43,6 +50,7 @@ export function AnalyticsView() {
   return (
     <main className="mx-auto min-h-screen max-w-[1350px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
       <PageHeader eyebrow={t("analytics.eyebrow")} title={t("analytics.title")} description={t("analytics.description")} action={<SelectBox value={range} options={RANGES} onChange={(value) => setRange(value as AnalyticsRange)} />} />
+      {status === "error" ? <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200"><span>Could not load analytics.</span><Button onClick={() => setReloadKey((value) => value + 1)}>Retry</Button></div> : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, change, icon: Icon }) => (
           <div key={label} className="surface rounded-2xl p-5">

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 const SLEEP_TITLE = "zzz... come back \u2014 misa.lol";
-const SLEEP_ICON = "/dashboard/favicon-sleep.svg";
+const SLEEP_ICON = "/dashboard/favicon-sleep.png";
 
 export function DashboardTabState() {
   useEffect(() => {
@@ -14,8 +14,8 @@ export function DashboardTabState() {
       const sleeping = document.visibilityState === "hidden";
       document.title = sleeping ? SLEEP_TITLE : normalTitle;
       saved.forEach(({ element, href, type }) => {
-        element.setAttribute("href", sleeping ? SLEEP_ICON : href || "/dashboard/favicon.svg");
-        if (sleeping) element.setAttribute("type", "image/svg+xml");
+        element.setAttribute("href", sleeping ? SLEEP_ICON : href || "/dashboard/favicon-awake.png");
+        if (sleeping) element.setAttribute("type", "image/png");
         else if (type === null) element.removeAttribute("type");
         else element.setAttribute("type", type);
       });

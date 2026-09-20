@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Copy, LayoutDashboard, Link2, LockKeyhole, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Palette, Search, Settings, Share2, ShieldCheck, Sparkles, Trophy, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LanguageSelect } from "@/components/dashboard/LanguageSelect";
+import { RuntimeErrorBoundary } from "@/components/dashboard/RuntimeErrorBoundary";
 import { UsernameClaimGate } from "@/components/onboarding/UsernameClaimGate";
 import { useAuth } from "@/lib/auth-store";
 import { useI18n } from "@/lib/i18n";
@@ -22,9 +23,9 @@ function NavLink({ href, label, icon: Icon, close }: DashboardNavItem & { close:
   const pathname = usePathname();
   const active = isActive(pathname, href);
   return (
-    <Link href={href} onClick={close} className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition ${active ? "bg-[#e11d48]/[.12] text-white" : "text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"}`}>
-      <Icon size={17} strokeWidth={active ? 2 : 1.7} className={active ? "text-[#fda4af]" : "text-zinc-600 group-hover:text-zinc-300"} />
-      {label}
+    <Link href={href} prefetch={href === "/" || href === "/analytics" || href === "/badges" || href === "/settings" || href === "/links"} onClick={close} className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition ${active ? "bg-[#e11d48]/20 shadow-[inset_0_0_0_1px_rgba(251,113,133,.18)]" : "hover:bg-white/[.055]"}`}>
+      <Icon size={17} strokeWidth={active ? 2.1 : 1.8} className={active ? "text-[#fda4af]" : "text-zinc-300 group-hover:text-white"} />
+      <span className="truncate">{label}</span>
       {active && <span className="absolute end-3 h-1.5 w-1.5 rounded-full bg-[#fecdd3] shadow-[0_0_10px_#e11d48]" />}
     </Link>
   );
@@ -36,11 +37,14 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
   const { t } = useI18n();
   const { enabled } = useFeatureFlags();
   const router = useRouter();
+  const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(true);
+  const [customizeOpen, setCustomizeOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [copiedAccountId, setCopiedAccountId] = useState(false);
   const initials = config.profile.displayName.trim().slice(0, 1).toUpperCase() || "U";
+  const avatarUrl = config.assets.avatar.url;
   const publicOrigin = process.env.NEXT_PUBLIC_AUTH_ORIGIN || "http://127.0.0.1:8000";
   const copyAccountId = async () => {
     if (!user?.accountId) return;
@@ -66,6 +70,15 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
     enabled("nav.leaderboard") && { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
     enabled("nav.premium") && { label: t("nav.premium"), href: "/premium", icon: Sparkles },
   ].filter((item): item is DashboardNavItem => Boolean(item)), [enabled, t]);
+  const accountGroup = groups.find((group) => group.label === t("nav.account"));
+  const customizeGroup = groups.find((group) => group.label === t("nav.customize"));
+  const linksGroup = groups.find((group) => group.label === t("nav.links"));
+  const accountActive = Boolean(accountGroup?.items.some((item) => isActive(pathname, item.href)));
+  const customizeActive = Boolean(customizeGroup?.items.some((item) => isActive(pathname, item.href)));
+  useEffect(() => {
+    if (accountActive) setAccountOpen(true);
+    if (customizeActive) setCustomizeOpen(true);
+  }, [accountActive, customizeActive]);
   const searchable = useMemo(() => {
     const items = [
       ...groups.flatMap((group) => group.items),
@@ -81,7 +94,7 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
     <div className="flex h-full flex-col">
       <div className="flex h-[76px] items-center justify-between px-5">
         <Link href="/" onClick={close} className="flex items-center gap-3">
-          <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
+          <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-2xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
           <span className="text-[15px] font-semibold tracking-[-.02em]">Misa<span className="text-[#fb7185]">.lol</span></span>
         </Link>
         <div className="flex items-center gap-1">
@@ -112,50 +125,59 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
         {searchOpen && query.trim() && (
           <div className="absolute inset-x-4 top-12 z-20 overflow-hidden rounded-xl border border-white/[.08] bg-[#0d0d14] py-1 shadow-xl">
             {searchable.length === 0 ? <p className="px-3 py-2 text-xs text-zinc-600">{t("nav.searchEmpty")}</p> : searchable.map(({ label, href, icon: Icon }) => (
-              <Link key={href} href={href} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); close(); }} className="flex h-9 items-center gap-2.5 px-3 text-xs text-zinc-400 hover:bg-white/[.05] hover:text-white">
+              <Link key={href} href={href} prefetch={false} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); close(); }} className="flex h-9 items-center gap-2.5 px-3 text-xs text-zinc-400 hover:bg-white/[.05] hover:text-white">
                 <Icon size={14} />{label}
               </Link>
             ))}
           </div>
         )}
       </div>
-      <nav className="mt-8 flex-1 space-y-7 overflow-y-auto px-3 pb-5">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <button type="button" onClick={() => group.label === t("nav.account") && setAccountOpen((open) => !open)} className="mb-2 flex w-full items-center justify-between px-3 text-start text-[10px] font-semibold uppercase tracking-[.2em] text-zinc-600">
-              {group.label}
-              {group.label === t("nav.account") && <ChevronRight size={13} className={`transition-transform ${accountOpen ? "rotate-90" : ""}`} />}
+      <nav className="mt-6 flex-1 space-y-3 overflow-y-auto px-3 pb-5">
+        {accountGroup ? (
+          <div>
+            <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} className={`flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-start text-sm font-semibold text-white transition ${accountActive ? "bg-[#e11d48]/20" : "bg-white/[.035] hover:bg-white/[.06]"}`}>
+              <LayoutDashboard size={17} className={accountActive ? "text-[#fda4af]" : "text-zinc-300"} />
+              <span className="flex-1">{accountGroup.label}</span>
+              <ChevronRight size={15} className={`transition-transform ${accountOpen ? "rotate-90" : ""}`} />
             </button>
-            <div className={`space-y-1 ${group.label === t("nav.account") && !accountOpen ? "hidden" : ""}`}>
-              {group.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}
-            </div>
+            {accountOpen ? <div className="mt-1.5 space-y-1 ps-2">{accountGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
           </div>
-        ))}
-        {(user?.isAdmin || user?.isStaff) && <a href="/admin" onClick={close} className="flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"><ShieldCheck size={15} />{t("nav.admin")}</a>}
-        <div>
-          <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-zinc-600">{t("nav.more")}</div>
-          <div className="space-y-1">{moreItems.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div>
+        ) : null}
+        {customizeGroup ? (
+          <div>
+            <button type="button" onClick={() => setCustomizeOpen((open) => !open)} aria-expanded={customizeOpen} className={`flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-start text-sm font-semibold text-white transition ${customizeActive ? "bg-[#e11d48]/20" : "hover:bg-white/[.055]"}`}>
+              <Palette size={17} className={customizeActive ? "text-[#fda4af]" : "text-zinc-300"} />
+              <span className="flex-1">{customizeGroup.label}</span>
+              <ChevronRight size={15} className={`transition-transform ${customizeOpen ? "rotate-90" : ""}`} />
+            </button>
+            {customizeOpen ? <div className="mt-1.5 space-y-1 ps-2">{customizeGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
+          </div>
+        ) : null}
+        {linksGroup?.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}
+        {(user?.isAdmin || user?.isStaff) ? <NavLink href="/admin" label={t("nav.admin")} icon={ShieldCheck} close={close} /> : null}
+        {moreItems.map((item) => <NavLink key={item.href} {...item} close={close} />)}
+        <div className="pt-2">
+          <div className="rounded-2xl border border-white/[.07] bg-white/[.025] p-2.5">
+            <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[.18em] text-zinc-400">{t("language.label")}</p>
+            <LanguageSelect compact />
+          </div>
         </div>
-        <div className="border-t border-white/[.06] pt-5">
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-zinc-600">{t("language.label")}</p>
-          <div className="rounded-xl border border-white/[.06] bg-white/[.025] p-2.5"><LanguageSelect compact /></div>
-        </div>
-        <div className="space-y-1">
+        <div className="rounded-[24px] border border-white/[.06] bg-white/[.025] p-2">
           <NavLink href="/help" label={t("nav.help")} icon={CircleHelp} close={close} />
-          <a href={`${publicOrigin}/${config.profile.username}`} target="_blank" rel="noreferrer" className="flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-zinc-500 hover:bg-white/[.05] hover:text-zinc-200"><Share2 size={15} />{t("nav.share")}</a>
+          <a href={`${publicOrigin}/${config.profile.username}`} target="_blank" rel="noreferrer" className="mt-1 flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition hover:bg-white/[.055]"><Share2 size={17} className="text-zinc-300" />{t("nav.share")}</a>
         </div>
       </nav>
-      <div className="space-y-3 border-t border-white/[.06] p-3">
-        <div className="flex items-center gap-3 rounded-xl border border-white/[.06] bg-white/[.025] p-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#5d4ea4] to-[#241d45] text-xs font-semibold">{initials}</div>
+      <div className="border-t border-white/[.06] p-3">
+        <div className="flex items-center gap-3 rounded-[26px] border border-white/[.06] bg-white/[.035] p-2.5 shadow-[0_12px_30px_rgba(0,0,0,.18)]">
+          {avatarUrl ? <Image src={avatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10" /> : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#5d4ea4] to-[#241d45] text-xs font-semibold text-white">{initials}</div>}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-zinc-200">@{config.profile.username}</p>
+            <p className="truncate text-sm font-semibold text-white">@{config.profile.username}</p>
             <div className="flex items-center gap-1">
-              <p className="font-mono text-[10px] text-zinc-600">{user?.accountId || "Generating..."}</p>
-              {user?.accountId && <button type="button" aria-label="Copy Account ID" title="Copy Account ID" onClick={() => void copyAccountId()} className="rounded p-0.5 text-zinc-600 hover:bg-white/[.06] hover:text-white">{copiedAccountId ? <Check size={11} /> : <Copy size={11} />}</button>}
+              <p className="truncate font-mono text-[10px] text-zinc-400">{user?.accountId || "Generating..."}</p>
+              {user?.accountId && <button type="button" aria-label="Copy Account ID" title="Copy Account ID" onClick={() => void copyAccountId()} className="rounded-full p-1 text-zinc-400 hover:bg-white/[.08] hover:text-white">{copiedAccountId ? <Check size={11} /> : <Copy size={11} />}</button>}
             </div>
           </div>
-          <button type="button" aria-label={t("nav.logout")} title={t("nav.logout")} onClick={() => void logout()} className="rounded-lg p-1.5 text-zinc-600 hover:bg-white/[.06] hover:text-white"><LogOut size={15} /></button>
+          <button type="button" aria-label={t("nav.logout")} title={t("nav.logout")} onClick={() => void logout()} className="rounded-full p-2 text-zinc-300 hover:bg-white/[.08] hover:text-white"><LogOut size={15} /></button>
         </div>
       </div>
     </div>
@@ -189,8 +211,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (isPublicProfile || isAdminRoute) return <>{children}</>;
   if (!localPreview && (!isReady || !user)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07070a] text-sm text-zinc-500">
-        {isReady ? t("nav.redirecting") : t("nav.loading")}
+      <div className="app-shell min-h-[100svh] bg-[#07070a]" aria-busy="true">
+        <aside className="sidebar-glass fixed inset-y-0 start-0 hidden w-[280px] border-e p-4 md:block">
+          <div className="h-10 w-32 animate-pulse rounded-xl bg-white/[.06]" />
+          <div className="mt-10 space-y-3">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-10 animate-pulse rounded-xl bg-white/[.035]" />)}</div>
+        </aside>
+        <div className="md:ps-[280px]">
+          <header className="h-[68px] border-b border-white/[.06] bg-[#07070a]/80 md:hidden" />
+          <main className="mx-auto max-w-[1360px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
+            <div className="h-8 w-56 animate-pulse rounded-xl bg-white/[.07]" />
+            <div className="mt-4 h-4 w-full max-w-md animate-pulse rounded-lg bg-white/[.04]" />
+            <p className="mt-5 text-xs text-zinc-600">{isReady ? t("nav.redirecting") : t("nav.loading")}</p>
+          </main>
+        </div>
       </div>
     );
   }
@@ -205,7 +238,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
-      {!sidebarCollapsed && <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[248px] border-e md:block"><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>}
+      {!sidebarCollapsed && <aside className="sidebar-glass fixed inset-y-0 start-0 z-50 hidden w-[280px] border-e md:block"><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>}
       {sidebarCollapsed && (
         <button type="button" className="sidebar-glass fixed start-3 top-4 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border text-zinc-300 shadow-lg hover:text-white md:flex" onClick={toggleSidebar} aria-label="Show navigation" title="Show navigation">
           <PanelLeftOpen size={17} />
@@ -214,15 +247,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {open && (
         <>
           <button type="button" className="animate-fade-in fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)} aria-label={t("nav.close")} />
-          <aside className="sidebar-glass animate-slide-in fixed inset-y-0 start-0 z-50 w-[272px] border-e md:hidden"><SidebarContent close={() => setOpen(false)} /></aside>
+          <aside className="sidebar-glass animate-slide-in fixed inset-y-0 start-0 z-50 w-[288px] border-e md:hidden"><SidebarContent close={() => setOpen(false)} /></aside>
         </>
       )}
-      <div className={sidebarCollapsed ? "" : "md:ps-[248px]"}>
+      <div className={sidebarCollapsed ? "" : "md:ps-[280px]"}>
         <header className="sticky top-0 z-30 flex h-[68px] items-center border-b border-white/[.06] bg-[#07070a]/70 px-4 backdrop-blur-xl sm:px-8 md:hidden">
           <button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#e11d48]/30 bg-[#e11d48]/10 p-2 text-[#fecdd3] hover:bg-[#e11d48]/20" aria-label={t("nav.open")}><Menu size={19} /></button>
           <div className="ms-3 flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#fb7185]">.lol</span></div>
         </header>
-        {children}
+        <RuntimeErrorBoundary resetKey={pathname}>{children}</RuntimeErrorBoundary>
       </div>
     </div>
   );

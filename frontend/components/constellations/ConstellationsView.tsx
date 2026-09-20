@@ -10,8 +10,11 @@ import { BACKGROUND_EFFECTS } from "@/lib/background-effects";
 import { ProfileDraftProvider } from "@/lib/profile-store";
 import type { BackgroundEffect, ProfileConfig } from "@/lib/types";
 import {
+  cacheConstellationDashboard,
   constellationApi,
   constellationError,
+  loadConstellationDashboard,
+  peekConstellationDashboard,
   constellationExamples,
   defaultConstellationPositions,
   defaultConstellationScale,
@@ -38,32 +41,35 @@ function cleanConstellationSlug(value: string) {
 }
 
 export function ConstellationsView() {
-  const [me, setMe] = useState<ConstellationIdentity | null>(null);
-  const [groups, setGroups] = useState<ConstellationGroup[]>([]);
-  const [invitations, setInvitations] = useState<ConstellationInvitation[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [me, setMe] = useState<ConstellationIdentity | null>(() => peekConstellationDashboard()?.me || null);
+  const [groups, setGroups] = useState<ConstellationGroup[]>(() => peekConstellationDashboard()?.groups || []);
+  const [invitations, setInvitations] = useState<ConstellationInvitation[]>(() => peekConstellationDashboard()?.invitations || []);
+  const [selectedId, setSelectedId] = useState(() => peekConstellationDashboard()?.groups[0]?.id || "");
   const [working, setWorking] = useState<ConstellationGroup | null>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileConfig | null>(null);
   const [entry, setEntry] = useState<Entry>(null);
   const [tab, setTab] = useState<Tab>("design");
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => Boolean(peekConstellationDashboard()));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const joinedToken = useRef("");
 
-  const load = async () => {
-    const [boot, list] = await Promise.all([constellationApi.bootstrap(), constellationApi.list()]);
-    setMe(boot.me);
-    setGroups(list.groups);
-    setInvitations(list.invitations);
-    setSelectedId((current) => current && list.groups.some((group) => group.id === current) ? current : list.groups[0]?.id || "");
+  const load = async (force = false) => {
+    const data = await loadConstellationDashboard(force);
+    setMe(data.me);
+    setGroups(data.groups);
+    setInvitations(data.invitations);
+    setSelectedId((current) => current && data.groups.some((group) => group.id === current) ? current : data.groups[0]?.id || "");
   };
 
   useEffect(() => {
     void load().catch((reason) => setError(constellationError(reason))).finally(() => setReady(true));
   }, []);
 
+  useEffect(() => {
+    if (ready && me) cacheConstellationDashboard({ me, groups, invitations });
+  }, [groups, invitations, me, ready]);
   useEffect(() => {
     const selected = groups.find((group) => group.id === selectedId) || null;
     setWorking(selected);
@@ -99,7 +105,7 @@ export function ConstellationsView() {
     try {
       const result = await task();
       if (result.deleted || (result.left && !result.group)) {
-        await load();
+        await load(true);
       } else if (result.group) {
         setGroups((current) => [result.group!, ...current.filter((item) => item.id !== result.group!.id)]);
         setSelectedId(result.group.id);
@@ -133,7 +139,7 @@ export function ConstellationsView() {
         description="Compose complete Misa profiles together on one shared page."
         action={<div className={styles.headerActions}><Button onClick={() => setEntry("join")}><Link2 size={15} />Join</Button><Button variant="accent" onClick={() => setEntry("create")}><Plus size={15} />Create</Button></div>}
       />
-      {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+      {error ? <div role="alert" className={styles.error}>{error} <button type="button" onClick={() => { setError(""); void load(true).catch((reason) => setError(constellationError(reason))); }}>Retry</button></div> : null}
       {notice ? <p role="status" className={styles.notice}><Check size={15} />{notice}</p> : null}
       {invitations.length ? <InvitationStrip invitations={invitations} busy={busy} onRespond={(invite, accept) => void apply(() => constellationApi.respond(invite, accept), accept ? "Invitation accepted." : "Invitation declined.")} /> : null}
       {entry ? <EntryPanel mode={entry} busy={busy} onClose={() => setEntry(null)} onCreate={(body) => void apply(() => constellationApi.create(body), "Constellation created.").then((result) => { if (result) setEntry(null); })} onJoin={(token) => void apply(() => constellationApi.join(token), "You joined the Constellation.").then((result) => { if (result) setEntry(null); })} /> : null}

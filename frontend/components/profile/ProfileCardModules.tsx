@@ -244,7 +244,7 @@ export function ProfileMediaModules({ config, preview }: { config: ProfileConfig
   if (!showDiscordTile && !showAudio) return null;
 
   return (
-    <div className={`mt-3 flex w-full min-w-0 flex-col items-stretch gap-2.5 ${stackMedia ? "" : "sm:h-20 sm:flex-row"}`}>
+    <div className={`relative z-20 mt-6 flex w-full min-w-0 flex-col items-stretch gap-2.5 ${stackMedia ? "" : "sm:h-20 sm:flex-row"}`}>
       {showDiscordTile && <DiscordPresenceTile config={config} compact={showAudio && !stackMedia} />}
       {showAudio && (
         <div className={`min-w-0 flex-1 [&>div]:mt-0 ${stackMedia ? "" : "sm:h-full sm:[&>div]:h-full"}`}>

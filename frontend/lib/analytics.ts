@@ -1,3 +1,5 @@
+import { dashboardRequest, peekDashboardCache } from "./dashboard-cache";
+
 export type AnalyticsRange = "3D" | "7D" | "30D" | "90D";
 
 export interface AnalyticsSummary {
@@ -34,10 +36,18 @@ export const emptyAnalytics = (range: AnalyticsRange = "7D"): AnalyticsSummary =
   countries: [],
 });
 
-export async function loadAnalytics(range: AnalyticsRange): Promise<AnalyticsSummary> {
-  const response = await fetch(`/api/v1/analytics/me?range=${range}`, { credentials: "include", cache: "no-store" });
-  if (!response.ok) throw new Error("Could not load analytics.");
-  return response.json() as Promise<AnalyticsSummary>;
+const analyticsKey = (range: AnalyticsRange) => `analytics:${range}`;
+
+export function peekAnalytics(range: AnalyticsRange) {
+  return peekDashboardCache<AnalyticsSummary>(analyticsKey(range));
+}
+
+export function loadAnalytics(range: AnalyticsRange, force = false): Promise<AnalyticsSummary> {
+  return dashboardRequest(analyticsKey(range), async () => {
+    const response = await fetch(`/api/v1/analytics/me?range=${range}`, { credentials: "include", cache: "no-store" });
+    if (!response.ok) throw new Error("Could not load analytics.");
+    return response.json() as Promise<AnalyticsSummary>;
+  }, { maxAge: 60_000, force });
 }
 
 export function formatChange(value: number) {

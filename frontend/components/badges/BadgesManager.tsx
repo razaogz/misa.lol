@@ -4,7 +4,7 @@ import { BadgeCheck, Check, ChevronRight, Crown, Lock, Search, ShieldCheck, Spar
 import { useEffect, useMemo, useState } from "react";
 import { BadgeArtwork } from "@/components/badges/BadgeArtwork";
 import { Button, FieldLabel, Modal, PageHeader, SectionTitle, TextArea, TextInput } from "@/components/ui";
-import type { AchievementBadge, AchievementCollection, AchievementRank } from "@/lib/badges";
+import { cacheBadgeCollection, loadBadgeCollection, peekBadgeCollection, type AchievementBadge, type AchievementCollection, type AchievementRank } from "@/lib/badges";
 
 const rarityTone: Record<string, string> = {
   COMMON: "text-zinc-400 border-white/10",
@@ -14,55 +14,33 @@ const rarityTone: Record<string, string> = {
   LEGENDARY: "text-amber-300 border-amber-300/20",
 };
 
-function asArray<T = any>(value: unknown): T[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function normalizeRank(item: any) {
-  return {
-    ...item,
-    badges: asArray(item.badges),
-  };
-}
-
-function normalizeBadge(item: any): AchievementBadge {
-  return { ...item, previewUrl: item.previewUrl || item.preview_url || item.icon, assetUrl: item.assetUrl || item.asset_url, enabled: Boolean(item.featured), color: item.color || "#9b87f5" };
-}
-
 function BadgeVisual({ badge, className }: { badge: AchievementBadge; className: string }) {
   const hasArtwork = Boolean(badge.previewUrl || badge.icon || (!badge.animated && badge.assetUrl));
   return hasArtwork ? <BadgeArtwork badge={badge} className={className} /> : <ShieldCheck className={className} style={{ color: badge.color }} />;
 }
 
+function featuredBadgeIds(collection: AchievementCollection | null | undefined) {
+  return (collection?.badges || [])
+    .filter((item) => item.owned && item.featured)
+    .sort((a, b) => Number(a.featured_order || 0) - Number(b.featured_order || 0))
+    .map((item) => item.id);
+}
+
 export function BadgesManager() {
-  const [collection, setCollection] = useState<AchievementCollection | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [collection, setCollection] = useState<AchievementCollection | null>(() => peekBadgeCollection() || null);
+  const [selected, setSelected] = useState<string[]>(() => featuredBadgeIds(peekBadgeCollection()));
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<AchievementBadge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const load = async () => {
+  const load = async (force = false) => {
     setError("");
     try {
-      const response = await fetch("/api/v1/badges/me", { credentials: "include", cache: "no-store" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load your badges.");
-      const badges = (body.badges || []).map(normalizeBadge);
-      const ranks = (body.ranks || []).map(normalizeRank);
-      const currentRank = body.currentRank ? normalizeRank(body.currentRank) : null;
-      setCollection({ ...body, badges, ranks, currentRank });
-      setSelected(badges.filter((item: AchievementBadge) => item.owned && item.featured).sort((a: any, b: any) => (a.featured_order || 0) - (b.featured_order || 0)).map((item: AchievementBadge) => item.id));
+      const next = await loadBadgeCollection(force);
+      setCollection(next);
+      setSelected(featuredBadgeIds(next));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not load your badges.");
     }
@@ -79,7 +57,11 @@ export function BadgesManager() {
       const response = await fetch("/api/v1/badges/me/featured", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ badge_ids: selected }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Could not save featured badges.");
-      setCollection((current) => current ? { ...current, badges: current.badges.map((badge) => ({ ...badge, featured: selected.includes(badge.id), enabled: selected.includes(badge.id) })) } : current);
+      if (collection) {
+        const next = { ...collection, badges: collection.badges.map((badge) => ({ ...badge, featured: selected.includes(badge.id), enabled: selected.includes(badge.id) })) };
+        setCollection(next);
+        cacheBadgeCollection(next);
+      }
       setSaved(true);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save featured badges."); }
     finally { setBusy(false); }
@@ -94,7 +76,7 @@ export function BadgesManager() {
   return (
     <main className="mx-auto min-h-screen max-w-[1280px] px-4 py-7 sm:px-8 sm:py-11 xl:px-12">
       <PageHeader eyebrow="COLLECTION" title="Badges & ranks" description="Your milestones, rank progression, and the badges you choose to feature." action={<Button variant="accent" onClick={() => void saveFeatured()} disabled={busy || !collection}>{busy ? "Saving…" : saved ? "Saved" : "Save featured"}</Button>} />
-      {error && <p className="mb-5 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
+      {error && <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200"><span>{error}</span><button type="button" onClick={() => void load(true)} className="shrink-0 font-medium text-white underline underline-offset-4">Retry</button></div>}
       {!collection ? <div className="surface rounded-2xl p-10 text-center text-sm text-zinc-500">Loading your collection…</div> : <>
         <RankHero rank={rank} next={collection.ranks.find((item) => !item.owned)} />
         <section className="mt-8">

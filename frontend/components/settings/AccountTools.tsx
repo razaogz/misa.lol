@@ -7,6 +7,7 @@ import {
   changePassword,
   disableMfa,
   fetchSessions,
+  peekSessions,
   forgetSwitcherAccount,
   formatWhen,
   rotateBackupCodes,
@@ -41,7 +42,7 @@ export function AccountTools() {
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaConfirm, setMfaConfirm] = useState(false);
 
-  const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [sessions, setSessions] = useState<AccountSession[]>(() => peekSessions() || []);
   const [sessionMessage, setSessionMessage] = useState("");
   const [sessionError, setSessionError] = useState(false);
   const [revokeOthers, setRevokeOthers] = useState(false);
@@ -63,7 +64,7 @@ export function AccountTools() {
       setPasswordConfirm("");
       setPasswordMessage(user?.hasPassword ? t("account.passwordUpdated") : t("account.passwordSaved"));
       await refresh();
-      setSessions(await fetchSessions());
+      setSessions(await fetchSessions(true));
     } catch (error) {
       setPasswordError(true);
       setPasswordMessage(error instanceof Error ? error.message : t("account.passwordFail"));
