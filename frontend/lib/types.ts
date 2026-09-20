@@ -129,6 +129,7 @@ export interface ProfileConfig {
     showAvatar?: boolean;
     showAvatarBorder?: boolean;
     showDisplayName?: boolean;
+    elementLayouts?: import("./element-layout").ElementLayouts;
     profileFrameScale?: number;
     profileFrameWidth?: number;
     profileFrameHeight?: number;

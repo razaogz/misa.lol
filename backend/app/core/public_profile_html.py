@@ -1,3 +1,5 @@
+from app.core.element_layout import element_style
+
 import hashlib
 import json
 from html import escape
@@ -55,39 +57,6 @@ PUBLIC_ANALYTICS_SCRIPT = """<script>
     if (!target) return;
     send("click", target.getAttribute("data-social-id") || "", target.getAttribute("data-social-platform") || "");
   });
-})();
-</script>
-"""
-
-PUBLIC_RESPONSIVE_FRAME_SCRIPT = """<script>
-(() => {
-  const stage = document.querySelector(".card-stage");
-  if (!stage) return;
-  const mobile = window.matchMedia("(max-width: 639px)");
-  let queued = 0;
-  const fit = () => {
-    cancelAnimationFrame(queued);
-    queued = requestAnimationFrame(() => {
-      if (!mobile.matches) {
-        stage.style.removeProperty("--mobile-frame-scale");
-        return;
-      }
-      const viewport = window.visualViewport;
-      const width = Math.max(1, viewport?.width || window.innerWidth);
-      const height = Math.max(1, viewport?.height || window.innerHeight);
-      const stageWidth = Math.max(1, stage.offsetWidth);
-      const stageHeight = Math.max(1, stage.offsetHeight);
-      const wanted = Math.max(0.1, Number(stage.dataset.frameScale || "1"));
-      const scale = Math.max(0.1, Math.min(wanted, (width - 24) / stageWidth, (height - 24) / stageHeight));
-      stage.style.setProperty("--mobile-frame-scale", String(scale));
-    });
-  };
-  new ResizeObserver(fit).observe(stage);
-  mobile.addEventListener("change", fit);
-  window.addEventListener("resize", fit, { passive: true });
-  window.visualViewport?.addEventListener("resize", fit, { passive: true });
-  document.fonts?.ready.then(fit).catch(() => {});
-  fit();
 })();
 </script>
 """
@@ -175,6 +144,18 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
     load(order[(pos + dir + order.length) % order.length], true);
   };
   if (audio) audio.volume = volume;
+  const videoToggle = document.getElementById("video-audio-toggle");
+  const videoVolume = document.getElementById("video-volume");
+  if (video) {
+    video.volume = volume;
+    const syncVideo = () => {
+      if (videoToggle) { videoToggle.textContent = video.muted ? "Enable audio" : "Mute audio"; videoToggle.setAttribute("aria-pressed", String(!video.muted)); }
+    };
+    video.addEventListener("volumechange", syncVideo);
+    videoToggle?.addEventListener("click", () => { video.muted = !video.muted; video.play().catch(() => {}); });
+    videoVolume?.addEventListener("input", () => { video.volume = Number(videoVolume.value) / 100; });
+    syncVideo();
+  }
   const startMedia = () => {
     if (video) video.play().catch(() => {});
     if (audio && enabled && tracks[0]) load(0, true);
@@ -348,6 +329,7 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
     if (profileMeta) profileMeta.hidden = true;
     entry.addEventListener("click", () => {
       entry.hidden = true;
+      if (video && videoToggle && enabled) video.muted = false;
       reveal();
     });
   } else {
@@ -433,6 +415,27 @@ PUBLIC_COPY_SCRIPT = """<div id="copy-toast" hidden>Copied</div>
 })();
 </script>"""
 
+
+PUBLIC_MEDIA_LAYOUT_SCRIPT = """<script>
+(() => {
+  const slot = document.querySelector(".profile-audio-slot");
+  if (!slot) return;
+  const mobile = document.querySelector("[data-profile-mobile-audio]");
+  const row = document.querySelector("[data-profile-media-row]");
+  const viewport = window.matchMedia("(min-width:900px)");
+  const place = () => {
+    const target = viewport.matches ? row : mobile;
+    if (!target || slot.parentElement === target) return;
+    const audio = slot.querySelector("audio");
+    const playing = audio && !audio.paused;
+    if (target.moveBefore && slot.isConnected) target.moveBefore(slot, null);
+    else target.appendChild(slot);
+    if (playing && audio.paused) audio.play().catch(() => {});
+  };
+  place();
+  viewport.addEventListener("change", place);
+})();
+</script>"""
 
 PUBLIC_WIDGET_SCRIPT = """<script>
 (() => {
@@ -636,13 +639,6 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     show_avatar_border = bool(settings.get("showAvatarBorder", True))
     show_display_name = bool(settings.get("showDisplayName", True))
     show_username = bool(settings.get("showUsername", True))
-    frame_scale = _clamp(settings.get("profileFrameScale"), 100, 50, 150) / 100
-    frame_width = _clamp(settings.get("profileFrameWidth"), 430, 260, 800)
-    stored_frame_height = _clamp(settings.get("profileFrameHeight"), 0, 0, 1000)
-    frame_height = stored_frame_height if stored_frame_height >= 200 else 0
-    frame_height_css = f"min-height:{frame_height}px;" if frame_height else ""
-    frame_x = _clamp(settings.get("profileFrameX"), 0, -45, 45)
-    frame_y = _clamp(settings.get("profileFrameY"), 0, -45, 45)
     border_color = css_hex_color(settings.get("borderColor"), "#ffffff")
     border_width = _clamp(settings.get("borderWidth"), 1, 0, 8)
     widget_swap = bool(settings.get("widgetColorSwap"))
@@ -734,7 +730,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     avatar_tag = f'<div class="avatar-ring{avatar_border_class}"><div class="avatar-inner{avatar_border_class}">{avatar_face}</div>{deco_tag}{status_tag}</div>' if show_avatar else ""
     guild_img = f'<img src="{guild_badge}" alt="" onerror="this.remove()">' if guild_badge else ""
     guild_tag = f'<span class="guild-tag">{guild_img}{guild_tag_text}</span>' if guild_tag_text else ""
-    video_muted = " muted" if audio_source != "video" else ""
+    video_muted = " muted"
     video_tag = (
         f'<video class="bg-video" autoplay{video_muted} loop playsinline src="{asset_src("backgroundVideo")}"></video>'
         if has_video
@@ -781,6 +777,8 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if playlist
         else ""
     )
+    if has_video and audio_source == "video" and audio_enabled:
+        audio_controls = f'<div class="player"><div class="player-layout"><span class="player-meta">Background video</span><button id="video-audio-toggle" type="button" class="audio-btn" aria-pressed="false" style="width:auto;padding:8px">Enable audio</button><input id="video-volume" type="range" min="0" max="100" value="{round(volume_ratio * 100)}" aria-label="Video volume" style="min-width:0;max-width:100%"></div></div>'
     presence_pfp = safe_discord_img(discord.get("accountAvatar") or discord.get("avatar"))
     presence_face = (
         f'<img class="discord-presence-image" src="{presence_pfp}" alt="" width="44" height="44">'
@@ -802,8 +800,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         if settings.get("showDiscordStatus", True) and (presence_pfp or discord_status)
         else ""
     )
-    if discord_tile or audio_controls:
-        audio_controls = f'<div class="player-row">{discord_tile}{audio_controls}</div>'
+
     wash_style = (
         f"background-image:radial-gradient(circle at 19% 10%,{accent}4d,transparent 28%),"
         f"radial-gradient(circle at 80% 75%,{accent}26,transparent 32%),"
@@ -880,20 +877,19 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     )
     display_name_tag = f'<h1 id="display-name" class="{name_class}" style="{name_style}">{display_name}</h1>' if show_display_name else ""
     handle_tag = f'<p class="handle">@{username}</p>' if show_username else ""
-    identity = (
-        f'<div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>'
-        f'{handle_tag}{description_tag}{location_tag}'
-        f'<div class="socials">{links}</div>{_public_widgets_markup(widgets)}{_public_sections_markup(config, username_raw)}'
-    )
+    uid_tag = f'<p class="handle">UID {escape(str(profile.get("uid") or ""))}</p>' if profile.get("uid") else ""
+    identity = f'<div class="profile-identity"><div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>{handle_tag}{uid_tag}{description_tag}{location_tag}</div>'
+    discord_element = f'<div class="profile-media-slot"><div class="profile-element profile-element-discord" data-layout-element="discord" style="{element_style(settings, "discord")}">{discord_tile}</div></div>' if discord_tile else ""
+    widget_markup = _public_widgets_markup(widgets, settings)
+    # Keep a single widget resolver / polling target; CSS places its cards beside presence.
+    modules = f'<div class="profile-media-row" data-profile-media-row>{discord_element}{widget_markup}</div><div class="socials">{links}</div>{_public_sections_markup(config, username_raw)}{meta_tag}'
     if layout == "Sleek":
-        card_inner = f'<div class="sleek-hero">{banner_tag}{avatar_tag}</div><div class="sleek-body">{identity}</div>'
-    elif layout == "Simplistic":
-        card_inner = f'{avatar_tag}{identity}'
+        card_inner = f'<div class="sleek-hero">{banner_tag}{avatar_tag}</div><div class="sleek-body">{identity}{modules}</div>'
     else:
-        card_inner = f'{banner_tag}<div class="{"card-body after-banner" if has_banner else "card-body"}">{avatar_tag}{identity}</div>'
-    media_dock = f'<div class="media-dock"{" hidden" if entry_on else ""}>{audio_controls}</div>' if audio_controls else ""
+        card_inner = f'{banner_tag if layout == "Modern" else ""}<div class="card-body"><div class="profile-header">{avatar_tag}{identity}</div>{modules}</div>'
+    media_dock = f'<div class="profile-media-slot profile-audio-slot"><div class="profile-element profile-element-audio" data-layout-element="audio" style="{element_style(settings, "audio")}"><div class="media-dock"{" hidden" if entry_on else ""}>{audio_controls}</div></div></div>' if audio_controls else ""
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{page_title}</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{page_title}</title>
 <meta name="description" content="{share_description}">
 <meta name="theme-color" content="{accent}">
 <link rel="canonical" href="{page_url}">
@@ -920,7 +916,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.lyrics::-webkit-scrollbar{{disp
 {cursor_css}
 .has-cursor,.has-cursor *{{cursor:var(--cursor, auto)}}
 body{{position:relative;display:flex;align-items:center;justify-content:{page_place};padding:32px 16px;overflow:auto{";perspective:900px" if card_tilt else ""}}}
-.card-stage{{--frame-scale:{frame_scale};position:relative;z-index:3;width:min(92vw,{frame_width}px);transform:translate({frame_x}vw,{frame_y}vh) scale(var(--frame-scale));transform-origin:center;}}
 #profile-audio{{position:absolute;width:0;height:0;opacity:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video,.bg-effect,.backdrop{{position:fixed;inset:0;pointer-events:none}}
 .bg-wash,.bg-image,.bg-video{{z-index:0}}
@@ -928,7 +923,7 @@ body{{position:relative;display:flex;align-items:center;justify-content:{page_pl
 .backdrop{{z-index:1}}
 .bg-effect{{z-index:2;background:transparent}}
 .codrops-rain-effect{{border:0}}
-.card{{position:relative;width:100%;{frame_height_css}margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
+.card{{position:relative;width:100%;min-height:inherit;margin:0;padding:{card_padding};border:{border_width}px solid {border_css};border-radius:{profile_radius}px;background:{card_background};backdrop-filter:blur({card_blur}px);box-shadow:{card_shadow};text-align:{content_align};overflow:hidden;pointer-events:auto{";transform-style:preserve-3d" if card_tilt else ""}}}
 .card.no-frame{{border-color:transparent;background:transparent;backdrop-filter:none;box-shadow:none}}
 .card.no-frame::before{{display:none}}
 .card-body.after-banner{{padding-top:20px}}
@@ -1011,7 +1006,6 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 #copy-toast{{position:fixed;bottom:24px;left:50%;z-index:5;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:#111118ee;color:#fff;font-size:12px}}
 #copy-toast[hidden],.card[hidden],.media-dock[hidden],.meta[hidden],.entry[hidden]{{display:none}}
 .media-dock{{position:relative;z-index:4;width:100%;margin-top:24px;pointer-events:auto;container-type:inline-size}}
-.player-row{{display:flex;min-height:80px;align-items:stretch;gap:10px;width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden}}
 .discord-presence{{position:relative;display:flex;flex:0 0 42%;width:42%;min-width:0;min-height:80px;align-items:center;overflow:hidden;padding:12px;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left}}
 .discord-presence-body{{display:grid;width:100%;min-width:0;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:2px 10px;overflow:hidden}}
 .discord-presence-avatar{{position:relative;grid-row:1/3;width:44px;height:44px;flex:none;overflow:visible}}
@@ -1021,8 +1015,6 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .discord-presence-name,.discord-presence-status{{width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .discord-presence-name{{color:#fff;font-size:13px;font-weight:600;line-height:1.2;text-align:left}}
 .discord-presence-status{{color:#ffffff8c;font-size:10px;line-height:1.2;text-align:left}}
-.player-row>.player{{height:80px;flex:1 1 auto;min-width:0;max-width:100%;margin-top:0;overflow:hidden}}
-.discord-presence:only-child,.player-row>.player:only-child{{width:100%;flex:1 1 100%}}
 .player{{position:relative;z-index:5;width:100%;min-width:0;max-width:100%;margin-top:24px;padding:12px;overflow:hidden;border:1px solid #ffffff1a;border-radius:18px;background:#00000040;text-align:left;pointer-events:auto;isolation:isolate}}
 .player-layout{{display:flex;min-width:0;align-items:center;gap:12px;overflow:hidden}}
 .player-art{{display:block;width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px);min-width:48px;min-height:48px;max-width:56px;max-height:56px;flex:0 0 clamp(48px,14vw,56px);overflow:hidden;border-radius:12px;object-fit:cover;background:#ffffff10}}
@@ -1036,11 +1028,6 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .audio-btn{{position:relative;z-index:1;display:inline-flex;width:28px;height:32px;flex:none;align-items:center;justify-content:center;overflow:hidden;border:0;border-radius:9px;background:transparent;color:#ffffff73;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}}
 .audio-btn:hover{{background:#ffffff0d;color:#fff}}
 .audio-btn.play{{width:32px;height:36px;color:#ffffffcc}}
-.player-row .player-layout{{display:grid;grid-template-columns:48px minmax(0,1fr);grid-template-rows:auto auto;gap:6px 8px}}
-.player-row .player-art{{grid-row:1/3;width:48px;height:48px;min-width:48px;min-height:48px}}
-.player-row .player-controls{{grid-column:2;justify-content:flex-end}}
-@container (max-width:399px){{.player-row{{min-height:0;flex-direction:column}}.discord-presence{{width:100%;min-height:80px;flex:1 1 auto}}.player-row>.player{{width:100%;height:auto;min-height:80px}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
-@media(max-width:639px){{.player-row{{min-height:0;flex-direction:column}}.discord-presence{{width:100%;min-height:80px;flex:1 1 auto}}.player-row>.player{{width:100%;height:auto;min-height:80px}}.player-row .player-layout{{display:flex;gap:12px}}.player-row .player-art{{width:56px;height:56px;min-width:56px;min-height:56px}}.player-row .player-controls{{justify-content:flex-end}}}}
 .audio-btn::before,.audio-btn::after{{display:none!important;content:none!important}}
 .audio-icon{{display:block;width:16px;height:16px;flex:none;pointer-events:none}}
 .audio-btn.play .audio-icon{{width:17px;height:17px}}
@@ -1096,24 +1083,22 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .enter-fade{{animation:enter-fade .55s ease both}}
 .enter-unfold{{transform-origin:top center;animation:enter-unfold .55s ease both}}
 .enter-pop{{animation:enter-pop .45s cubic-bezier(.22,1,.36,1) both}}
-@media(max-width:639px){{body{{height:100vh;height:100dvh;min-height:100dvh;justify-content:center;padding:0;overflow:hidden}}.card-stage{{position:fixed;left:50%;top:50%;width:min(calc(100vw - 24px),{frame_width}px);max-width:calc(100vw - 24px);transform:translate(-50%,-50%) scale(var(--mobile-frame-scale,var(--frame-scale)));transform-origin:center}}}}
 @media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}.codrops-rain-effect{{display:none}}}}
-</style></head>
-<body{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
+</style><link rel="stylesheet" href="/dashboard/profile-layout.css"></head>
+<body data-profile-layout{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
 {background_tag}{video_tag}<div class="backdrop"></div>{effect_canvas_tag}{sakura_effect_tag}{rain_effect_tag}{effect_video_tag if background_effect == "None" else ""}
 {f'<button type="button" id="entry" class="entry"><span class="entry-play"></span><small>{entry_text}</small></button>' if entry_on else ""}
-<div class="card-stage" data-frame-scale="{frame_scale}"><main class="card{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main>{media_dock}</div>
-{meta_tag}
+<div class="profile-composition"><div class="profile-element profile-element-frame" data-layout-element="frame" style="{element_style(settings, "frame")}"><div class="card-stage"><main class="card profile-glass{' no-frame' if not frame_visible else ""}" id="profile-card"{' hidden' if entry_on else ""}>{card_inner}</main></div></div><div class="profile-mobile-audio" data-profile-mobile-audio>{media_dock}</div></div>
 {audio_tag}
 {playlist_data}
 {bio_data}
 {title_data}
-{PUBLIC_RESPONSIVE_FRAME_SCRIPT}
 {PUBLIC_COPY_SCRIPT}
 {PUBLIC_ANALYTICS_SCRIPT}
 {PUBLIC_BACKGROUND_EFFECT_SCRIPT if effect_canvas_tag else ""}
 {PUBLIC_SAKURA_EFFECT if sakura_effect_tag else ""}
 {PUBLIC_BADGE_SCRIPT}
+{PUBLIC_MEDIA_LAYOUT_SCRIPT}
 {PUBLIC_WIDGET_SCRIPT}
 {PUBLIC_DISCORD_STATUS_SCRIPT if status_tag else ""}
 {PUBLIC_LYRICS_SCRIPT}
@@ -1171,7 +1156,7 @@ def _public_sections_markup(config: dict, username: str) -> str:
     return f'<div class="sections">{"".join(cards)}</div>'
 
 
-def _public_widgets_markup(widgets: list | None) -> str:
+def _public_widgets_markup(widgets: list | None, settings: dict | None = None) -> str:
     cards: list[str] = []
     for item in widgets or []:
         if not isinstance(item, dict):
@@ -1196,9 +1181,11 @@ def _public_widgets_markup(widgets: list | None) -> str:
             cards.append(f'<a class="{cls}" href="{escape(href, quote=True)}" target="_blank" rel="noopener noreferrer"{extra}>{inner}</a>')
         else:
             cards.append(f'<div class="{cls}"{extra}>{inner}</div>')
+        element = "widget:" + str(item.get("id") or "")
+        cards[-1] = f'<div class="profile-media-slot"><div class="profile-element profile-element-widget" data-layout-element="{escape(element, quote=True)}" style="{element_style(settings or {}, element)}">{cards[-1]}</div></div>'
     if not cards:
         return ""
-    return f'<div class="widgets">{"".join(cards)}</div>'
+    return "".join(cards)
 
 
 def _public_social_markup(config: dict, global_icon_color: str) -> tuple[str, str]:

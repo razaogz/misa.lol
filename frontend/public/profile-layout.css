@@ -1,0 +1,78 @@
+/* Shared by React profiles and the canonical server-rendered username page. */
+[data-profile-layout] { container: profile / inline-size; min-width: 0; }
+.profile-composition { width:100%; display:flex; flex-direction:column; justify-content:center; gap:20px; padding: max(32px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); box-sizing:border-box; }
+.profile-element { --element-width:var(--desktop-width); --element-height:var(--desktop-height); --element-x:var(--desktop-x); --element-y:var(--desktop-y); position:relative; flex-shrink:0; width:min(100%,var(--element-width)); min-width:0; min-height:var(--element-height); margin-left:calc((100% - min(100%,var(--element-width))) * var(--element-x)); margin-top:var(--element-y); box-sizing:border-box; }
+.profile-element-frame > div { min-height:inherit; }
+.profile-glass { min-width:0; overflow-wrap:anywhere; }
+.profile-glass h1 { max-width:100%; overflow-wrap:anywhere; white-space:normal; }
+.profile-header { display:flex; align-items:center; gap:20px; }
+.profile-header > :first-child:not(:only-child) { flex-shrink:0; margin:0; }
+.profile-header > :last-child { min-width:0; flex:1; }
+/* Each slot is a frame-relative coordinate space. Fixed fractional tracks mean
+   changing one element's width never pushes its neighbours away. */
+.profile-media-row { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); align-items:start; gap:12px; margin-top:20px; }
+.profile-media-row:empty,.profile-mobile-audio:empty { display:none; }
+.profile-media-slot { min-width:0; position:relative; container:media-slot / inline-size; }
+.profile-audio-slot { order:1; }
+.profile-media-slot > .profile-element > :first-child { min-width:0; min-height:inherit; overflow-wrap:anywhere; }
+.profile-element-widget > :first-child { display:flex; flex-wrap:wrap; }
+.profile-element-discord > :first-child { flex-wrap:wrap; }
+.profile-element-discord p { white-space:normal; overflow-wrap:anywhere; }
+.profile-mobile-audio { width:100%; min-width:0; }
+[data-profile-layout]:not([data-profile-preview]) > .profile-background { position:fixed; }
+.profile-element-discord > :first-child { min-height:inherit; height:100%; }
+.profile-audio-content { min-width:0; min-height:inherit; }
+.profile-audio-content > div { margin-top:0; min-height:inherit; }
+.profile-audio-content button { min-width:44px; min-height:44px; }
+.profile-audio-content input[type=range] { height:24px; padding:10px 0; background-clip:content-box; box-sizing:border-box; }
+.profile-glass[data-profile-variant=Sleek],.layout-sleek .profile-glass { padding:0 !important; }
+[data-profile-embedded] .profile-composition { padding:0; }
+[data-profile-embedded] .profile-element-frame { position:absolute; left:50%; top:50%; width:var(--embedded-width); max-width:none; margin:0; transform:translate(-50%,-50%) scale(var(--embedded-scale)); }
+.profile-element-audio .player { margin-top:0; min-height:inherit; }
+.profile-element-audio > .media-dock { min-height:inherit; }
+.profile-element[data-selected=true] { outline:2px solid #7dd3fc; outline-offset:3px; }
+.profile-move-handle,.profile-resize-handle { position:absolute; z-index:30; touch-action:none; min-width:44px; min-height:44px; border:1px solid #7dd3fc; border-radius:10px; background:#111827; color:white; font:12px system-ui; cursor:move; }
+.profile-move-handle { top:0; left:0; transform:translateY(-50%); padding:6px 10px; }
+.profile-resize-handle { right:0; bottom:0; transform:translate(15%,30%); cursor:nwse-resize; }
+.profile-move-handle:focus-visible,.profile-resize-handle:focus-visible { outline:3px solid white; }
+@container profile (max-width:899px) {
+  [data-profile-layout]:not([data-layout-viewport=desktop]) .profile-element { --element-width:var(--mobile-width); --element-height:var(--mobile-height); --element-x:var(--mobile-x); --element-y:var(--mobile-y); }
+  [data-profile-layout]:not([data-layout-viewport=desktop]) .profile-header { flex-direction:column; gap:12px; }
+  [data-profile-layout]:not([data-layout-viewport=desktop]) .profile-media-row { grid-auto-flow:row; grid-template-columns:minmax(0,1fr); }
+  [data-profile-layout]:not([data-layout-viewport=desktop]) .profile-glass { padding:24px 18px; }
+}
+[data-layout-viewport=mobile] .profile-element { --element-width:var(--mobile-width); --element-height:var(--mobile-height); --element-x:var(--mobile-x); --element-y:var(--mobile-y); }
+[data-layout-viewport=mobile] .profile-header { flex-direction:column; gap:12px; }
+[data-layout-viewport=mobile] .profile-media-row { grid-auto-flow:row; grid-template-columns:minmax(0,1fr); }
+[data-layout-viewport=mobile] .profile-glass { padding:24px 18px; }
+/* Canonical HTML keeps its existing colors, typography, animations and media. */
+body[data-profile-user] { display:block; padding:0; height:auto; overflow-x:clip; overflow-y:auto; }
+body[data-profile-user] .profile-composition { min-height:100svh; }
+body[data-profile-user] .card-stage { width:100%; position:relative; left:auto; top:auto; transform:none; }
+body[data-profile-user] .meta { position:static; margin:24px 0 0; }
+body[data-profile-user] .media-dock { margin:0; width:100%; }
+body[data-profile-user] .discord-presence { width:100%; min-height:80px; }
+body[data-profile-user] .discord-presence-name,body[data-profile-user] .discord-presence-status { white-space:normal; overflow-wrap:anywhere; }
+body[data-profile-user] .profile-header .avatar-ring { margin:0; }
+body[data-profile-user] .profile-glass h1,body[data-profile-user] .description { overflow-wrap:anywhere; }
+body[data-profile-user] .player-layout { flex-wrap:wrap; }
+body[data-profile-user] .player-meta { flex:1 1 100px; }
+body[data-profile-user] .social { min-width:44px; min-height:44px; }
+body[data-profile-user] .player button { min-width:44px; min-height:44px; }
+.profile-player-layout > :last-child { flex-wrap:wrap; max-width:100%; }
+body[data-profile-user] .player-controls { flex-wrap:wrap; max-width:100%; }
+body[data-profile-user] .profile-media-row .widget { min-width:0; }
+body[data-profile-user] .widget-title,body[data-profile-user] .widget-subtitle { white-space:normal; overflow-wrap:anywhere; }
+.profile-audio-content p,body[data-profile-user] .widget-meta strong,body[data-profile-user] .widget-meta span,body[data-profile-user] .player-meta strong { white-space:normal; overflow-wrap:anywhere; }
+/* Dense rows still keep every card and transport control within its own slot. */
+@container media-slot (max-width:180px) {
+  .profile-element-widget > :first-child,.profile-element-discord > :first-child,.profile-audio-content > div,.profile-element-audio .player { padding:8px; }
+  .profile-player-layout > :first-child { min-width:0; max-width:100%; flex-shrink:1; }
+  .profile-player-layout > :nth-child(2) { flex-basis:100%; max-width:100%; }
+  .profile-player-layout > :nth-child(2) > div { flex-wrap:wrap; gap:4px; }
+  .profile-player-layout input[type=range] { flex-basis:100%; order:1; }
+  .profile-element-widget > :first-child > :first-child { min-width:0; max-width:100%; flex:0 1 56px; }
+  body[data-profile-user] .player-art { min-width:0; max-width:100%; flex-shrink:1; }
+  body[data-profile-user] .player-progress { flex-wrap:wrap; gap:4px; }
+  body[data-profile-user] #audio-seek { flex-basis:100%; order:1; }
+}

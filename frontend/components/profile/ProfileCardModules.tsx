@@ -1,7 +1,11 @@
 "use client";
 
+import { ProfileLayoutElement } from "./ProfileLayoutElement";
+
 import { BadgeCheck, Crown, MapPin, Sparkles, Zap } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import type { LayoutViewport } from "@/lib/element-layout";
 import { ProfileMusicPlayer, ProfileVideoAudioControl } from "@/components/profile/ProfileMusicPlayer";
 import { BadgeArtwork } from "@/components/badges/BadgeArtwork";
 import { ProfileSections } from "@/components/profile/ProfileSections";
@@ -79,6 +83,7 @@ export function ProfileIdentity({ config, align = "center" }: { config: ProfileC
         <ProfileBadges config={config} className="" />
       </div>
       {config.settings.showUsername !== false ? <p className="mt-1 text-xs text-white/35">@{config.profile.username}</p> : null}
+      {config.profile.uid ? <p className="mt-1 text-xs text-white/35">UID {config.profile.uid}</p> : null}
     </div>
   );
 }
@@ -212,7 +217,7 @@ export function ProfileMeta({ config, align = "center", floating = false }: { co
   );
 }
 
-function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfig; compact?: boolean }) {
+function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
   const discord = useCardDiscord(config);
   const src = discord?.accountAvatar || undefined;
   if (!src && !discord?.status) return null;
@@ -223,7 +228,7 @@ function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfi
   const discordName = (discord?.globalName || discord?.username || "").trim();
   const statusLabel = status ? DISCORD_STATUS_LABELS[status] : "";
   return (
-    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 sm:h-full ${compact ? "flex-1 sm:flex-[0_0_42%]" : "flex-1"} ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
+    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 sm:h-full flex-1 ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
       <div className="relative h-12 w-12 shrink-0">
         {src ? <img src={src} alt="" className="h-full w-full rounded-full object-cover" /> : <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>{(discordName || config.profile.displayName).slice(0, 1)}</div>}
         {status ? <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4"><DiscordStatusGlyph status={status} className="block h-full w-full" /></span> : null}
@@ -233,35 +238,47 @@ function DiscordPresenceTile({ config, compact = false }: { config: ProfileConfi
   );
 }
 
-export function ProfileMediaModules({ config, preview }: { config: ProfileConfig; preview: boolean }) {
-  const discord = useCardDiscord(config);
-  const showDiscordTile = config.settings.showDiscordStatus !== false && Boolean(discord?.accountAvatar || discord?.status);
+export function ProfileAudioModule({ config, preview, rootRef, viewport }: { config: ProfileConfig; preview: boolean; rootRef: RefObject<HTMLDivElement | null>; viewport: LayoutViewport }) {
   const hasVideoAudio = usesBackgroundVideoAudio(config.assets);
   const hasPlaylist = usesUploadedProfileAudio(config.assets);
-  const showAudio = hasPlaylist || hasVideoAudio;
-  const stackMedia = (config.settings.profileFrameWidth ?? 430) < 400;
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const slot = document.createElement("div");
+    slot.className = "profile-media-slot profile-audio-slot";
+    setHost(slot);
+    return () => slot.remove();
+  }, []);
+  useLayoutEffect(() => {
+    if (!host) return;
+    const target = rootRef.current?.querySelector(viewport === "desktop" ? "[data-profile-media-row]" : "[data-profile-mobile-audio]");
+    if ((hasPlaylist || hasVideoAudio) && target && host.parentElement !== target) {
+      const audio = host.querySelector("audio");
+      const playing = audio && !audio.paused;
+      const parent = target as Element & { moveBefore?: (node: Node, child: Node | null) => void };
+      if (parent.moveBefore && host.isConnected) parent.moveBefore(host, null);
+      else parent.appendChild(host);
+      if (playing && audio.paused) void audio.play().catch(() => undefined);
+    } else if (!hasPlaylist && !hasVideoAudio) host.remove();
+  }, [host, viewport, rootRef, config.settings.layout, hasPlaylist, hasVideoAudio]);
+  if (!hasPlaylist && !hasVideoAudio) return null;
+  // The portal host moves, but the player and its media element stay mounted.
+  return host ? createPortal(<ProfileLayoutElement id="audio"><div className="profile-audio-content">
+    {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
+    {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} />}
+  </div></ProfileLayoutElement>, host) : null;
+}
 
-  if (!showDiscordTile && !showAudio) return null;
-
-  return (
-    <div className={`relative z-20 mt-6 flex w-full min-w-0 flex-col items-stretch gap-2.5 ${stackMedia ? "" : "sm:h-20 sm:flex-row"}`}>
-      {showDiscordTile && <DiscordPresenceTile config={config} compact={showAudio && !stackMedia} />}
-      {showAudio && (
-        <div className={`min-w-0 flex-1 [&>div]:mt-0 ${stackMedia ? "" : "sm:h-full sm:[&>div]:h-full"}`}>
-          {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
-          {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} compact={showDiscordTile && !stackMedia} />}
-        </div>
-      )}
-    </div>
-  );
+export function ProfileDiscord({ config }: { config: ProfileConfig }) {
+  const discord = useCardDiscord(config);
+  if (config.settings.showDiscordStatus === false || (!discord?.accountAvatar && !discord?.status)) return null;
+  return <div className="profile-media-slot"><ProfileLayoutElement id="discord"><DiscordPresenceTile config={config} /></ProfileLayoutElement></div>;
 }
 
 export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
   return (
     <div style={{ textAlign: align }}>
-      <ProfileBio config={config} align={align} />
+      <ProfileWidgets config={config} preview={preview} presence={<ProfileDiscord config={config} />} />
       <SocialLinks config={config} />
-      <ProfileWidgets config={config} preview={preview} />
       <ProfileSections config={config} preview={preview} />
     </div>
   );

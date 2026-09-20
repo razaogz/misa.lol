@@ -1,3 +1,5 @@
+from app.core.element_layout import normalize_layouts
+
 import base64
 import re
 from typing import Any
@@ -102,6 +104,12 @@ def sanitize_profile_config(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _sanitize_settings(settings: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(settings)
+    if "elementLayouts" in cleaned:
+        layouts = normalize_layouts(cleaned["elementLayouts"])
+        if layouts is None:
+            cleaned.pop("elementLayouts", None)
+        else:
+            cleaned["elementLayouts"] = layouts
     align = cleaned.get("socialAlign")
     cleaned["socialAlign"] = align if align in {"left", "center", "right"} else "center"
     card_align = cleaned.get("cardAlign")

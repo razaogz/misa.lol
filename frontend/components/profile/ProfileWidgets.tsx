@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ProfileConfig, ProfileWidget, ResolvedWidget } from "@/lib/types";
 import { emptyResolvedWidget, previewResolvedWidget, widgetLabel } from "@/lib/widgets";
+import { ProfileLayoutElement } from "./ProfileLayoutElement";
 
-export function ProfileWidgets({ config, preview = false }: { config: ProfileConfig; preview?: boolean }) {
+export function ProfileWidgets({ config, preview = false, presence }: { config: ProfileConfig; preview?: boolean; presence?: ReactNode }) {
   const widgets = useMemo(() => (config.widgets || []).filter((item) => item.enabled), [config.widgets]);
   const [resolved, setResolved] = useState<ResolvedWidget[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,15 +56,12 @@ export function ProfileWidgets({ config, preview = false }: { config: ProfileCon
     };
   }, [signature, preview, config.profile.username, widgets]);
 
-  if (widgets.length === 0) return null;
-
-  const cards = resolved.length ? resolved : (loading ? widgets.map((item) => emptyResolvedWidget(item)) : []);
-
   return (
-    <div className="mt-6 space-y-2.5" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-      {loading && resolved.length === 0
-        ? widgets.map((item) => <WidgetSkeleton key={item.id} swap={swap} accent={accent} ink={ink} />)
-        : cards.map((item) => <WidgetCard key={item.id} widget={item} swap={swap} accent={accent} ink={ink} />)}
+    <div className="profile-media-row" data-profile-media-row onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+      {presence}
+      {widgets.map((item) => <div className="profile-media-slot" key={item.id}><ProfileLayoutElement id={`widget:${item.id}`}>
+        {loading && resolved.length === 0 ? <WidgetSkeleton swap={swap} accent={accent} ink={ink} /> : <WidgetCard widget={resolved.find((card) => card.id === item.id) || emptyResolvedWidget(item)} swap={swap} accent={accent} ink={ink} />}
+      </ProfileLayoutElement></div>)}
     </div>
   );
 }
@@ -81,8 +79,8 @@ function WidgetCard({ widget, swap, accent, ink }: { widget: ResolvedWidget; swa
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{widget.type === "timezone" && widget.meta?.timezone ? <ClockTitle timezone={widget.meta.timezone} initial={widget.title} /> : widget.title || widgetLabel(widget.type)}</p>
-        <p className={`mt-0.5 truncate text-[11px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.66 } : undefined}>{widget.subtitle}</p>
+        <p className="break-words text-sm font-medium">{widget.type === "timezone" && widget.meta?.timezone ? <ClockTitle timezone={widget.meta.timezone} initial={widget.title} /> : widget.title || widgetLabel(widget.type)}</p>
+        <p className={`mt-0.5 break-words text-[11px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.66 } : undefined}>{widget.subtitle}</p>
       </div>
     </>
   );
