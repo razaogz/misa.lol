@@ -10,6 +10,7 @@ import type { ProfileAsset, ProfileConfig } from "./types";
 type SaveState = "idle" | "saving" | "saved" | "error";
 interface ProfileContextValue {
   config: ProfileConfig;
+  savedConfig: ProfileConfig;
   updateConfig: (updater: (config: ProfileConfig) => ProfileConfig) => void;
   resetConfig: () => void;
   saveProfile: (nextConfig?: ProfileConfig) => Promise<void>;
@@ -29,6 +30,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
 function SessionProfileProvider({ children, user, authReady }: { children: React.ReactNode; user: AuthUser | null; authReady: boolean }) {
   const [config, setConfig] = useState<ProfileConfig>(() => profileFromAuthenticatedUser(user));
+  const [savedConfig, setSavedConfig] = useState<ProfileConfig>(() => profileFromAuthenticatedUser(user));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
   const hasAuthenticatedProfile = Boolean(user && user.profile !== undefined);
@@ -66,7 +68,8 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
       if (!response.ok || !result.profile) throw new Error(result.detail || result.error || "Profile save failed. Please try again.");
       const saved = normalizeDashboardProfile(result.profile);
       lastSavedRef.current = JSON.stringify(saved);
-      setConfig(saved);
+      setSavedConfig(saved);
+      setConfig(current => JSON.stringify(normalizeDashboardProfile(current)) === snapshot ? saved : current);
       setSaveState("saved");
     } catch (error) {
       setSaveState("error");
@@ -83,6 +86,7 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
     }
     if (user.profile !== undefined) {
       const next = profileFromAuthenticatedUser(user);
+      setSavedConfig(next);
       lastSavedRef.current = user.username ? JSON.stringify(next) : "";
       hydratedUserRef.current = user.id;
       setProfileReady(true);
@@ -96,6 +100,7 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
         const next = await loadProfileForUser(user);
         if (cancelled) return;
         const normalized = normalizeDashboardProfile(next);
+        setSavedConfig(normalized);
         setConfig(normalized);
         lastSavedRef.current = user.username ? JSON.stringify(normalized) : "";
         hydratedUserRef.current = user.id;
@@ -118,13 +123,15 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
 
   const value = useMemo<ProfileContextValue>(() => ({
     config,
+    savedConfig,
     updateConfig: (updater) => { setConfig((current) => updater(current)); setSaveState("idle"); setSaveError(""); },
-    resetConfig: () => { setConfig(user ? profileForUser(user) : profileDefaults()); setSaveState("idle"); setSaveError(""); },
+    resetConfig: () => { setConfig(structuredClone(savedConfig)); setSaveState("idle"); setSaveError(""); },
     saveProfile: async (nextConfig) => { await persist(nextConfig || config); },
     hydrateFromServer: (nextConfig) => {
       const normalized = normalizeDashboardProfile(nextConfig);
       lastSavedRef.current = JSON.stringify(normalized);
       hydratedUserRef.current = user?.id || null;
+      setSavedConfig(normalized);
       setConfig(normalized);
       setProfileReady(true);
       setSaveState("saved");
@@ -133,11 +140,12 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
     saveState,
     saveError,
     profileReady,
-  }), [config, persist, saveState, saveError, profileReady, user]);
+  }), [config, savedConfig, persist, saveState, saveError, profileReady, user]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, onSave, children }: { initialConfig: ProfileConfig; draftKey: string; onDraftChange?: (config: ProfileConfig) => void; onSave: (config: ProfileConfig) => Promise<void>; children: React.ReactNode }) {
   const [config, setConfig] = useState<ProfileConfig>(() => normalizeDashboardProfile(initialConfig));
+  const [savedConfig, setSavedConfig] = useState<ProfileConfig>(() => normalizeDashboardProfile(initialConfig));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
   const initialRef = useRef(normalizeDashboardProfile(initialConfig));
@@ -145,6 +153,7 @@ export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, o
   useEffect(() => {
     const next = normalizeDashboardProfile(initialConfig);
     initialRef.current = next;
+    setSavedConfig(next);
     setConfig(next);
     setSaveState("idle");
     setSaveError("");
@@ -167,6 +176,7 @@ export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, o
     try {
       await onSave(next);
       initialRef.current = next;
+      setSavedConfig(next);
       setConfig(next);
       onDraftChange?.(next);
       setSaveState("saved");
@@ -177,6 +187,7 @@ export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, o
   };
   const value = useMemo<ProfileContextValue>(() => ({
     config,
+    savedConfig,
     updateConfig: update,
     resetConfig: () => {
       const next = initialRef.current;
@@ -189,6 +200,7 @@ export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, o
     hydrateFromServer: (nextConfig) => {
       const next = normalizeDashboardProfile(nextConfig);
       initialRef.current = next;
+      setSavedConfig(next);
       setConfig(next);
       onDraftChange?.(next);
       setSaveState("saved");
@@ -197,7 +209,7 @@ export function ProfileDraftProvider({ initialConfig, draftKey, onDraftChange, o
     saveState,
     saveError,
     profileReady: true,
-  }), [config, saveState, saveError, onSave, onDraftChange]);
+  }), [config, savedConfig, saveState, saveError, onSave, onDraftChange]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 export function useProfile() {
@@ -224,7 +236,7 @@ function profileDefaults(): ProfileConfig {
   return defaults;
 }
 
-function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
+export function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
   const defaults = profileDefaults();
   const incoming = (input && typeof input === "object" ? input : {}) as Partial<ProfileConfig>;
   const assets = (incoming.assets && typeof incoming.assets === "object" ? incoming.assets : {}) as Partial<ProfileConfig["assets"]>;
@@ -316,9 +328,10 @@ export async function dataUrlToFile(dataUrl: string, name: string, type?: string
   return new File([blob], name, { type: type || blob.type || "application/octet-stream" });
 }
 
-export async function uploadProfileAsset(kind: string, file: File): Promise<ProfileAsset> {
+export async function uploadProfileAsset(kind: string, file: File, premium = false): Promise<ProfileAsset> {
   const form = new FormData();
   form.append("kind", kind);
+  if (premium) form.append("premium", "true");
   form.append("file", file, file.name);
   const response = await fetch("/api/v1/profile/assets", {
     method: "POST",

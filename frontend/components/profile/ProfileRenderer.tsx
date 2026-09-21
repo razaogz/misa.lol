@@ -1,5 +1,9 @@
 "use client";
 
+import { PortfolioProfile } from "./PortfolioProfile";
+import { effectColor } from "@/lib/effect-colors";
+import { ProfileVolume } from "./ProfileVolume";
+import { PremiumCursor } from "./PremiumCursor";
 import { AnimatePresence, motion } from "framer-motion";
 import { ProfileLayoutElement, ProfileLayoutProvider } from "./ProfileLayoutElement";
 import type { LayoutElement, LayoutViewport } from "@/lib/element-layout";
@@ -7,7 +11,7 @@ import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from
 import { ProfileAvatar, ProfileBanner, ProfileBio, ProfileIdentity, ProfileAudioModule, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
-import { resolvedAudioSource } from "@/lib/audio";
+import { resolvedAudioSource, usesBackgroundVideoAudio } from "@/lib/audio";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { contentAlign, profileFont, profileLayout } from "@/lib/profile-layout";
 import { typeSize } from "@/lib/typography";
@@ -33,23 +37,24 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const s = config.settings;
-  const defaultFonts = useDefaultFonts();
+  const defaultFonts = useDefaultFonts(!!s.profileFont && s.profileFont !== "Inter");
   const selectedDefaultFont = defaultFonts.find((font) => font.id === s.profileFont);
   const layout = profileLayout(s);
   const align = contentAlign(s.socialAlign);
-  const customCursor = config.assets.cursor.url ? { cursor: `url(${config.assets.cursor.url}), auto` } : undefined;
+  const customCursor = config.assets.cursor.url ? { cursor: `url(${config.assets.cursor.url}) 16 16, auto` } : undefined;
   const customFont = config.assets.customFont?.url || "";
   const family = customFont
     ? `"MisaProfile", "Inter", ui-sans-serif, system-ui, sans-serif`
     : selectedDefaultFont?.url
       ? `"MisaDefaultFont", "Inter", ui-sans-serif, system-ui, sans-serif`
       : profileFont(s.profileFont);
-  const pageFamily = "Inter, ui-sans-serif, system-ui, sans-serif";
+  const pageFamily = s.profileFontScope === "all" ? family : "Inter, ui-sans-serif, system-ui, sans-serif";
   const [entered, setEntered] = useState(embedded || !s.entryScreen);
+  const entryLock = useRef(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [quiet, setQuiet] = useState(false);
   useEffect(() => { setQuiet(prefersReducedMotion()); }, []);
-  useEffect(() => { setEntered(embedded || !s.entryScreen); }, [embedded, s.entryScreen, s.pageEnter]);
+  useEffect(() => { entryLock.current = false; setEntered(embedded || !s.entryScreen); }, [embedded, s.entryScreen]);
   const enter = s.pageEnter || "Fade";
   const motionStart = screenshot
     ? { opacity: 1, scale: 1, scaleY: 1 }
@@ -60,9 +65,20 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
       : enter === "Pop"
         ? { opacity: 0, scale: 0.86 }
         : { opacity: 0 };
+  const portfolio = layout === "Portfolio" && !embedded;
   const showFrame = s.showProfileFrame !== false;
   const frameOpacity = Math.min(100, Math.max(0, s.profileFrameOpacity ?? 100)) / 100;
   const frameVisible = showFrame && frameOpacity > 0;
+  const frameStyle: CSSProperties = {
+                    borderRadius: s.profileRadius + "px",
+                    backgroundColor: frameVisible ? "rgba(8,8,13," + (((layout === "Simplistic" ? Math.min(s.profileOpacity + 8, 80) : s.profileOpacity) / 100) * frameOpacity) + ")" : "transparent",
+                    backgroundImage: frameVisible && s.profileGradient && layout !== "Simplistic" ? "linear-gradient(145deg, " + colorWithAlpha(s.accentColor, 0.07 * frameOpacity) + ", transparent 40%)" : "none",
+                    backdropFilter: frameVisible ? "blur(" + (layout === "Simplistic" ? Math.max(s.profileBlur - 10, 0) : s.profileBlur) + "px)" : "none",
+                    border: frameVisible && s.premium?.borderEnabled !== false ? (s.borderWidth ?? 1) + (s.premium?.borderType === "Dashed" ? "px dashed " : "px solid ") + colorWithAlpha(s.borderColor, frameOpacity * (s.premium?.borderOpacity ?? 100) / 100) : "0 solid transparent",
+                    boxShadow: embedded ? "none" : frameVisible ? (layout === "Simplistic" ? "0 12px 40px rgba(0,0,0," + (0.22 * frameOpacity).toFixed(3) + ")" : "0 25px 90px rgba(0,0,0," + (0.36 * frameOpacity).toFixed(3) + "), 0 0 70px " + colorWithAlpha(s.accentColor, 0.09 * frameOpacity)) : "none",
+                    color: s.textColor,
+                    minHeight: "inherit",
+                  };
   const audioSource = resolvedAudioSource(config.assets);
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -70,26 +86,32 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     const measure = () => setMeasuredViewport(root.clientWidth < 900 ? "mobile" : "desktop");
     const observer = new ResizeObserver(measure);
     observer.observe(root); measure();
-    return () => observer.disconnect();
-  }, []);
+    const height = () => root.style.setProperty("--profile-viewport-height", `${fitViewport || screenshot ? root.clientHeight : window.innerHeight}px`);
+    const heightObserver = new ResizeObserver(height); heightObserver.observe(root); window.addEventListener("resize", height); height();
+    return () => { observer.disconnect(); heightObserver.disconnect(); window.removeEventListener("resize", height); };
+  }, [fitViewport, screenshot]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.volume = Math.min(1, Math.max(0, config.assets.volume / 100));
-    video.muted = audioSource !== "video" || !audioUnlocked;
+    video.muted = !usesBackgroundVideoAudio(config.assets) || !audioUnlocked;
     if (entered) void video.play().catch(() => undefined);
-  }, [audioSource, audioUnlocked, config.assets.backgroundVideo.url, config.assets.volume, entered]);
-  const tap = () => { if (s.clickSound) playClickSound(config.assets.clickSound?.url); };
+  }, [audioSource, audioUnlocked, config.assets.backgroundVideo.url, config.assets.volume, config.assets.audioEnabled, entered]);
+  const tap = () => { if (s.clickSound) playClickSound(s.premium?.clickPreset && s.premium.clickPreset !== "Custom" ? null : config.assets.clickSound?.url, s.premium?.clickPreset); };
   const openPage = () => {
+    if (entryLock.current) return;
+    entryLock.current = true;
     tap(); setAudioUnlocked(true); setEntered(true);
-    if (videoRef.current && audioSource === "video") {
+    const audio = rootRef.current?.querySelector("audio");
+    if (audio && audioSource !== "video") { audio.muted = false; void audio.play().catch(() => undefined); }
+    if (videoRef.current && usesBackgroundVideoAudio(config.assets)) {
       videoRef.current.muted = false;
       void videoRef.current.play().catch(() => undefined);
     }
   };
   const tilt = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!s.cardTilt || quiet || !cardRef.current) return;
+    if (!s.cardTilt || quiet || event.pointerType !== "mouse" || !cardRef.current) return;
     const box = cardRef.current.getBoundingClientRect();
     const x = (event.clientX - box.left) / box.width - 0.5;
     const y = (event.clientY - box.top) / box.height - 0.5;
@@ -98,24 +120,27 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const untilt = () => { if (cardRef.current) cardRef.current.style.transform = ""; };
   return (
     <ProfileLayoutProvider value={{ settings: s, editing: manualPositioning, viewport, selected, select: setSelected, change: onLayoutChange }}>
-    <div data-profile-layout data-profile-preview={preview || screenshot || undefined} data-profile-embedded={embedded || undefined} data-layout-viewport={layoutViewport} ref={rootRef} className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-y-auto bg-[#07070a]" : "min-h-[100svh] bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family, ["--embedded-width" as string]: `${s.profileFrameWidth ?? 430}px`, ["--embedded-scale" as string]: (s.profileFrameScale ?? 100) / 100 } as CSSProperties}>
+    <div onClickCapture={portfolio && entered ? event => { if ((event.target as HTMLElement).closest("a,button") && !(event.target as HTMLElement).closest(".profile-entry")) tap(); } : undefined} data-profile-layout data-profile-kind={layout} data-premium-hero={s.premium?.hero} data-premium-border={s.premium?.borderEnabled ? s.premium.borderType : undefined} data-profile-preview={preview || screenshot || undefined} data-profile-embedded={embedded || undefined} data-layout-viewport={layoutViewport} ref={rootRef} className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-y-auto bg-[#07070a]" : "min-h-[100svh] bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, color: s.textColor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family, ["--portfolio-border" as string]: frameVisible && s.premium?.borderEnabled !== false ? `${s.borderWidth ?? 1}px ${s.premium?.borderType === "Dashed" ? "dashed" : "solid"} ${colorWithAlpha(s.borderColor, frameOpacity * (s.premium?.borderOpacity ?? 100) / 100)}` : "0 solid transparent", ["--portfolio-radius" as string]: `${s.profileRadius}px`, ["--profile-text-size" as string]: `${typeSize(s.fontSize)}px`, ["--embedded-width" as string]: `${s.profileFrameWidth ?? 430}px`, ["--embedded-scale" as string]: (s.profileFrameScale ?? 100) / 100 } as CSSProperties}>
+      {!embedded && <ProfileVolume config={config} rootRef={rootRef} />}
+      {!embedded && !screenshot && <PremiumCursor config={config} rootRef={rootRef} />}
       {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
       {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:url("${selectedDefaultFont.url}");font-display:swap}`}</style> : null}
       {!embedded && <ProfileBackground config={config} videoRef={videoRef} reduceMotion={quiet} />}
       {!embedded && <div className="pointer-events-none absolute inset-0 bg-black/35" />}
-      <div className="profile-composition relative z-10" style={{ perspective: s.cardTilt ? 900 : undefined, minHeight: embedded || fitViewport || screenshot ? "100%" : "100svh" }}>
-        {!embedded && s.entryScreen && !entered && (
-          <button type="button" className="absolute inset-0 z-20 grid place-items-center bg-black/60 text-white" onClick={openPage}>
+      <div className="profile-composition relative z-10" style={{ perspective: s.cardTilt && !portfolio ? 900 : undefined, minHeight: embedded || fitViewport || screenshot ? "100%" : "100svh" }}>
+        <AnimatePresence>{!embedded && s.entryScreen && !entered && (
+          <motion.button type="button" className="profile-entry" style={{ fontFamily: family }} initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: quiet ? 0 : .5 }} onClick={event => { event.stopPropagation(); openPage(); }}>
             <span className="flex flex-col items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-lg">â–¶</span>
-              <span className="text-xs text-white/70">{s.entryText || "click to enter..."}</span>
+              {config.assets.entryIcon?.url && <img src={config.assets.entryIcon.url} alt="" className="profile-entry-icon" />}
+              <strong>{s.entryText?.trim() && s.entryText !== "click to enter..." ? s.entryText : "Click anywhere to enter"}</strong>
+              {s.premium?.entrySubtitle && <span className="profile-entry-subtitle">{s.premium.entrySubtitle}</span>}
             </span>
-          </button>
-        )}
+          </motion.button>
+        )}</AnimatePresence>
         <AnimatePresence initial={false}>
           {entered && (
             <>
-            <ProfileLayoutElement id="frame">
+            {portfolio ? <PortfolioProfile config={config} preview={preview} rootRef={rootRef} frameStyle={frameStyle} /> : <ProfileLayoutElement id="frame">
               <motion.div key="profile-card" initial={motionStart} animate={{ opacity: 1, scale: 1, scaleY: 1 }} transition={{ duration: screenshot || quiet ? 0 : 0.55, ease: [0.22, 1, .36, 1] }} className="relative w-full" style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
                 <div
                   data-profile-variant={layout}
@@ -123,29 +148,22 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
                   onPointerMove={manualPositioning ? undefined : tilt}
                   onPointerLeave={manualPositioning ? undefined : untilt}
                   className={"profile-glass relative shadow-2xl transition-transform duration-150 " + (layout === "Sleek" ? "p-0" : layout === "Simplistic" ? "p-6 sm:p-7" : "p-7 sm:p-9")}
-                  style={{
-                    borderRadius: s.profileRadius + "px",
-                    backgroundColor: frameVisible ? "rgba(8,8,13," + (((layout === "Simplistic" ? Math.min(s.profileOpacity + 8, 80) : s.profileOpacity) / 100) * frameOpacity) + ")" : "transparent",
-                    backgroundImage: frameVisible && s.profileGradient && layout !== "Simplistic" ? "linear-gradient(145deg, " + colorWithAlpha(s.accentColor, 0.07 * frameOpacity) + ", transparent 40%)" : "none",
-                    backdropFilter: frameVisible ? "blur(" + (layout === "Simplistic" ? Math.max(s.profileBlur - 10, 0) : s.profileBlur) + "px)" : "none",
-                    border: frameVisible ? (s.borderWidth ?? 1) + "px solid " + colorWithAlpha(s.borderColor, frameOpacity) : "0 solid transparent",
-                    boxShadow: embedded ? "none" : frameVisible ? (layout === "Simplistic" ? "0 12px 40px rgba(0,0,0," + (0.22 * frameOpacity).toFixed(3) + ")" : "0 25px 90px rgba(0,0,0," + (0.36 * frameOpacity).toFixed(3) + "), 0 0 70px " + colorWithAlpha(s.accentColor, 0.09 * frameOpacity)) : "none",
-                    color: s.textColor,
-                    minHeight: "inherit",
-                  }}
+                  style={frameStyle}
                 >
                   {layout === "Modern" && frameVisible && <div className="absolute inset-x-8 top-0 h-px" style={{ background: "linear-gradient(90deg, transparent, " + s.accentColor + "aa, transparent)" }} />}
-                  {layout === "Modern" && <ModernCard config={config} preview={preview} align={align} />}
+                  {(layout === "Modern" || layout === "Default" || (layout === "Portfolio" && embedded)) && <ModernCard config={config} preview={preview} align={align} />}
                   {layout === "Simplistic" && <SimplisticCard config={config} preview={preview} align={align} />}
                   {layout === "Sleek" && <SleekCard config={config} preview={preview} align={align} />}
                 </div>
               </motion.div>
-            </ProfileLayoutElement>
-              <div data-profile-mobile-audio className="profile-mobile-audio" />
-              <ProfileAudioModule config={config} preview={preview} rootRef={rootRef} viewport={viewport} />
+            </ProfileLayoutElement>}
+              {!portfolio && <div data-profile-mobile-audio className="profile-mobile-audio" />}
+
             </>
           )}
         </AnimatePresence>
+        <div hidden data-profile-audio-waiting />
+        <ProfileAudioModule config={config} preview={preview} rootRef={rootRef} viewport={viewport} entered={entered} />
       </div>
 
     </div>
@@ -198,12 +216,31 @@ function SleekCard({ config, preview, align }: { config: ProfileConfig; preview:
 function ProfileBackground({ config, videoRef, reduceMotion }: { config: ProfileConfig; videoRef: React.RefObject<HTMLVideoElement | null>; reduceMotion: boolean }) {
   const { background, backgroundVideo, backgroundEffectVideo } = config.assets;
   const accent = config.settings.accentColor;
+  const [image, setImage] = useState(background.url);
+  useEffect(() => {
+    if (!background.url) { setImage(null); return; }
+    let cancelled = false;
+    const next = new Image();
+    next.onload = () => { if (!cancelled) setImage(background.url); };
+    next.onerror = () => { if (!cancelled) setImage(null); };
+    next.src = background.url;
+    return () => { cancelled = true; next.onload = null; next.onerror = null; };
+  }, [background.url]);
   return (
     <div className="profile-background pointer-events-none absolute inset-0 overflow-hidden" style={{ backgroundColor: config.settings.backgroundColor }}>
-      <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: background?.url ? "url(" + background.url + ")" : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
-      {backgroundVideo.url && <video data-bg-video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ opacity: config.settings.backgroundOpacity / 100 }} src={backgroundVideo.url} autoPlay loop muted playsInline preload="metadata" />}
-      <BackgroundEffectLayer effect={config.settings.backgroundEffect || "None"} className="z-[1]" />
+      <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: image ? "url(" + image + ")" : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
+      {backgroundVideo.url && <BackgroundVideo key={backgroundVideo.url} src={backgroundVideo.url} videoRef={videoRef} opacity={config.settings.backgroundOpacity / 100} />}
+      <BackgroundEffectLayer color={effectColor(config)} effect={config.settings.backgroundEffect || "None"} className="z-[1]" />
       {config.settings.backgroundEffect === "None" && backgroundEffectVideo?.url ? <video className="absolute inset-0 z-[1] h-full w-full object-cover" src={backgroundEffectVideo.url} autoPlay={!reduceMotion} loop muted playsInline preload="metadata" aria-hidden="true" /> : null}
     </div>
   );
+}
+
+function BackgroundVideo({ src, videoRef, opacity }: { src: string; videoRef: React.RefObject<HTMLVideoElement | null>; opacity: number }) {
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && !video.getAttribute("src")) { video.src = src; void video.play().catch(() => undefined); }
+    return () => { if (video) { video.pause(); video.removeAttribute("src"); video.load(); } };
+  }, [videoRef, src]);
+  return <video data-bg-video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ opacity }} src={src} autoPlay loop muted playsInline preload="metadata" />;
 }

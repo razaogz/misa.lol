@@ -1373,6 +1373,8 @@ async def get_share_card_bits(username: str) -> dict[str, Any] | None:
         SELECT
             u.username,
             u.display_name,
+            COALESCE(pr.config->'_premium_base', pr.config->'config'->'_premium_base') AS premium_base,
+            EXISTS(SELECT 1 FROM premium_entitlements pe WHERE pe.user_id=u.id AND pe.active=TRUE AND (pe.expires_at IS NULL OR pe.expires_at>NOW())) AS premium_active,
             COALESCE(
                 pr.config->'settings',
                 pr.config->'config'->'settings',
@@ -1413,12 +1415,15 @@ async def get_share_card_bits(username: str) -> dict[str, Any] | None:
     if not str(identity.get("displayName") or "").strip():
         identity = dict(identity)
         identity["displayName"] = str(row.get("display_name") or row.get("username") or username)
+    from app.core.premium import public_projection
+    projection = public_projection({"settings": settings, "_premium_base": row["premium_base"], "assets": {"ogImage": {"url": row["og_image"]}, "favicon": {"url": row["favicon"]}}}, bool(row["premium_active"]))
+    settings = projection["settings"]
     return {
         "username": str(row["username"] or username),
         "settings": settings,
         "identity": identity,
-        "og_image": str(row["og_image"] or "").strip() or None,
-        "favicon": str(row["favicon"] or "").strip() or None,
+        "og_image": (projection["assets"].get("ogImage") or {}).get("url"),
+        "favicon": (projection["assets"].get("favicon") or {}).get("url"),
         "avatar": str(row["avatar"] or "").strip() or None,
         "background": str(row["background"] or "").strip() or None,
         "version": int(row["version"] or 0),
@@ -1428,10 +1433,11 @@ async def get_share_card_bits(username: str) -> dict[str, Any] | None:
 async def get_public_asset_url(username: str, kind: str) -> str | None:
     row = await _get_pool().fetchrow(
         """
-        SELECT COALESCE(
-            config->'assets'->$2->>'url',
-            config->'config'->'assets'->$2->>'url'
-        ) AS url
+        SELECT CASE WHEN $2 = ANY(ARRAY['customFont','clickSound','entryIcon','ogImage','favicon'])
+            AND COALESCE(config->'_premium_base',config->'config'->'_premium_base') IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM premium_entitlements pe WHERE pe.user_id=u.id AND pe.active=TRUE AND (pe.expires_at IS NULL OR pe.expires_at>NOW()))
+            THEN COALESCE(config->'_premium_base'->'assets'->$2->>'url',config->'config'->'_premium_base'->'assets'->$2->>'url')
+            ELSE COALESCE(config->'assets'->$2->>'url',config->'config'->'assets'->$2->>'url') END AS url
         FROM profiles p
         JOIN users u ON u.id = p.user_id
         WHERE lower(u.username) = $1 AND p.disabled_at IS NULL
@@ -2442,6 +2448,12 @@ async def add_premium_rank(actor_id: UUID, name: str) -> dict[str, Any]:
                 raise ValueError("exists") from exc
             await _audit(conn, actor_id, "premium.rank.create", "premium_rank", str(rank_id), {"name": label, "slug": slug})
     return {"id": rank_id, "name": label, "slug": slug}
+
+
+async def has_active_premium(user_id: str) -> bool:
+    return bool(await _get_pool().fetchval(
+        "SELECT EXISTS(SELECT 1 FROM premium_entitlements WHERE user_id = $1 AND active = TRUE AND (expires_at IS NULL OR expires_at > NOW()))", UUID(str(user_id))
+    ))
 
 
 async def list_entitlements() -> list[dict[str, Any]]:

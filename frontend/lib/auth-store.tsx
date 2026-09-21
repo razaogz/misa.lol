@@ -19,6 +19,7 @@ export interface AuthUser {
   mfaCodesLeft: number;
   uid: string;
   isAdmin: boolean;
+  premium: boolean;
   isStaff: boolean;
   staffRole: "owner" | "admin" | "moderator" | null;
   isTemplateCreator: boolean;
@@ -61,6 +62,7 @@ function announceAuthEvent(event: AuthEvent) {
 function normalizeUser(value: Record<string, unknown>): AuthUser {
   return {
     id: String(value.id || ""),
+    premium: value.premium === true,
     accountId: String(value.account_id || value.accountId || ""),
     username: value.username ? String(value.username) : null,
     displayName: String(value.display_name || value.displayName || value.username || "Misa user"),

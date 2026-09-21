@@ -49,11 +49,11 @@ ASSET_LIMITS = {
     "backgroundVideo": 110_000_000, "backgroundEffectVideo": 110_000_000,
     "audio": 40_000_000, "audioArtwork": 15_000_000,
     "clickSound": 400_000, "customFont": 2_000_000, "cover": 3_000_000,
-    "socialIcon": 512_000,
+    "socialIcon": 512_000, "entryIcon": 5_000_000,
 }
 
 def _asset_content_allowed(kind: str, content_type: str) -> bool:
-    if kind in {"avatar", "background", "banner", "ogImage", "favicon", "audioArtwork", "cover", "socialIcon", "cursor"}:
+    if kind in {"avatar", "background", "banner", "ogImage", "favicon", "audioArtwork", "cover", "socialIcon", "cursor", "entryIcon"}:
         return content_type in {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"}
     if kind in {"backgroundVideo", "backgroundEffectVideo"}:
         return content_type in {"video/mp4", "video/webm", "video/quicktime"}
@@ -73,8 +73,12 @@ async def upload_asset(
     kind: Annotated[str, Form(...)],
     file: Annotated[UploadFile, File(...)],
     settings = Depends(get_settings),
+    premium: Annotated[bool, Form()] = False,
     user: User = Depends(require_user),
 ) -> dict[str, Any]:
+    from app.core.premium import has_premium
+    if (premium or kind == "entryIcon") and not await has_premium(user.id):
+        raise HTTPException(403, "Premium is required for this upload.")
     if kind not in ASSET_LIMITS:
         raise HTTPException(status_code=400, detail="Unsupported asset type.")
     content_type = (file.content_type or "").lower()
@@ -92,6 +96,8 @@ async def upload_asset(
     body = await file.read(ASSET_LIMITS[kind] + 1)
     if len(body) > ASSET_LIMITS[kind]:
         raise HTTPException(status_code=413, detail="That file is too large.")
+    from app.core.upload_validation import validate_upload
+    validate_upload(kind, body, content_type)
     storage = get_r2_storage(settings)
     if not storage.enabled:
         raise HTTPException(status_code=503, detail="R2 object storage is not configured.")
@@ -328,6 +334,8 @@ async def save_my_profile(payload: dict[str, Any], user: User = Depends(require_
         existing,
         await data_api.list_user_badge_grants(user.id),
     )
+    from app.core.premium import protect_write, has_premium
+    payload = protect_write(payload, existing, await has_premium(user.id))
     display_name = str(profile.get("displayName", "")).strip()
     if not display_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Display name cannot be empty.")

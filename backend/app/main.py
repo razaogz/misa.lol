@@ -16,7 +16,7 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.profiles import resolve_public_profile
 from app.core.public_profile_html import render_public_profile
-from app.core.widgets import resolve_profile_widgets
+from app.core.widgets import profile_widget_inputs
 from app.core.security import RESERVED_USERNAMES, USERNAME_RE
 from app.core.usernames import current_handle_for, username_redirect
 from app.core.turnstile import TURNSTILE_ENABLED
@@ -145,11 +145,8 @@ def create_app() -> FastAPI:
                     status_code=502,
                 )
             if profile:
-                try:
-                    widgets = await resolve_profile_widgets(profile)
-                except Exception:
-                    widgets = []
-                default_fonts = await admin_db.list_default_fonts() if admin_db.has_pool() else []
+                widgets = [{**item, "status": "empty", "title": item["type"], "subtitle": "Loading…"} for item in profile_widget_inputs(profile) if item.get("enabled")]
+                default_fonts = await admin_db.list_default_fonts() if admin_db.has_pool() and (profile.get("settings") or {}).get("profileFont", "Inter") != "Inter" else []
                 return HTMLResponse(render_public_profile(profile, request, widgets=widgets, default_fonts=default_fonts), headers={"Cache-Control": "no-store"})
             alias = await current_handle_for(slug)
             if alias:

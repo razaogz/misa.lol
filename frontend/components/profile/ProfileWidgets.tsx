@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { profileWidgets } from "@/lib/premium";
 import type { ProfileConfig, ProfileWidget, ResolvedWidget } from "@/lib/types";
-import { emptyResolvedWidget, previewResolvedWidget, widgetLabel } from "@/lib/widgets";
+import { emptyResolvedWidget, widgetLabel } from "@/lib/widgets";
+import { EmptyContent } from "./EmptyContent";
 import { ProfileLayoutElement } from "./ProfileLayoutElement";
 
-export function ProfileWidgets({ config, preview = false, presence }: { config: ProfileConfig; preview?: boolean; presence?: ReactNode }) {
-  const widgets = useMemo(() => (config.widgets || []).filter((item) => item.enabled), [config.widgets]);
+const WidgetContext = createContext<{ resolved: ResolvedWidget[]; loading: boolean }>({ resolved: [], loading: false });
+export function WidgetResolutionProvider({ config, preview, children }: { config: ProfileConfig; preview: boolean; children: ReactNode }) {
+  const widgets = useMemo(() => profileWidgets(config), [config.widgets, config.sections]);
   const [resolved, setResolved] = useState<ResolvedWidget[]>([]);
   const [loading, setLoading] = useState(false);
-  const swap = Boolean(config.settings.widgetColorSwap);
-  const ink = config.settings.backgroundColor;
-  const accent = config.settings.accentColor;
+  const [resolvedSignature, setResolvedSignature] = useState("");
   const signature = widgets.map((item) => `${item.id}:${item.type}:${item.value}`).join("|");
 
   useEffect(() => {
@@ -21,40 +22,43 @@ export function ProfileWidgets({ config, preview = false, presence }: { config: 
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoading(true);
       try {
         const response = preview
           ? await fetch("/api/v1/widgets/preview", {
-              method: "POST",
+              method: "POST", signal: controller.signal,
               credentials: "include",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ widgets }),
+              body: JSON.stringify({ widgets: config.widgets, sections: config.sections }),
             })
-          : await fetch(`/api/v1/profile/${encodeURIComponent(config.profile.username)}/widgets`, { cache: "no-store" });
+          : await fetch(`/api/v1/profile/${encodeURIComponent(config.profile.username)}/widgets`, { cache: "no-store", signal: controller.signal });
         if (!response.ok) {
-          // Local preview can run without a signed-in API session. Keep the
-          // cards visible there; live profiles still use the backend resolver.
-          if (preview) {
-            if (!cancelled) setResolved(widgets.map(previewResolvedWidget));
-            return;
-          }
           throw new Error(`Widget request failed (${response.status})`);
         }
         const data = await response.json() as { widgets?: ResolvedWidget[] };
         if (!Array.isArray(data.widgets)) throw new Error("Widget response was invalid");
-        if (!cancelled) setResolved(data.widgets);
+        if (!cancelled) { setResolved(widgets.map(item => data.widgets?.find(card => card.id === item.id) || emptyResolvedWidget(item, "error"))); setResolvedSignature(signature); }
       } catch {
-        if (!cancelled) setResolved(widgets.map((item) => emptyResolvedWidget(item, "error")));
+        if (!cancelled) { setResolved(widgets.map((item) => emptyResolvedWidget(item, "error"))); setResolvedSignature(signature); }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }, preview ? 400 : 0);
     return () => {
-      cancelled = true;
+      cancelled = true; controller.abort();
       window.clearTimeout(timer);
     };
-  }, [signature, preview, config.profile.username, widgets]);
+  // Only provider inputs trigger resolution; text/style editing does not refetch.
+  }, [signature, preview, config.profile.username]);
+  return <WidgetContext.Provider value={{ resolved: resolvedSignature === signature ? resolved : [], loading: loading || (widgets.length > 0 && resolvedSignature !== signature) }}>{children}</WidgetContext.Provider>;
+}
+
+export function ProfileWidgets({ config, presence }: { config: ProfileConfig; preview?: boolean; presence?: ReactNode }) {
+  const widgets = config.widgets.filter(w => w.enabled);
+  const { resolved, loading } = useContext(WidgetContext);
+  const swap = Boolean(config.settings.widgetColorSwap), ink = config.settings.backgroundColor, accent = config.settings.accentColor;
 
   return (
     <div className="profile-media-row" data-profile-media-row onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
@@ -66,7 +70,7 @@ export function ProfileWidgets({ config, preview = false, presence }: { config: 
   );
 }
 
-function WidgetCard({ widget, swap, accent, ink }: { widget: ResolvedWidget; swap: boolean; accent: string; ink: string }) {
+export function WidgetCard({ widget, swap, accent, ink }: { widget: ResolvedWidget; swap: boolean; accent: string; ink: string }) {
   const className = `flex items-center gap-3 rounded-2xl border p-3 text-left no-underline ${swap ? "" : "border-white/[.1] bg-black/25 text-white"} ${widget.status !== "ok" ? "opacity-85" : ""}`;
   const style = swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined;
   const inner = (
@@ -121,4 +125,11 @@ function ClockTitle({ timezone, initial }: { timezone: string; initial: string }
 
 export function widgetCount(widgets: ProfileWidget[] | undefined) {
   return (widgets || []).filter((item) => item.enabled).length;
+}
+
+export function SectionWidget({ config, id, type, value }: { config: ProfileConfig; id: string; type: ProfileWidget["type"]; value: string }) {
+  const { resolved, loading } = useContext(WidgetContext);
+  if (!value.trim()) return <EmptyContent />;
+  if (loading || !resolved.some(w => w.id === id)) return <WidgetSkeleton swap={!!config.settings.widgetColorSwap} accent={config.settings.accentColor} ink={config.settings.backgroundColor} />;
+  return <WidgetCard widget={resolved.find(w => w.id === id) || emptyResolvedWidget({ id, type, value, enabled: true })} swap={!!config.settings.widgetColorSwap} accent={config.settings.accentColor} ink={config.settings.backgroundColor} />;
 }

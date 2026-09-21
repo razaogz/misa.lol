@@ -17,6 +17,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
   const srcRef = useRef("");
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
   const [muted] = useState(false);
   const [repeat] = useState<RepeatMode>("all");
   const [shuffle] = useState(false);
@@ -39,12 +40,9 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
     setIndex((current) => (tracks.length ? Math.min(current, tracks.length - 1) : 0));
   }, [trackKey, tracks.length]);
   useEffect(() => { setLevel(config.assets.volume); }, [config.assets.volume]);
-  useEffect(() => () => {
+  useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
+    return () => { if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); srcRef.current = ""; } };
   }, []);
   useEffect(() => {
     const audio = audioRef.current;
@@ -64,13 +62,8 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
       setPlaying(false);
       return;
     }
-    if (srcRef.current === src) {
-      if (playingRef.current) {
-        audio.currentTime = 0;
-        void audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-      }
-      return;
-    }
+    if (srcRef.current === src) return;
+    setMediaError(false);
     audio.pause();
     audio.currentTime = 0;
     srcRef.current = src;
@@ -175,13 +168,16 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
     >
       <audio
         ref={audioRef}
+        data-track-info={JSON.stringify({ id: track.id, title: trackTitle(track), artwork, src, recording: track.recording, count: tracks.length })}
         preload="none"
         onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => { setMediaError(false); setPlaying(true); }}
+        onError={() => { playingRef.current = false; setPlaying(false); setMediaError(true); }}
         onPause={() => setPlaying(false)}
         onEnded={ended}
       />
+      {mediaError && <p role="status" className="mb-2 text-xs opacity-70">This audio could not be played. Try another track.</p>}
       <div className="profile-player-layout flex min-w-0 flex-wrap items-center gap-3">
         <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:h-14 sm:w-14  ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
           {artwork ? <img src={artwork} alt="" className="h-full w-full object-cover" /> : <Volume2 size={18} className={swap ? "" : "text-white/40"} style={swap ? { color: ink } : undefined} />}
@@ -208,11 +204,11 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
           </div>
         </div>
         <div className={`flex shrink-0 items-center gap-0.5 `}>
-          <button type="button" onClick={() => step(-1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Previous track"><SkipBack size={15} fill="currentColor" /></button>
+          <button type="button" data-player-prev disabled={tracks.length < 2} onClick={() => step(-1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Previous track"><SkipBack size={15} fill="currentColor" /></button>
           <button type="button" onClick={toggle} className={`grid h-9 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/80 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
             {playing ? <Pause size={20} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
           </button>
-          <button type="button" onClick={() => step(1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Next track"><SkipForward size={15} fill="currentColor" /></button>
+          <button type="button" data-player-next disabled={tracks.length < 2} onClick={() => step(1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Next track"><SkipForward size={15} fill="currentColor" /></button>
         </div>
       </div>
     </div>

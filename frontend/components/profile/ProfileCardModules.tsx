@@ -9,6 +9,7 @@ import type { LayoutViewport } from "@/lib/element-layout";
 import { ProfileMusicPlayer, ProfileVideoAudioControl } from "@/components/profile/ProfileMusicPlayer";
 import { BadgeArtwork } from "@/components/badges/BadgeArtwork";
 import { ProfileSections } from "@/components/profile/ProfileSections";
+import { WidgetResolutionProvider } from "./ProfileWidgets";
 import { ProfileWidgets } from "@/components/profile/ProfileWidgets";
 import { SocialLinks } from "@/components/socials/SocialLinks";
 import { badgePaint, hasVerifiedBadge } from "@/lib/badges";
@@ -117,7 +118,7 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
     <h1
       className={`font-semibold ${effectClass}`}
       style={{
-        fontSize: typeSize(s.fontSize) + 8,
+        fontSize: "var(--profile-name-size, " + (typeSize(s.fontSize) + 8) + "px)",
         letterSpacing: nameTracking(s.letterSpacing),
         fontFamily: "var(--misa-profile-font)",
         color: gradientEffect ? undefined : usernameColor,
@@ -132,13 +133,14 @@ export function ProfileDisplayName({ config }: { config: ProfileConfig }) {
   );
 }
 
-export function ProfileBio({ config, align = "center" }: { config: ProfileConfig; align?: "left" | "center" | "right" }) {
+export function ProfileBio({ config, align = "center", showLocation = true }: { config: ProfileConfig; align?: "left" | "center" | "right"; showLocation?: boolean }) {
   const justify = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "justify-center";
-  const lines = bioLines(config.profile.description);
+  const description = config.settings.premium?.typewriterTexts?.filter(Boolean).join("\n") || config.profile.description;
+  const lines = bioLines(description);
   const [typed, setTyped] = useState(config.settings.bioTypewriter ? "" : config.profile.description);
   useEffect(() => {
-    if (!config.settings.bioTypewriter || lines.length === 0) {
-      setTyped(config.profile.description);
+    if (!config.settings.bioTypewriter || lines.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setTyped(description);
       return;
     }
     let line = 0;
@@ -173,11 +175,11 @@ export function ProfileBio({ config, align = "center" }: { config: ProfileConfig
     };
     timer = window.setTimeout(tick, typeSpeed);
     return () => window.clearTimeout(timer);
-  }, [config.profile.description, config.settings.bioTypewriter, config.settings.bioTypeMs, config.settings.bioDeleteMs, config.settings.bioPauseMs]);
+  }, [description, config.settings.bioTypewriter, config.settings.bioTypeMs, config.settings.bioDeleteMs, config.settings.bioPauseMs]);
   return (
     <>
-      {config.profile.description && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-white/65">{config.settings.bioTypewriter ? typed : config.profile.description}</p>}
-      {config.profile.location && <p className={`mt-3 flex items-center gap-1.5 text-xs text-white/40 ${justify}`}><MapPin size={12} />{config.profile.location}</p>}
+      {description && <p className="mt-3 min-h-6 whitespace-pre-line break-words text-sm leading-6 text-white/65">{config.settings.bioTypewriter ? typed : config.profile.description}</p>}
+      {showLocation && config.profile.location && <p className={`mt-3 flex items-center gap-1.5 text-xs text-white/40 ${justify}`}><MapPin size={12} />{config.profile.location}</p>}
     </>
   );
 }
@@ -192,11 +194,14 @@ export function ProfileBadges({ config, className = "" }: { config: ProfileConfi
       {visible.map((badge) => (
         <span
           key={badge.id}
-          title={badge.name}
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[.07] text-sm"
+          onMouseEnter={positionBadgeTooltip}
+          onFocus={positionBadgeTooltip}
+          tabIndex={0}
+          aria-label={badge.name}
+          className="profile-badge relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[.07] text-sm"
           style={badgePaint(badge, config.settings)}
         >
-          <BadgeIcon badge={badge} />
+          <BadgeIcon badge={badge} /><span className="profile-badge-tooltip" aria-hidden="true">{badge.name}</span>
         </span>
       ))}
     </div>
@@ -217,7 +222,7 @@ export function ProfileMeta({ config, align = "center", floating = false }: { co
   );
 }
 
-function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
+export function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
   const discord = useCardDiscord(config);
   const src = discord?.accountAvatar || undefined;
   if (!src && !discord?.status) return null;
@@ -238,7 +243,7 @@ function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
   );
 }
 
-export function ProfileAudioModule({ config, preview, rootRef, viewport }: { config: ProfileConfig; preview: boolean; rootRef: RefObject<HTMLDivElement | null>; viewport: LayoutViewport }) {
+export function ProfileAudioModule({ config, preview, rootRef, viewport, entered = true }: { config: ProfileConfig; preview: boolean; rootRef: RefObject<HTMLDivElement | null>; viewport: LayoutViewport; entered?: boolean }) {
   const hasVideoAudio = usesBackgroundVideoAudio(config.assets);
   const hasPlaylist = usesUploadedProfileAudio(config.assets);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -250,7 +255,7 @@ export function ProfileAudioModule({ config, preview, rootRef, viewport }: { con
   }, []);
   useLayoutEffect(() => {
     if (!host) return;
-    const target = rootRef.current?.querySelector(viewport === "desktop" ? "[data-profile-media-row]" : "[data-profile-mobile-audio]");
+    const target = (entered ? rootRef.current?.querySelector(viewport === "desktop" ? "[data-profile-media-row]" : "[data-profile-mobile-audio]") : null) || rootRef.current?.querySelector("[data-profile-audio-waiting]");
     if ((hasPlaylist || hasVideoAudio) && target && host.parentElement !== target) {
       const audio = host.querySelector("audio");
       const playing = audio && !audio.paused;
@@ -259,12 +264,12 @@ export function ProfileAudioModule({ config, preview, rootRef, viewport }: { con
       else parent.appendChild(host);
       if (playing && audio.paused) void audio.play().catch(() => undefined);
     } else if (!hasPlaylist && !hasVideoAudio) host.remove();
-  }, [host, viewport, rootRef, config.settings.layout, hasPlaylist, hasVideoAudio]);
+  }, [host, viewport, rootRef, config.settings.layout, hasPlaylist, hasVideoAudio, entered]);
   if (!hasPlaylist && !hasVideoAudio) return null;
   // The portal host moves, but the player and its media element stay mounted.
   return host ? createPortal(<ProfileLayoutElement id="audio"><div className="profile-audio-content">
     {hasVideoAudio && <ProfileVideoAudioControl config={config} />}
-    {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview} />}
+    {hasPlaylist && <ProfileMusicPlayer config={config} preview={preview} autoplay={!preview && entered} />}
   </div></ProfileLayoutElement>, host) : null;
 }
 
@@ -276,11 +281,11 @@ export function ProfileDiscord({ config }: { config: ProfileConfig }) {
 
 export function ProfileModules({ config, preview, align = "center" }: { config: ProfileConfig; preview: boolean; align?: "left" | "center" | "right" }) {
   return (
-    <div style={{ textAlign: align }}>
+    <WidgetResolutionProvider config={config} preview={preview}><div style={{ textAlign: align }}>
       <ProfileWidgets config={config} preview={preview} presence={<ProfileDiscord config={config} />} />
       <SocialLinks config={config} />
       <ProfileSections config={config} preview={preview} />
-    </div>
+    </div></WidgetResolutionProvider>
   );
 }
 function profileLayoutIsSleek(config: ProfileConfig) {
@@ -294,4 +299,15 @@ function BadgeIcon({ badge }: { badge: ProfileConfig["badges"][number] }) {
 
 function EyeIcon() {
   return <span className="relative flex h-3.5 w-5 items-center justify-center rounded-[50%] border border-current"><span className="h-1.5 w-1.5 rounded-full bg-current" /></span>;
+}
+
+function positionBadgeTooltip(event: React.SyntheticEvent<HTMLSpanElement>) {
+  const badge = event.currentTarget;
+  const tooltip = badge.querySelector<HTMLElement>(".profile-badge-tooltip");
+  const root = badge.closest("[data-profile-layout]");
+  if (!root || !tooltip) return;
+  const bounds = root.getBoundingClientRect(), box = badge.getBoundingClientRect();
+  const width = Math.min(160, bounds.width - 24);
+  tooltip.style.width = `${width}px`;
+  tooltip.style.left = `${Math.max(bounds.left + 12, Math.min(box.left + box.width / 2 - width / 2, bounds.right - width - 12)) - box.left}px`;
 }

@@ -154,6 +154,8 @@ async def resolve_public_profile(username: str) -> dict[str, Any] | None:
     if not str(identity.get("displayName") or "").strip():
         identity["displayName"] = user.display_name or user.username
     grants = await data_api.list_user_badge_grants(user.id)
+    from app.core.premium import has_premium, public_projection
+    config = public_projection(config, await has_premium(user.id))
     cleaned = apply_badge_ownership(sanitize_profile_config(config), stored, grants)
     from app.db import achievements
     cleaned["rank"] = await achievements.current_rank_for_user(user.id)

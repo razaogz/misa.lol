@@ -42,6 +42,8 @@ async def public_user_payload(user: User, settings: Settings, request: Request |
     payload["is_template_creator"] = bool(
         payload["is_admin"] or await admin_db.user_has_role(user.id, "template_creator")
     )
+    from app.core.premium import has_premium
+    payload["premium"] = await has_premium(user.id)
     payload["has_password"] = bool(user.password_hash)
     payload["mfa_enabled"] = await admin_db.mfa_is_enabled(user.id)
     payload["mfa_codes_left"] = await admin_db.unused_backup_count(user.id) if payload["mfa_enabled"] else 0
