@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rememberSignupIp, requestIpIsBanned, userIsBanned } from "./account-bans";
 import { publicOrigin } from "./account-mail";
 import { rememberSwitcherUser } from "./account-security";
+import { popPendingOAuth, savePendingOAuth } from "./oauth-challenge";
 import { storeDiscordTokens } from "./discord-tokens";
 import { apiError } from "./http";
 import { createMfaTicket, mfaEnabled } from "./mfa";
@@ -12,9 +13,14 @@ import { oauthDestination, popOAuthState, safeNextPath, saveOAuthState, trustedE
 import { OAuthConflict, upsertOAuthUser, type ProviderIdentity } from "./oauth-users";
 import { withinLimit } from "./rate-limit";
 import { nativeCoreEnabled } from "./rollout";
+import { verifyTurnstile } from "./turnstile";
 import { attachSession, createSession, currentUser, destroySession, SESSION_COOKIE } from "./sessions";
 import { isSuspended, touchLogin } from "./users";
 const redirect = (request: NextRequest, path: string) => NextResponse.redirect(new URL(path,publicOrigin(request)),{status:302,headers:{"Cache-Control":"no-store"}});
+const challengePage = () => {
+  const base = process.env.MISA_DASHBOARD_URL || (process.env.MISA_NEXT_ROOT_BASE_PATH === "true" ? "" : "/dashboard");
+  return base.replace(/\/+$/, "") + "/auth/verify";
+};
 function oauthError(request: NextRequest, path: string, error: string) {
   const url=new URL(path,publicOrigin(request));url.searchParams.set("error",error);return redirect(request,url.href);
 }
@@ -90,8 +96,34 @@ export async function callbackOAuth(request: NextRequest, provider: OAuthProvide
         identity={provider,providerId:String(claims.sub),email,emailVerified:trustedEmailClaim(claims.email_verified),displayName:name,avatarUrl:provider==="google"?string(claims.picture):null};
       }
     } catch { return oauthError(request,target,"oauth_failed"); }
-    const {response,user}=await finishOAuth(request,identity,next,link);
-    if(provider==="discord"&&user)await storeDiscordTokens(user.id,identity.providerId,tokens).catch(()=>undefined);
-    return response;
+    const current=await currentUser(request);
+    if(link&&!current)return oauthError(request,"/login","not_authenticated");
+    const ticket=await savePendingOAuth({identity,tokens,next,link,currentUserId:current?.id||null});
+    return redirect(request,challengePage()+"?ticket="+encodeURIComponent(ticket));
   } catch { return oauthError(request,"/login","oauth_failed"); }
+}
+
+export async function completeOAuthChallenge(request: NextRequest) {
+  if (!nativeCoreEnabled()) return apiError("Not found.", 404);
+  const form = await request.formData().catch(() => null);
+  const ticket = form?.get("ticket");
+  const token = form?.get("turnstile_token");
+  if (typeof ticket !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(ticket)) return oauthError(request, "/login", "oauth_failed");
+  const retry = challengePage() + "?ticket=" + encodeURIComponent(ticket);
+  if (!await withinLimit("rl:oauth-challenge:"+clientIp(request), 8, 60)) return oauthError(request, retry, "rate_limited");
+  const verified = await verifyTurnstile(request, token).catch(() => false);
+  if (!verified) return oauthError(request, retry, "turnstile");
+  const pending = await popPendingOAuth(ticket).catch(() => null);
+  if (!pending) return oauthError(request, "/login", "oauth_failed");
+  try {
+    const current = await currentUser(request);
+    if ((current?.id || null) !== pending.currentUserId) return oauthError(request, "/login", "not_authenticated");
+    const {response,user} = await finishOAuth(request, pending.identity, safeNextPath(pending.next), pending.link);
+    if (pending.identity.provider === "discord" && user) {
+      await storeDiscordTokens(user.id, pending.identity.providerId, pending.tokens).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    return oauthError(request, "/login", "oauth_failed");
+  }
 }

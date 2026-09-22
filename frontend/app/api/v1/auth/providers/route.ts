@@ -12,6 +12,7 @@ export async function GET() {
     discord: Boolean(process.env.MISA_DISCORD_CLIENT_ID && process.env.MISA_DISCORD_CLIENT_SECRET),
     telegram: Boolean(process.env.MISA_TELEGRAM_BOT_TOKEN && process.env.MISA_TELEGRAM_BOT_USERNAME),
     apple: Boolean(process.env.MISA_APPLE_CLIENT_ID || process.env.APPLE_CLIENT_ID),
-    turnstile_site_key: process.env.MISA_TURNSTILE_SITE_KEY || "",
+    turnstile_site_key: (process.env.MISA_TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY)
+      ? (process.env.MISA_TURNSTILE_SITE_KEY || process.env.TURNSTILE_SITE_KEY || "") : "",
   }, { headers: { "Cache-Control": "no-store" } });
 }

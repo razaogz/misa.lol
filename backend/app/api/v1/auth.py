@@ -1,4 +1,7 @@
+import hashlib
 import hmac
+import json
+import re
 import secrets
 from typing import Annotated
 
@@ -25,7 +28,7 @@ from app.core.account_security import (
     remember_switcher_user,
 )
 from app.core.config import Settings, get_settings
-from app.core.discord_live import store_discord_session
+from app.core.discord_live import decrypt_secret, encrypt_secret, store_discord_session
 from app.core.mailer import mailer_configured, send_password_reset
 from app.core.oauth import (
     apple_authorize_url,
@@ -60,6 +63,7 @@ from app.core.sessions import (
     revoke_all_sessions,
 )
 from app.db import admin_db, data_api
+from app.db.dragonfly import get_dragonfly
 from app.db.data_api import DataConflict
 from app.models import User
 
@@ -243,6 +247,94 @@ async def _finish_oauth(
     response = RedirectResponse(destination, status_code=302)
     await _issue_session(response, request, user, settings, remember=True)
     return response, user
+
+
+def _challenge_page(settings: Settings, ticket: str) -> str:
+    return f"{settings.dashboard_url.rstrip('/')}/auth/verify?ticket={ticket}"
+
+
+async def _stage_oauth(
+    request: Request,
+    settings: Settings,
+    *,
+    identity: dict,
+    next_path: str,
+    link: bool,
+    tokens: dict | None = None,
+) -> RedirectResponse:
+    current = await get_user_from_request(request)
+    if link and current is None:
+        return _oauth_error("/login", "not_authenticated")
+    ticket = secrets.token_urlsafe(32)
+    digest = hashlib.sha256(ticket.encode()).hexdigest()
+    pending = {
+        "identity": identity,
+        "tokens": tokens or {},
+        "next": safe_next_path(next_path),
+        "link": link,
+        "currentUserId": current.id if current else None,
+    }
+    await get_dragonfly().set(
+        f"oauth_challenge:{digest}",
+        encrypt_secret(json.dumps(pending), settings),
+        ex=300,
+    )
+    return RedirectResponse(_challenge_page(settings, ticket), status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/verify")
+async def verify_oauth_challenge(request: Request, settings: SettingsDep) -> RedirectResponse:
+    try:
+        form = await request.form()
+    except Exception:
+        return _oauth_error("/login", "oauth_failed")
+    ticket = str(form.get("ticket") or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", ticket):
+        return _oauth_error("/login", "oauth_failed")
+    retry = _challenge_page(settings, ticket)
+    try:
+        await limit_auth(request, "oauth-challenge", limit=8, window_seconds=60)
+    except HTTPException:
+        return _oauth_error(retry, "rate_limited")
+    try:
+        await verify_turnstile(request, str(form.get("turnstile_token") or ""), settings)
+    except HTTPException:
+        return _oauth_error(retry, "turnstile")
+    digest = hashlib.sha256(ticket.encode()).hexdigest()
+    encrypted = await get_dragonfly().getdel(f"oauth_challenge:{digest}")
+    decoded = decrypt_secret(encrypted, settings) if encrypted else None
+    if not decoded:
+        return _oauth_error("/login", "oauth_failed")
+    try:
+        pending = json.loads(decoded)
+        identity = pending["identity"]
+        provider = identity["provider"]
+        if provider not in {"google", "discord", "telegram", "apple"} or not identity.get("providerId"):
+            raise ValueError("Invalid provider identity")
+        current = await get_user_from_request(request)
+        if (current.id if current else None) != pending.get("currentUserId"):
+            return _oauth_error("/login", "not_authenticated")
+        response, user = await _finish_oauth(
+            request,
+            settings,
+            provider=provider,
+            provider_id=str(identity["providerId"]),
+            email=identity.get("email"),
+            email_verified=identity.get("emailVerified") is True,
+            display_name=identity.get("displayName"),
+            avatar_url=identity.get("avatarUrl"),
+            telegram_username=identity.get("telegramUsername"),
+            next_path=safe_next_path(pending.get("next")),
+            link=pending.get("link") is True,
+        )
+        if provider == "discord" and user:
+            try:
+                await store_discord_session(user.id, str(identity["providerId"]), pending.get("tokens") or {}, settings)
+            except Exception:
+                pass
+        return response
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return _oauth_error("/login", "oauth_failed")
 
 
 @router.get("/providers")
@@ -520,19 +612,15 @@ async def google_callback(
     if not sub:
         return _oauth_error(error_target, "oauth_failed")
     email = normalize_email(claims["email"]) if claims.get("email") else None
-    response, _user = await _finish_oauth(
-        request,
-        settings,
-        provider="google",
-        provider_id=str(sub),
-        email=email,
-        email_verified=_trusted_email_claim(claims.get("email_verified")) if email else False,
-        display_name=claims.get("name"),
-        avatar_url=claims.get("picture"),
-        next_path=next_path,
-        link=link,
+    return await _stage_oauth(
+        request, settings,
+        identity={
+            "provider": "google", "providerId": str(sub), "email": email,
+            "emailVerified": _trusted_email_claim(claims.get("email_verified")) if email else False,
+            "displayName": claims.get("name"), "avatarUrl": claims.get("picture"),
+        },
+        next_path=next_path, link=link,
     )
-    return response
 
 
 @router.get("/discord")
@@ -577,24 +665,16 @@ async def discord_callback(
     if not discord_id:
         return _oauth_error(error_target, "oauth_failed")
     email = normalize_email(profile["email"]) if profile.get("email") else None
-    response, user = await _finish_oauth(
-        request,
-        settings,
-        provider="discord",
-        provider_id=str(discord_id),
-        email=email,
-        email_verified=bool(profile.get("verified")) if email else False,
-        display_name=profile.get("global_name") or profile.get("username"),
-        avatar_url=discord_avatar_url(profile),
-        next_path=next_path,
-        link=link,
+    return await _stage_oauth(
+        request, settings,
+        identity={
+            "provider": "discord", "providerId": str(discord_id), "email": email,
+            "emailVerified": bool(profile.get("verified")) if email else False,
+            "displayName": profile.get("global_name") or profile.get("username"),
+            "avatarUrl": discord_avatar_url(profile),
+        },
+        next_path=next_path, link=link, tokens=tokens,
     )
-    if user:
-        try:
-            await store_discord_session(user.id, str(discord_id), tokens, settings)
-        except Exception:
-            pass
-    return response
 
 
 @router.get("/telegram")
@@ -671,20 +751,15 @@ async def telegram_callback(request: Request, settings: SettingsDep) -> Redirect
     first_name = payload.get("first_name") or ""
     last_name = payload.get("last_name") or ""
     display_name = f"{first_name} {last_name}".strip() or payload.get("username")
-    response, _user = await _finish_oauth(
-        request,
-        settings,
-        provider="telegram",
-        provider_id=str(telegram_id),
-        email=None,
-        email_verified=False,
-        display_name=display_name,
-        avatar_url=payload.get("photo_url"),
-        telegram_username=payload.get("username"),
-        next_path=next_path,
-        link=link,
+    return await _stage_oauth(
+        request, settings,
+        identity={
+            "provider": "telegram", "providerId": str(telegram_id), "email": None,
+            "emailVerified": False, "displayName": display_name,
+            "avatarUrl": payload.get("photo_url"), "telegramUsername": payload.get("username"),
+        },
+        next_path=next_path, link=link,
     )
-    return response
 
 
 @router.get("/apple")
@@ -701,7 +776,7 @@ async def apple_start(
     link = mode == "link"
     if link and await get_user_from_request(request) is None:
         return _oauth_error("/login", "not_authenticated")
-    state = await save_oauth_state("apple", safe_next_path(next_path), nonce=nonce)
+    state = await save_oauth_state("apple", safe_next_path(next_path), nonce=nonce, mode="link" if link else "login")
     return RedirectResponse(apple_authorize_url(settings, state, nonce), status_code=302)
 
 
@@ -782,16 +857,12 @@ async def apple_callback(
     if not display_name and email:
         display_name = email.split("@", 1)[0]
 
-    response, _user = await _finish_oauth(
-        request,
-        settings,
-        provider="apple",
-        provider_id=str(sub),
-        email=email,
-        email_verified=email_verified,
-        display_name=display_name,
-        avatar_url=None,
-        next_path=safe_next_path(saved.get("next")),
+    return await _stage_oauth(
+        request, settings,
+        identity={
+            "provider": "apple", "providerId": str(sub), "email": email,
+            "emailVerified": email_verified, "displayName": display_name, "avatarUrl": None,
+        },
+        next_path=safe_next_path(saved.get("next")), link=saved.get("mode") == "link",
     )
-    return response
 

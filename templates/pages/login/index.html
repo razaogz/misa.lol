@@ -24,7 +24,6 @@
     <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
     <link rel="manifest" href="/site.webmanifest">
     <link rel="stylesheet" href="css/v2.css">
-    <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/v2.js" defer></script>
     <script src="js/tab-state.js" defer></script>
@@ -85,35 +84,44 @@
       <p class="auth-message" id="auth-message" role="status" aria-live="polite" hidden></p>
 
       <form class="auth__form" id="login-form" method="POST" action="#" novalidate>
-        <p class="auth__gate" data-lock-note role="status"><span class="dot" aria-hidden="true"></span><span>Pass the human check below to unlock the form.</span></p>
-        <div class="auth-lock is-locked auth__fields" inert>
+        <p class="auth__gate" data-lock-note role="status" hidden><span class="dot" aria-hidden="true"></span><span>Complete the human check to continue.</span></p>
+        <div class="auth__fields">
           <div class="field">
             <div class="field__label"><label for="login-email">email</label></div>
-            <div class="field__box"><input class="field__input" id="login-email" name="email" type="email" autocomplete="email" required spellcheck="false" placeholder="you@somewhere.net" aria-describedby="login-email-hint" disabled></div>
+            <div class="field__box"><input class="field__input" id="login-email" name="email" type="email" autocomplete="email" required spellcheck="false" placeholder="you@somewhere.net" aria-describedby="login-email-hint"></div>
             <p class="field__hint" id="login-email-hint"><span class="dot" aria-hidden="true"></span><span data-field-hint>the one you signed up with</span></p>
           </div>
           <div class="field">
             <div class="field__label"><label for="login-pass">password</label><button type="button" class="forgot-link">forgot it?</button></div>
             <div class="field__box">
-              <input class="field__input" id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" aria-describedby="login-pass-hint" data-pw disabled>
-              <button class="field__eye" type="button" aria-label="Show password" aria-pressed="false" data-eye disabled><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button>
+              <input class="field__input" id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" aria-describedby="login-pass-hint" data-pw>
+              <button class="field__eye" type="button" aria-label="Show password" aria-pressed="false" data-eye><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button>
             </div>
             <p class="field__hint" id="login-pass-hint"><span class="dot" aria-hidden="true"></span><span data-field-hint>case-sensitive, like everything good</span></p>
           </div>
           <label class="check">
-            <input type="checkbox" name="remember" disabled>
+            <input type="checkbox" name="remember">
             <i aria-hidden="true"><svg class="ic"><use href="#i-check"/></svg></i>
             <span>keep me logged in on this device</span>
           </label>
         </div>
-        <div class="turnstile-box">
+        <div class="turnstile-box" hidden>
           <div class="cf-turnstile" data-sitekey="" data-theme="dark" data-size="flexible" data-callback="misaTurnstileSuccess" data-expired-callback="misaTurnstileExpire" data-timeout-callback="misaTurnstileExpire" data-error-callback="misaTurnstileError"></div>
         </div>
-        <button class="btn btn--crimson btn--lg auth__submit auth-lock is-locked" type="submit" disabled>Log in <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+        <button class="btn btn--crimson btn--lg auth__submit" type="submit">Log in <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+      </form>
+
+      <form class="auth__form" id="mfa-form" method="POST" action="#" novalidate hidden>
+        <p class="auth__gate" role="status"><span class="dot" aria-hidden="true"></span><span>Enter a backup code to finish signing in.</span></p>
+        <div class="field">
+          <div class="field__label"><label for="mfa-code">backup code</label></div>
+          <div class="field__box"><input class="field__input" id="mfa-code" name="code" type="text" autocomplete="one-time-code" required placeholder="XXXX-XXXX"></div>
+        </div>
+        <button class="btn btn--crimson btn--lg auth__submit" type="submit">Verify and continue <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
       </form>
 
       <p class="auth__or">or continue with</p>
-      <div class="oauth auth-lock is-locked" inert role="group" aria-label="Log in with another account">
+      <div class="oauth" role="group" aria-label="Log in with another account">
         <a class="btn btn--ghost social-auth__button social-auth__button--google" href="/api/v1/auth/google?next=/dashboard"><img src="icons/google.webp" alt="">Google</a>
         <a class="btn btn--ghost social-auth__button social-auth__button--discord" href="/api/v1/auth/discord?next=/dashboard"><img src="icons/discord.webp" alt="">Discord</a>
         <a class="btn btn--ghost social-auth__button social-auth__button--telegram" href="/api/v1/auth/telegram"><img src="icons/telegram.webp" alt="">Telegram</a>
@@ -140,9 +148,6 @@
 </div>
 
 
-<script>
-document.querySelectorAll(".cf-turnstile").forEach(function (widget) { widget.dataset.sitekey = window.MISA_TURNSTILE_SITE_KEY || ""; });
-</script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </body>
 </html>

@@ -3,8 +3,9 @@ import "server-only";
 import type { NextRequest } from "next/server";
 
 export async function verifyTurnstile(request: NextRequest, token: unknown) {
-  const secret = process.env.MISA_TURNSTILE_SECRET_KEY;
-  if (!secret || !process.env.MISA_TURNSTILE_SITE_KEY) return false;
+  const secret = process.env.MISA_TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY;
+  const siteKey = process.env.MISA_TURNSTILE_SITE_KEY || process.env.TURNSTILE_SITE_KEY;
+  if (!secret || !siteKey) return false;
   if (typeof token !== "string" || !token) return false;
   const form = new FormData();
   form.set("secret", secret);

@@ -17,109 +17,94 @@ const AUTH_ERRORS = {
   invalid: "Invalid email or password.",
 };
 
-function setTurnstileToken(token) {
-  window.__misaTurnstileToken = token || "";
-}
+let activeChallenge = null;
+let activeWidget = null;
+let activeForm = null;
 
-function authLocks() {
-  return document.querySelectorAll(".auth-lock");
-}
-
-function isFormControl(el) {
-  return (
-    el instanceof HTMLButtonElement ||
-    el instanceof HTMLInputElement ||
-    el instanceof HTMLSelectElement ||
-    el instanceof HTMLTextAreaElement
-  );
-}
-
-function setAuthLockState(el, locked) {
-  el.classList.toggle("is-locked", locked);
+async function turnstileSiteKey() {
+  if (window.MISA_TURNSTILE_SITE_KEY) return window.MISA_TURNSTILE_SITE_KEY;
   try {
-    el.inert = locked;
-  } catch {
-    /* older browsers ignore the inert property */
+    const response = await fetch("/api/v1/auth/providers", { credentials: "include", cache: "no-store" });
+    if (response.ok) {
+      const config = await response.json();
+      window.MISA_TURNSTILE_SITE_KEY = config.turnstile_site_key || "";
+    }
+  } catch {}
+  return window.MISA_TURNSTILE_SITE_KEY || "";
+}
+
+async function waitForTurnstile() {
+  for (let i = 0; i < 100; i++) {
+    if (window.turnstile && typeof window.turnstile.render === "function") return window.turnstile;
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  if (locked) el.setAttribute("inert", "");
-  else el.removeAttribute("inert");
-  if (isFormControl(el)) el.disabled = locked;
-  el.querySelectorAll("input, button, textarea, select").forEach((node) => {
-    node.disabled = locked;
-  });
-  el.querySelectorAll("a").forEach((node) => {
-    if (locked) node.setAttribute("tabindex", "-1");
-    else node.removeAttribute("tabindex");
-  });
+  throw new Error("Human verification could not load. Check your connection and try again.");
 }
 
-function lockAuthActions() {
-  setTurnstileToken("");
-  authLocks().forEach((el) => setAuthLockState(el, true));
-}
-
-function unlockAuthActions(token) {
-  if (!token) return;
-  setTurnstileToken(token);
-  authLocks().forEach((el) => setAuthLockState(el, false));
-}
-
-function currentTurnstileToken() {
-  if (window.__misaTurnstileToken) return window.__misaTurnstileToken;
-  const inputs = document.querySelectorAll('input[name="cf-turnstile-response"]');
-  for (const input of inputs) {
-    if (input.value) return input.value;
+function clearChallenge(form) {
+  activeChallenge = null;
+  if (activeWidget !== null && window.turnstile && window.turnstile.remove) {
+    try { window.turnstile.remove(activeWidget); } catch {}
   }
-  return "";
+  activeWidget = null;
+  activeForm = null;
+  const box = form.querySelector(".turnstile-box");
+  if (box) {
+    box.hidden = true;
+    const mount = box.querySelector(".cf-turnstile");
+    if (mount) mount.replaceChildren();
+  }
+  const note = form.querySelector("[data-lock-note]");
+  if (note) note.hidden = true;
 }
 
-function syncTurnstileGate() {
-  const token = currentTurnstileToken();
-  if (token) unlockAuthActions(token);
+async function showChallenge(form, onVerified) {
+  const key = await turnstileSiteKey();
+  if (!key) {
+    showAuthMessage("Human verification is unavailable. Please try again shortly.", "error");
+    return;
+  }
+  const box = form.querySelector(".turnstile-box");
+  const mount = box && box.querySelector(".cf-turnstile");
+  if (!box || !mount) return;
+  if (activeForm && activeForm !== form) clearChallenge(activeForm);
+  box.hidden = false;
+  const note = form.querySelector("[data-lock-note]");
+  if (note) note.hidden = false;
+  try {
+    const turnstile = await waitForTurnstile();
+    activeChallenge = onVerified;
+    activeForm = form;
+    if (activeWidget !== null) turnstile.reset(activeWidget);
+    else activeWidget = turnstile.render(mount, {
+      sitekey: key,
+      theme: "dark",
+      size: "flexible",
+      callback: window.misaTurnstileSuccess,
+      "expired-callback": window.misaTurnstileExpire,
+      "timeout-callback": window.misaTurnstileExpire,
+      "error-callback": window.misaTurnstileError,
+    });
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (error) {
+    showAuthMessage(error.message || "Human verification could not load.", "error");
+  }
 }
 
 window.misaTurnstileSuccess = function (token) {
-  unlockAuthActions(token);
-  syncTurnstileGate();
+  if (!token || !activeChallenge) return;
+  const complete = activeChallenge;
+  activeChallenge = null;
+  void complete(token);
 };
 
 window.misaTurnstileExpire = function () {
-  lockAuthActions();
+  showAuthMessage("Human verification expired. Please complete it again.", "error");
 };
 
 window.misaTurnstileError = function () {
-  if (currentTurnstileToken()) {
-    syncTurnstileGate();
-    return;
-  }
-  showAuthMessage("Human verification failed to load. Refresh and try again.", "error");
+  showAuthMessage("Human verification failed to load. Please retry or refresh.", "error");
 };
-
-function watchTurnstileGate() {
-  if (!document.querySelector(".auth-lock")) return;
-  syncTurnstileGate();
-  const root = document.querySelector(".turnstile-box") || document.body;
-  const observer = new MutationObserver(syncTurnstileGate);
-  observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["value"] });
-  const started = Date.now();
-  const timer = setInterval(() => {
-    syncTurnstileGate();
-    if (currentTurnstileToken() || Date.now() - started > 120000) clearInterval(timer);
-  }, 200);
-}
-
-function consumeTurnstileToken() {
-  const token = currentTurnstileToken();
-  lockAuthActions();
-  if (window.turnstile?.reset) {
-    try {
-      window.turnstile.reset();
-    } catch {
-      /* widget may already be gone */
-    }
-  }
-  return token;
-}
 
 function authMessageBox() {
   return document.getElementById("auth-message");
@@ -158,25 +143,78 @@ function bindLoginForm() {
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (form.dataset.busy) return; // v3.97: a second Enter while it sends does nothing
-    const submit = form.querySelector('[type="submit"]');
-    const original = submit ? submit.textContent : "";
-    form.dataset.busy = "1";
-    if (submit) { submit.textContent = "Signing in…"; submit.setAttribute("aria-busy", "true"); }
-    try {
-      const token = currentTurnstileToken();
-      if (!token) {
-        showAuthMessage("Complete the human verification first.", "error");
-        return;
+    if (form.dataset.busy) return;
+    await showChallenge(form, async (token) => {
+      const submit = form.querySelector('[type="submit"]');
+      const original = submit ? submit.innerHTML : "";
+      form.dataset.busy = "1";
+      if (submit) { submit.textContent = "Signing in…"; submit.setAttribute("aria-busy", "true"); }
+      try {
+        const { response, data } = await sendJson("/api/v1/auth/login", {
+          email: form.email.value,
+          password: form.password.value,
+          remember: Boolean(form.remember?.checked),
+          turnstile_token: token,
+        });
+        clearChallenge(form);
+        if (!response.ok) {
+          showAuthMessage(errorFromApi(data), "error");
+          return;
+        }
+        if (data.mfa_required && data.ticket) {
+          showMfaForm(data.ticket);
+          return;
+        }
+        window.location.href = data.redirect || "/dashboard";
+      } catch {
+        clearChallenge(form);
+        showAuthMessage("Could not reach the server.", "error");
+      } finally {
+        delete form.dataset.busy;
+        if (submit) { submit.innerHTML = original; submit.removeAttribute("aria-busy"); }
       }
-      const { response, data } = await sendJson("/api/v1/auth/login", {
-        email: form.email.value,
-        password: form.password.value,
-        remember: Boolean(form.remember?.checked),
-        turnstile_token: token,
+    });
+  });
+}
+
+function showMfaForm(ticket) {
+  const form = document.getElementById("mfa-form");
+  if (!form || !ticket) return;
+  form.dataset.ticket = ticket;
+  form.hidden = false;
+  const login = document.getElementById("login-form");
+  if (login) login.hidden = true;
+  const or = document.querySelector(".auth__or");
+  const providers = document.querySelector(".oauth");
+  if (or) or.hidden = true;
+  if (providers) providers.hidden = true;
+  const code = form.querySelector('input[name="code"]');
+  if (code) code.focus();
+}
+
+function bindMfaForm() {
+  const form = document.getElementById("mfa-form");
+  if (!form) return;
+  const ticket = new URLSearchParams(location.search).get("mfa_ticket");
+  if (ticket) {
+    showMfaForm(ticket);
+    history.replaceState(null, "", "/login");
+  }
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (form.dataset.busy) return;
+    const code = form.querySelector('input[name="code"]');
+    if (!code || !code.value.trim()) return;
+    const submit = form.querySelector('[type="submit"]');
+    const original = submit ? submit.innerHTML : "";
+    form.dataset.busy = "1";
+    if (submit) { submit.textContent = "Verifying…"; submit.setAttribute("aria-busy", "true"); }
+    try {
+      const { response, data } = await sendJson("/api/v1/auth/login/mfa", {
+        ticket: form.dataset.ticket,
+        code: code.value.trim(),
       });
       if (!response.ok) {
-        consumeTurnstileToken();
         showAuthMessage(errorFromApi(data), "error");
         return;
       }
@@ -185,7 +223,7 @@ function bindLoginForm() {
       showAuthMessage("Could not reach the server.", "error");
     } finally {
       delete form.dataset.busy;
-      if (submit) { submit.textContent = original; submit.removeAttribute("aria-busy"); }
+      if (submit) { submit.innerHTML = original; submit.removeAttribute("aria-busy"); }
     }
   });
 }
@@ -195,47 +233,44 @@ function bindSignupForm() {
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (form.dataset.busy) return; // v3.97: a second Enter while it sends does nothing
-    const submit = form.querySelector('[type="submit"]');
-    const original = submit ? submit.textContent : "";
-    form.dataset.busy = "1";
-    if (submit) { submit.textContent = "Creating account…"; submit.setAttribute("aria-busy", "true"); }
-    try {
-      const token = currentTurnstileToken();
-      if (!token) {
-        showAuthMessage("Complete the human verification first.", "error");
-        return;
+    if (form.dataset.busy) return;
+    await showChallenge(form, async (token) => {
+      const submit = form.querySelector('[type="submit"]');
+      const original = submit ? submit.innerHTML : "";
+      form.dataset.busy = "1";
+      if (submit) { submit.textContent = "Creating account…"; submit.setAttribute("aria-busy", "true"); }
+      try {
+        const { response, data } = await sendJson("/api/v1/auth/signup", {
+          email: form.email.value,
+          password: form.password.value,
+          confirm_password: form["confirm-password"].value,
+          tos: Boolean(form.tos?.checked),
+          username: form.username?.value?.trim().toLowerCase() || null,
+          turnstile_token: token,
+        });
+        clearChallenge(form);
+        if (!response.ok) {
+          showAuthMessage(errorFromApi(data), "error");
+          return;
+        }
+        window.location.href = data.redirect || "/dashboard";
+      } catch {
+        clearChallenge(form);
+        showAuthMessage("Could not reach the server.", "error");
+      } finally {
+        delete form.dataset.busy;
+        if (submit) { submit.innerHTML = original; submit.removeAttribute("aria-busy"); }
       }
-      const { response, data } = await sendJson("/api/v1/auth/signup", {
-        email: form.email.value,
-        password: form.password.value,
-        confirm_password: form["confirm-password"].value,
-        tos: Boolean(form.tos?.checked),
-        username: form.username?.value?.trim().toLowerCase() || null,
-        turnstile_token: token,
-      });
-      if (!response.ok) {
-        consumeTurnstileToken();
-        showAuthMessage(errorFromApi(data), "error");
-        return;
-      }
-      window.location.href = data.redirect || "/dashboard";
-    } catch {
-      showAuthMessage("Could not reach the server.", "error");
-    } finally {
-      delete form.dataset.busy;
-      if (submit) { submit.textContent = original; submit.removeAttribute("aria-busy"); }
-    }
+    });
   });
 }
 
 function bindSocialAuth() {
   document.querySelectorAll(".social-auth__button").forEach((link) => {
     link.addEventListener("click", (event) => {
-      if (!document.querySelector(".auth-page")) return;
-      if (currentTurnstileToken()) return;
+      if (link.getAttribute("aria-disabled") !== "true") return;
       event.preventDefault();
-      showAuthMessage("Complete the human verification first.", "error");
+      showAuthMessage("This sign-in provider is not configured yet.", "error");
     });
   });
 }
@@ -252,6 +287,9 @@ async function configureSocialAuth() {
     providers = response.ok ? await response.json() : null;
   } catch {
     providers = null;
+  }
+  if (providers?.turnstile_site_key) {
+    window.MISA_TURNSTILE_SITE_KEY = providers.turnstile_site_key;
   }
   const routes = {
     google: "/api/v1/auth/google?next=/dashboard",
@@ -459,9 +497,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const error = params.get("error");
   if (error) showAuthMessage(AUTH_ERRORS[error] || "Sign-in failed. Try again.", "error");
 
-  watchTurnstileGate();
-
   bindLoginForm();
+  bindMfaForm();
   bindSignupForm();
   configureSocialAuth();
   bindSocialAuth();
