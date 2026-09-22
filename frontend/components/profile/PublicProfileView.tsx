@@ -1,10 +1,40 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadProfileForUsername, normalizeDashboardProfile } from "@/lib/profile-store";
 import type { ProfileConfig } from "@/lib/types";
 import { ProfilePageMetadata } from "./ProfilePageMetadata";
 import { ProfileRenderer } from "./ProfileRenderer";
+
+function PublicProfileAnalytics({ config }: { config: ProfileConfig }) {
+  const lastViewedUsername = useRef("");
+  useEffect(() => {
+    const username = config.profile.username;
+    const socialLabels = new Map(config.socials.map((social) => [social.id, social.platform]));
+    const device = /iPad|Tablet/i.test(navigator.userAgent) ? "tablet" : /Mobi|Android/i.test(navigator.userAgent) ? "mobile" : "desktop";
+    const send = (kind: "view" | "click", socialId = "") => {
+      void fetch("/api/v1/analytics/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        keepalive: true,
+        body: JSON.stringify({ username, kind, socialId, socialLabel: socialLabels.get(socialId) || "", referrer: document.referrer, device }),
+      }).catch(() => undefined);
+    };
+    if (lastViewedUsername.current !== username) {
+      lastViewedUsername.current = username;
+      send("view");
+    }
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-social-id]") : null;
+      const socialId = target?.dataset.socialId;
+      if (socialId && socialLabels.has(socialId)) send("click", socialId);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [config]);
+  return null;
+}
 
 export function PublicProfileView({ username, initialProfile }: { username: string; initialProfile?: ProfileConfig | null }) {
   const [config, setConfig] = useState<ProfileConfig | null>(() => initialProfile ? normalizeDashboardProfile(initialProfile) : null);
@@ -48,5 +78,5 @@ export function PublicProfileView({ username, initialProfile }: { username: stri
       </main>
     );
   }
-  return <><ProfilePageMetadata config={config} /><ProfileRenderer config={config} /></>;
+  return <><ProfilePageMetadata config={config} /><PublicProfileAnalytics config={config} /><ProfileRenderer config={config} /></>;
 }
