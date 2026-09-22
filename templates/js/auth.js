@@ -120,6 +120,14 @@ function showAuthMessage(text, kind) {
   box.classList.toggle("auth-message--ok", kind !== "error");
 }
 
+function clearAuthMessage() {
+  const box = authMessageBox();
+  if (!box) return;
+  box.hidden = true;
+  box.textContent = "";
+  box.classList.remove("is-visible", "auth-message--error", "auth-message--ok");
+}
+
 function errorFromApi(data) {
   if (!data) return "Something went wrong.";
   if (typeof data.detail === "string") return data.detail;
@@ -144,6 +152,12 @@ function bindLoginForm() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (form.dataset.busy) return;
+    clearAuthMessage();
+    if (!form.email.value.trim() || !form.password.value || !form.email.checkValidity()) {
+      showAuthMessage("Enter a valid email and password first.", "error");
+      (!form.email.value.trim() || !form.email.checkValidity() ? form.email : form.password).focus();
+      return;
+    }
     await showChallenge(form, async (token) => {
       const submit = form.querySelector('[type="submit"]');
       const original = submit ? submit.innerHTML : "";
@@ -234,6 +248,7 @@ function bindSignupForm() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (form.dataset.busy) return;
+    clearAuthMessage();
     await showChallenge(form, async (token) => {
       const submit = form.querySelector('[type="submit"]');
       const original = submit ? submit.innerHTML : "";

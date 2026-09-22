@@ -22,7 +22,8 @@ function isAdminRoute(pathname: string) {
 }
 
 function isStandaloneRoute(pathname: string) {
-  return pathname === "/preview" || pathname.startsWith("/p/")
+  return pathname === "/auth/verify" || pathname === "/dashboard/auth/verify"
+    || pathname === "/preview" || pathname.startsWith("/p/")
     || pathname.startsWith("/c/");
 }
 
