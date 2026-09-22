@@ -407,12 +407,12 @@ function UsernameEffectPicker({ label, value, onChange, name, usernameColor, eff
   const [draft, setDraft] = useState(value);
   return <div>
     <div className="flex items-center justify-between"><FieldLabel>{label}</FieldLabel>{onReset && <ResetButton label={label} onClick={onReset} />}</div>
-    <button type="button" aria-haspopup="dialog" onClick={() => { setDraft(value); setOpen(true); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-black/30 px-4 py-3 text-sm text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"><WandSparkles size={17} />Username Effects</button>
+    <button type="button" aria-haspopup="dialog" onClick={() => { setDraft(USERNAME_EFFECTS.includes(value) ? value : "None"); setOpen(true); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-black/30 px-4 py-3 text-sm text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"><WandSparkles size={17} />Username Effects</button>
     <Modal open={open} title="Username Effects" size="lg" onClose={() => setOpen(false)}>
       <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="grid min-w-0 grid-cols-3 gap-2">
           {USERNAME_EFFECTS.map(effect => <button key={effect} type="button" aria-label={effect} aria-pressed={draft === effect} onClick={() => setDraft(effect)} className={"flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-2 py-3 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 " + (draft === effect ? "border-purple-400/60 bg-purple-500/10" : "border-transparent bg-white/[.035] hover:bg-white/[.07]")}>
-            <UsernameEffectPreview effect={effect} name={effect.endsWith(" Sparkles") ? "?" : "Name"} usernameColor={usernameColor} effectColor={effectColor} />
+            <UsernameEffectPreview effect={effect} name="Name" usernameColor={usernameColor} effectColor={effectColor} />
             <span className="text-[10px] text-zinc-400">{effect}</span>
           </button>)}
         </div>
@@ -456,7 +456,7 @@ function EffectsPanel({ config, setSettings, setAsset, onUpload, showBackgroundE
       <div className="space-y-6">
         <div className="grid w-full min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
         {showBackgroundEffect ? <div className="col-span-full min-w-0"><BackgroundEffectPicker value={backgroundEffectValue ?? config.settings.backgroundEffect ?? "None"} onChange={onBackgroundEffectChange ?? ((value) => setSettings({ backgroundEffect: value }))} /></div> : null}
-        <div className="col-span-full min-w-0"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "Glow" })} /></div>
+        <div className="col-span-full min-w-0"><UsernameEffectPicker label={t("customize.nameEffect")} value={config.settings.usernameEffect} onChange={(value) => setSettings({ usernameEffect: value })} name={config.profile.displayName || "yourname"} usernameColor={config.settings.usernameColor || config.settings.textColor || "#ffffff"} effectColor={config.settings.usernameEffectColor || config.settings.accentColor || "#e11d48"} onReset={() => setSettings({ usernameEffect: "None" })} /></div>
         <div className="min-w-0"><FieldLabel>{t("customize.pageEnter")}</FieldLabel><SelectBox value={config.settings.pageEnter || "Fade"} options={[...PAGE_ENTERS]} onChange={(value) => setSettings({ pageEnter: value as PageEnter })} onReset={() => setSettings({ pageEnter: "Fade" })} /></div>
         <div className="min-w-0"><FieldLabel>{t("customize.font")}</FieldLabel><SelectBox value={selectedFont?.name || "Inter"} options={defaultFonts.map((font) => font.name)} onChange={(value) => { const next = defaultFonts.find((font) => font.name === value); if (next) setSettings({ profileFont: next.id }); }} onReset={() => setSettings({ profileFont: "Inter" })} /></div>
 

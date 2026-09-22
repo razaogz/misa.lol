@@ -1,9 +1,19 @@
 import type { PageEnter, ProfileFont, UsernameEffect } from "./types";
 
 export const PROFILE_FONTS: ProfileFont[] = ["Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"];
-export const USERNAME_EFFECTS: UsernameEffect[] = ["None", "Glow", "Shimmer", "Rainbow", "Fuzzy", "Shuffle", "Sparkle", "Glitch", "Pulse", "Wave", "Blue Sparkles", "Green Sparkles", "Pink Sparkles", "Red Sparkles", "White Sparkles", "Yellow Sparkles"];
+export const USERNAME_EFFECTS: UsernameEffect[] = ["None", "Wish Lanterns", "Crystal Rain", "Tiny Crowns", "Gold Sparkles", "Pink Hearts"];
+
+export const WEBP_NAME_EFFECTS: Partial<Record<UsernameEffect, string>> = {
+  "Wish Lanterns": "wish-lanterns",
+  "Crystal Rain": "crystal-rain",
+  "Tiny Crowns": "tiny-crowns",
+  "Gold Sparkles": "gold-sparkles",
+  "Pink Hearts": "pink-hearts",
+};
 
 export function usernameEffectClass(effect: UsernameEffect) {
+  const webp = WEBP_NAME_EFFECTS[effect];
+  if (webp) return "name-gif name-webp name-webp-" + webp;
   if (effect.endsWith(" Sparkles")) return "name-gif name-gif-" + effect.split(" ")[0].toLowerCase();
   if (effect === "Gradient") return "bg-gradient-to-r from-[var(--username-color)] via-[var(--effect-color)] to-[var(--username-color)] bg-clip-text text-transparent";
   if (effect === "Shimmer") return "animate-shimmer bg-gradient-to-r from-[var(--username-color)] via-[var(--effect-color)] to-[var(--username-color)] bg-clip-text text-transparent";

@@ -687,7 +687,10 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
         name_class += " name-wave"
     elif username_effect == "Shadow":
         name_class += " name-shadow"
-    if username_effect.endswith(" Sparkles"):
+    webp_name_effects = {"Wish Lanterns": "wish-lanterns", "Crystal Rain": "crystal-rain", "Tiny Crowns": "tiny-crowns", "Gold Sparkles": "gold-sparkles", "Pink Hearts": "pink-hearts"}
+    if username_effect in webp_name_effects:
+        name_class += " name-gif name-webp name-webp-" + webp_name_effects[username_effect]
+    elif username_effect.endswith(" Sparkles"):
         name_class += " name-gif name-gif-" + username_effect.split(" ")[0].lower()
     name_style = f"font-size:var(--profile-name-size,{font_size + 8}px);letter-spacing:{letter_spacing}px;color:{username_color};"
     name_style += f"font-family:{font_stack};"
