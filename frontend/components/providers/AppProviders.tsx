@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
+import { isPublicProfilePath } from "@/lib/public-profile-path";
 
 const DashboardProviders = dynamic(
   () => import("@/components/providers/DashboardProviders").then((module) => module.DashboardProviders),
@@ -49,6 +50,6 @@ function DashboardBootShell() {
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   if (isAdminRoute(pathname)) return <AdminProviders>{children}</AdminProviders>;
-  if (isStandaloneRoute(pathname)) return <>{children}</>;
+  if (isStandaloneRoute(pathname) || isPublicProfilePath(pathname)) return <>{children}</>;
   return <DashboardProviders>{children}</DashboardProviders>;
 }

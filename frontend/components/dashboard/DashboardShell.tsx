@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-store";
 import { useI18n } from "@/lib/i18n";
 import { useProfile } from "@/lib/profile-store";
 import { publicProfileUrl } from "@/lib/share";
+import { isPublicProfilePath } from "@/lib/public-profile-path";
 import { useFeatureFlags } from "@/lib/feature-flags";
 
 function isActive(pathname: string, href: string) {
@@ -228,7 +229,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     setSidebarCollapsed(next);
     window.localStorage.setItem("misa.dashboard.sidebarCollapsed", next ? "1" : "0");
   };
-  const isPublicProfile = pathname.startsWith("/p/") || pathname.startsWith("/c/") || pathname === "/constellations/examples";
+  const isPublicProfile = pathname.startsWith("/p/") || pathname.startsWith("/c/") || pathname === "/constellations/examples" || isPublicProfilePath(pathname);
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard/admin" || pathname.startsWith("/dashboard/admin/") || pathname === "/m" || pathname.startsWith("/m/");
   useEffect(() => {
     if (!localPreview && !isPublicProfile && !isAdminRoute && isReady && !user) {
