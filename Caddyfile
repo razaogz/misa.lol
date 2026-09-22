@@ -48,6 +48,14 @@ http://misa.lol, http://www.misa.lol {
 		}
 	}
 
+	# Dynamic Turnstile configuration consumed by the static authentication pages.
+	handle /js/config.js {
+		rewrite * /dashboard/js/config.js
+		reverse_proxy frontend:3000 {
+			import tunnel_headers
+		}
+	}
+
 	# Static assets: css, js, icons, images, fonts, site.webmanifest, robots.txt
 	@static path /css/* /js/* /icons/* /images/* /fonts/* /site.webmanifest /robots.txt
 	handle @static {
@@ -85,9 +93,10 @@ http://misa.lol, http://www.misa.lol {
 		file_server
 	}
 
-	# FastAPI API remains authoritative during staged native rollout
+	# Root public API paths map to Next.js routes under its /dashboard basePath.
 	handle /api* {
-		reverse_proxy api:8000 {
+		rewrite * /dashboard{uri}
+		reverse_proxy frontend:3000 {
 			import tunnel_headers
 		}
 	}
@@ -106,9 +115,10 @@ http://misa.lol, http://www.misa.lol {
 		}
 	}
 
-	# Public vanity profile URLs and fallback remain on FastAPI during staged native rollout
+	# Native public-profile routes and other dynamic paths.
 	handle {
-		reverse_proxy api:8000 {
+		rewrite * /dashboard{uri}
+		reverse_proxy frontend:3000 {
 			import tunnel_headers
 		}
 	}
@@ -124,7 +134,8 @@ http://ukvhq.dev {
 	}
 
 	handle /api* {
-		reverse_proxy api:8000 {
+		rewrite * /dashboard{uri}
+		reverse_proxy frontend:3000 {
 			import tunnel_headers
 		}
 	}

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
-use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{FromRow, PgConnection, PgPool, Postgres, QueryBuilder, Transaction};
 use std::str::FromStr;
 use std::time::Duration;
 use uuid::Uuid;
@@ -121,7 +121,61 @@ fn parse_ssl_mode(mode: &str) -> PgSslMode {
     }
 }
 
+const WEB_MIGRATIONS: &[(i64, &str, &str)] = &[
+    (1, "legacy_web_schema", include_str!("../migrations/0001_legacy_web_schema.sql")),
+    (2, "badge_rank_platform", include_str!("../migrations/0002_badge_rank_platform.sql")),
+];
+
 pub async fn migrate(pool: &PgPool) -> Result<()> {
+    // The transaction-scoped lock serializes every startup, including the existing core schema.
+    // A failure rolls back both DDL and its version marker.
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext('misa_schema_migrations'))")
+        .execute(&mut *tx).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY, name TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+        .execute(&mut *tx).await?;
+    let core_applied: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 0)")
+        .fetch_one(&mut *tx).await?;
+    if !core_applied {
+        migrate_core(&mut *tx).await?;
+        sqlx::query("INSERT INTO schema_migrations (version, name) VALUES (0, 'data_api_core')")
+            .execute(&mut *tx).await?;
+    }
+    for &(version, name, script) in WEB_MIGRATIONS {
+        let applied: Option<String> = sqlx::query_scalar("SELECT name FROM schema_migrations WHERE version = $1")
+            .bind(version).fetch_optional(&mut *tx).await?;
+        if let Some(existing_name) = applied {
+            if existing_name != name { anyhow::bail!("schema migration version {version} has unexpected name {existing_name}"); }
+            continue;
+        }
+        sqlx::raw_sql(script).execute(&mut *tx).await
+            .with_context(|| format!("schema migration {version} ({name}) failed"))?;
+        sqlx::query("INSERT INTO schema_migrations (version, name) VALUES ($1, $2)")
+            .bind(version).bind(name).execute(&mut *tx).await?;
+    }
+    seed_root_admin(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn seed_root_admin(conn: &mut PgConnection) -> Result<()> {
+    let email = std::env::var("SUPER_ADMIN_EMAIL").unwrap_or_default().trim().to_lowercase();
+    if email.is_empty() { return Ok(()); }
+    let id = Uuid::new_v4();
+    sqlx::query(r#"
+        INSERT INTO admin_accounts (id, email, name, role, permissions, status, suspended)
+        SELECT COALESCE((SELECT id FROM users WHERE lower(email) = $1 LIMIT 1), $2),
+               $1,
+               COALESCE((SELECT COALESCE(display_name, username, email) FROM users WHERE lower(email) = $1 LIMIT 1), 'Misa administrator'),
+               'super_admin', '{"*": true}'::jsonb, 'active', FALSE
+        ON CONFLICT (email) DO UPDATE SET
+            role = 'super_admin', permissions = '{"*": true}'::jsonb,
+            status = 'active', suspended = FALSE, updated_at = NOW()
+    "#).bind(&email).bind(id).execute(&mut *conn).await?;
+    Ok(())
+}
+
+async fn migrate_core(conn: &mut PgConnection) -> Result<()> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS users (
@@ -144,7 +198,7 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
         )
         "#,
     )
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
     for statement in [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(128) UNIQUE",
@@ -241,10 +295,10 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
         )",
         "CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs (created_at DESC)",
     ] {
-        sqlx::query(statement).execute(pool).await?;
+        sqlx::query(statement).execute(&mut *conn).await?;
     }
-    ensure_account_ids(pool).await?;
-    sqlx::query("ALTER TABLE users ALTER COLUMN account_id SET NOT NULL").execute(pool).await?;
+    ensure_account_ids(conn).await?;
+    sqlx::query("ALTER TABLE users ALTER COLUMN account_id SET NOT NULL").execute(&mut *conn).await?;
     Ok(())
 }
 
@@ -254,10 +308,10 @@ fn account_id_for() -> String {
     value.to_string()
 }
 
-async fn ensure_account_ids(pool: &PgPool) -> Result<()> {
+async fn ensure_account_ids(conn: &mut PgConnection) -> Result<()> {
     // Replace old MISA-... public IDs without changing users.id or any relationships.
     let users = sqlx::query("SELECT id FROM users WHERE account_id IS NULL OR account_id !~ '^[0-9]{12}$'")
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
     for row in users {
         let id: Uuid = sqlx::Row::try_get(&row, "id")?;
@@ -267,7 +321,7 @@ async fn ensure_account_ids(pool: &PgPool) -> Result<()> {
             match sqlx::query("UPDATE users SET account_id = $1, updated_at = NOW() WHERE id = $2")
                 .bind(candidate)
                 .bind(id)
-                .execute(pool)
+                .execute(&mut *conn)
                 .await
             {
                 Ok(_) => { updated = true; break; }

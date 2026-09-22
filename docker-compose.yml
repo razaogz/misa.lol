@@ -7,8 +7,6 @@ services:
     depends_on:
       frontend:
         condition: service_healthy
-      api:
-        condition: service_healthy
     ports:
       - "127.0.0.1:8080:80"
     volumes:
@@ -24,15 +22,12 @@ services:
     build:
       context: ./frontend
       args:
-        API_PROXY_TARGET: http://api:8000
         NEXT_PUBLIC_MEDIA_HOSTS: "${NEXT_PUBLIC_MEDIA_HOSTS:-r2.misa.lol}"
-        MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-false}"
+        MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-true}"
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      MISA_BACKEND_URL: http://api:8000
-      MISA_NEXT_CORE_READS: "true"
-      MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-false}"
+      MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-true}"
       MISA_INSTANCE_NAME: frontend
       MISA_APP_NAME: misa
       MISA_APP_VERSION: 0.1.0
@@ -66,7 +61,7 @@ services:
     depends_on:
       dragonfly:
         condition: service_started
-      api:
+      data-api:
         condition: service_healthy
     expose:
       - "3000"
@@ -150,6 +145,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
+      SUPER_ADMIN_EMAIL: "${SUPER_ADMIN_EMAIL:?Set SUPER_ADMIN_EMAIL in .env}"
       DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-5}"
       DATA_API_KEY: "${DATA_API_KEY:?Set DATA_API_KEY in .env}"
       LISTEN_ADDR: 0.0.0.0:8080

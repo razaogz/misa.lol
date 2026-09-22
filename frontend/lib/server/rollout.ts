@@ -1,6 +1,6 @@
 import "server-only";
 
-// Routes stay dark until their complete feature group has reached parity.
+// Native routes are the default. An explicit false is an emergency kill switch.
 export function nativeCoreEnabled() {
-  return process.env.MISA_NEXT_CORE_ROLLOUT === "true";
+  return process.env.MISA_NEXT_CORE_ROLLOUT !== "false";
 }
