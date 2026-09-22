@@ -15,17 +15,15 @@ import binascii
 import copy
 from dataclasses import dataclass, field
 from hashlib import sha256
-from pathlib import Path
 import re
 import sys
 from typing import Any, Iterable
 
 
-# Running ``python /app/scripts/migrate_media_to_r2.py`` sets sys.path[0] to
-# /app/scripts. Add /app so the same app package used by the API is importable.
-APP_ROOT = Path(__file__).resolve().parents[1]
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
+try:
+    from .media_migration_support import MediaMigrationDatabase, MigrationSettings, R2Storage
+except ImportError:
+    from media_migration_support import MediaMigrationDatabase, MigrationSettings, R2Storage
 
 
 REQUIRED_R2_BUCKET = "misa-media"
@@ -204,9 +202,9 @@ def replace_paths(document: Any, replacements: Iterable[tuple[JsonPath, str]]) -
 
 def _validate_configuration(settings: Any, storage: Any) -> None:
     if not settings.database_url:
-        raise RuntimeError("DATABASE_URL is not configured in the API container.")
+        raise RuntimeError("DATABASE_URL is not configured for the migration.")
     if not storage.enabled:
-        raise RuntimeError("R2 is not fully configured in the API container.")
+        raise RuntimeError("R2 is not fully configured for the migration.")
     if settings.r2_bucket != REQUIRED_R2_BUCKET:
         raise RuntimeError(
             f"R2_BUCKET must be {REQUIRED_R2_BUCKET!r}; got {settings.r2_bucket!r}."
@@ -300,12 +298,8 @@ async def migrate_profile(
 
 
 async def run(args: argparse.Namespace) -> int:
-    from app.core.config import get_settings
-    from app.core.r2_storage import get_r2_storage
-    from app.db import admin_db
-
-    settings = get_settings()
-    storage = get_r2_storage(settings)
+    settings = MigrationSettings.from_environment()
+    storage = R2Storage(settings)
     _validate_configuration(settings, storage)
     mode = "APPLY" if args.apply else "DRY-RUN"
     print(
@@ -316,7 +310,8 @@ async def run(args: argparse.Namespace) -> int:
         print("No R2 objects or database rows will be changed.")
 
     totals = Totals()
-    await admin_db.init_admin_db(settings.database_url, initialize_schema=False)
+    admin_db = MediaMigrationDatabase(settings.database_url)
+    await admin_db.open()
     try:
         after_user_id: str | None = None
         while True:
@@ -344,7 +339,7 @@ async def run(args: argparse.Namespace) -> int:
                     totals=totals,
                 )
     finally:
-        await admin_db.close_admin_db()
+        await admin_db.close()
 
     label = "migrated" if args.apply else "would_migrate"
     print("\nMigration summary")

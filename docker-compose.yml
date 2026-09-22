@@ -178,6 +178,21 @@ services:
       - data
       - bot_egress
 
+  media-migration:
+    profiles: ["maintenance"]
+    build:
+      context: ./backend/scripts
+    environment:
+      DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in .env}"
+      R2_BUCKET: "${R2_BUCKET:-}"
+      R2_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:-}"
+      R2_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY:-}"
+      R2_ENDPOINT: "${R2_ENDPOINT:-}"
+      R2_PUBLIC_BASE_URL: "${R2_PUBLIC_BASE_URL:-}"
+    networks:
+      - data
+      - maintenance_egress
+
   dragonfly:
     image: docker.dragonflydb.io/dragonflydb/dragonfly
     restart: unless-stopped
@@ -203,6 +218,8 @@ networks:
   data_api_egress:
     driver: bridge
   bot_egress:
+    driver: bridge
+  maintenance_egress:
     driver: bridge
 
 volumes:
