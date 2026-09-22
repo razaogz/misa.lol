@@ -1,4 +1,4 @@
-﻿import json
+import json
 import hmac
 from datetime import datetime, timezone
 from typing import Any
@@ -48,12 +48,18 @@ async def init_admin_db(
     )
     if not initialize_schema:
         return
+    # Multiple Gunicorn workers execute lifespan concurrently.  A transaction-scoped
+    # lock serializes bootstrap without leaving a session-level lock behind if a
+    # worker is terminated.  Bootstrap can exceed the pool's normal 30-second
+    # command timeout on an existing production schema, so only lock acquisition
+    # receives the bounded extended timeout.
     async with _pool.acquire() as schema_lock:
-        await schema_lock.execute("SELECT pg_advisory_lock(hashtext('misa_admin_schema_bootstrap'))")
-        try:
+        async with schema_lock.transaction():
+            await schema_lock.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('misa_admin_schema_bootstrap'))",
+                timeout=120,
+            )
             await _ensure_admin_schema(root_email)
-        finally:
-            await schema_lock.execute("SELECT pg_advisory_unlock(hashtext('misa_admin_schema_bootstrap'))")
 
 
 async def _ensure_admin_schema(root_email: str) -> None:
