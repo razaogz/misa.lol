@@ -25,12 +25,12 @@ services:
       context: ./frontend
       args:
         API_PROXY_TARGET: http://api:8000
-        NEXT_PUBLIC_MEDIA_HOSTS: "${NEXT_PUBLIC_MEDIA_HOSTS:-r2.misa.lol}"
+        NEXT_PUBLIC_MEDIA_HOSTS: "${NEXT_PUBLIC_MEDIA_HOSTS:-r2.misa.lol}"`n        MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-false}"
     restart: unless-stopped
     environment:
       NODE_ENV: production
       MISA_BACKEND_URL: http://api:8000
-      MISA_NEXT_CORE_READS: "true"
+      MISA_NEXT_CORE_READS: "true"`n      MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-false}"
       MISA_INSTANCE_NAME: frontend
       MISA_APP_NAME: misa
       MISA_APP_VERSION: 0.1.0
