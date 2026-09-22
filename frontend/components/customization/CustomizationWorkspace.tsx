@@ -18,7 +18,7 @@ import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLaye
 import { BACKGROUND_EFFECTS } from "@/lib/background-effects";
 import { SharingAppearance } from "@/components/sharing/SharingAppearance";
 import { sharePageCopy } from "@/lib/share";
-import { Button, FieldLabel, PageHeader, RangeControl, SelectBox, SectionTitle, TextArea, TextInput, Toggle } from "@/components/ui";
+import { Button, FieldLabel, Modal, PageHeader, RangeControl, SelectBox, SectionTitle, TextArea, TextInput, Toggle } from "@/components/ui";
 import { canCropAsset, IMAGE_ACCEPT, isAnimatedAsset, prepareCursorAsset } from "@/lib/image-edit";
 import { syncPlaylist } from "@/lib/audio";
 import { PreviewPlayerProvider } from "@/lib/preview-player";
@@ -403,24 +403,24 @@ function UsernameEffectPreview({ effect, name, usernameColor, effectColor, large
 }
 
 function UsernameEffectPicker({ label, value, onChange, name, usernameColor, effectColor, onReset }: { label: string; value: UsernameEffect; onChange: (value: UsernameEffect) => void; name: string; usernameColor: string; effectColor: string; onReset?: () => void }) {
-  return (
-    <div>
-      <div className="flex items-center justify-between"><FieldLabel>{label}</FieldLabel>{onReset && <ResetButton label={label} onClick={onReset} />}</div>
-      <div className="w-full min-w-0 max-w-full rounded-2xl border border-white/[.07] bg-white/[.02] p-3">
-        <div className="flex min-h-20 items-center justify-center overflow-hidden rounded-xl border border-white/[.06] bg-black/20 px-4 py-5">
-          <UsernameEffectPreview effect={value} name={name} usernameColor={usernameColor} effectColor={effectColor} large />
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  return <div>
+    <div className="flex items-center justify-between"><FieldLabel>{label}</FieldLabel>{onReset && <ResetButton label={label} onClick={onReset} />}</div>
+    <button type="button" aria-haspopup="dialog" onClick={() => { setDraft(value); setOpen(true); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-black/30 px-4 py-3 text-sm text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"><WandSparkles size={17} />Username Effects</button>
+    <Modal open={open} title="Username Effects" size="lg" onClose={() => setOpen(false)}>
+      <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="grid min-w-0 grid-cols-3 gap-2">
+          {USERNAME_EFFECTS.map(effect => <button key={effect} type="button" aria-label={effect} aria-pressed={draft === effect} onClick={() => setDraft(effect)} className={"flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-2 py-3 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 " + (draft === effect ? "border-purple-400/60 bg-purple-500/10" : "border-transparent bg-white/[.035] hover:bg-white/[.07]")}>
+            <UsernameEffectPreview effect={effect} name={effect.endsWith(" Sparkles") ? "?" : "Name"} usernameColor={usernameColor} effectColor={effectColor} />
+            <span className="text-[10px] text-zinc-400">{effect}</span>
+          </button>)}
         </div>
-        <div className="mt-3 grid w-full min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
-          {USERNAME_EFFECTS.map((effect) => (
-            <button key={effect} type="button" onClick={() => onChange(effect)} aria-pressed={value === effect} className={"flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-2 py-3 transition " + (value === effect ? "border-[#e11d48]/60 bg-[#e11d48]/10" : "border-white/[.07] bg-white/[.02] hover:border-white/20 hover:bg-white/[.05]")}>
-              <UsernameEffectPreview effect={effect} name={name} usernameColor={usernameColor} effectColor={effectColor} />
-              <span className={"text-[10px] uppercase tracking-[.12em] " + (value === effect ? "text-[#fecdd3]" : "text-zinc-600")}>{effect}</span>
-            </button>
-          ))}
-        </div>
+        <div className="order-first min-w-0 sm:order-none"><div className="flex min-h-36 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-purple-950/50 to-rose-950/70 p-5 text-center"><div className="max-w-full break-words"><UsernameEffectPreview effect={draft} name={name} usernameColor={usernameColor} effectColor={effectColor} large /></div></div><div aria-live="polite" className="mt-3 rounded-xl bg-white/[.035] p-3"><p className="text-sm font-medium">{draft}</p><p className="mt-1 text-xs text-zinc-400">Preview of your display name</p></div></div>
       </div>
-    </div>
-  );
+      <div className="mt-5 grid grid-cols-2 gap-2"><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="accent" onClick={() => { onChange(draft); setOpen(false); }}>Save</Button></div>
+    </Modal>
+  </div>;
 }
 
 function BackgroundEffectPicker({ value, onChange }: { value: BackgroundEffect; onChange: (value: BackgroundEffect) => void }) {

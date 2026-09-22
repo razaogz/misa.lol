@@ -308,3 +308,14 @@ body > .profile-entry > span { display:flex; flex-direction:column; align-items:
 /* Keep section titles readable while scrolling through their content. */
 .portfolio-section .profile-introduction > h2 { position:sticky; top:16px; z-index:5; width:fit-content; max-width:100%; padding:8px 12px; margin-left:-12px; border-radius:10px; background:#101010d9; backdrop-filter:blur(10px); }
 [data-profile-layout] .portfolio-section .profile-introduction > h2[data-portfolio-reveal] { opacity:1; transform:none; transition:none; }
+
+/* Bundled GIF overlays shared by the editor and both public renderers. */
+.name-gif { position:relative; isolation:isolate; display:inline-block; }
+.name-gif::after { content:""; position:absolute; inset:-.7em -.5em; pointer-events:none; background-image:var(--name-effect-gif); background-position:center; background-size:auto 100%; }
+.name-gif-blue { --name-effect-gif:url("/dashboard/name-effects/blue-sparkles.gif"); }
+.name-gif-green { --name-effect-gif:url("/dashboard/name-effects/green-sparkles.gif"); }
+.name-gif-pink { --name-effect-gif:url("/dashboard/name-effects/pink-sparkles.gif"); }
+.name-gif-red { --name-effect-gif:url("/dashboard/name-effects/red-sparkles.gif"); }
+.name-gif-white { --name-effect-gif:url("/dashboard/name-effects/white-sparkles.gif"); }
+.name-gif-yellow { --name-effect-gif:url("/dashboard/name-effects/yellow-sparkles.gif"); }
+@media(prefers-reduced-motion:reduce) { .name-gif::after { display:none; } }

@@ -7,7 +7,7 @@ export type SocialPlatform =
 
 export type BadgeName = "Verified" | "Premium" | "Staff" | "Helper" | "Donor" | "Gifter" | "OG" | "Server Booster" | "Bug Hunter" | "Winner" | "Second Place" | "Third Place";
 export type BackgroundEffect = "None" | "Snowflakes" | "Snow" | "Sakura" | "Rain" | "Fireflies";
-export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Wave" | "Shadow";
+export type UsernameEffect = "None" | "Glow" | "Gradient" | "Shimmer" | "Rainbow" | "Fuzzy" | "Shuffle" | "Sparkle" | "Glitch" | "Pulse" | "Wave" | "Shadow" | "Blue Sparkles" | "Green Sparkles" | "Pink Sparkles" | "Red Sparkles" | "White Sparkles" | "Yellow Sparkles";
 export type SocialAlign = "left" | "center" | "right";
 export type SocialAction = "open" | "copy";
 export type ProfileLayout = "Default" | "Modern" | "Simplistic" | "Sleek" | "Portfolio";
