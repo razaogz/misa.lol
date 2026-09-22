@@ -43,8 +43,8 @@ const fmt = value => Number.isFinite(value) ? `${Math.floor(value/60)}:${String(
 /** Both React and canonical HTML use this view. It never creates an audio element. */
 export function mountLyrics(host, root) {
   host.classList.add('synced-player');
-  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">♫</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" tabindex="0" aria-label="Song lyrics"><div class="synced-lines"></div></div><footer><button type="button" class="synced-follow" hidden>Return to current line</button><a href="https://lrclib.net" target="_blank" rel="noopener noreferrer" hidden>Lyrics by LRCLIB</a></footer>`;
-  const viewport=host.querySelector('.synced-viewport'), list=host.querySelector('.synced-lines'), status=host.querySelector('.synced-status'), seek=host.querySelector('input'), title=host.querySelector('strong'), art=host.querySelector('.synced-art'), times=host.querySelectorAll('time'), buttons=host.querySelectorAll('.synced-controls button'), follow=host.querySelector('.synced-follow'), attribution=host.querySelector('footer a');
+  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">♫</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" tabindex="0" aria-label="Song lyrics"><div class="synced-lines"></div></div><footer><button type="button" class="synced-follow" hidden>Return to current line</button></footer>`;
+  const viewport=host.querySelector('.synced-viewport'), list=host.querySelector('.synced-lines'), status=host.querySelector('.synced-status'), seek=host.querySelector('input'), title=host.querySelector('strong'), art=host.querySelector('.synced-art'), times=host.querySelectorAll('time'), buttons=host.querySelectorAll('.synced-controls button'), follow=host.querySelector('.synced-follow');
   let audio=null, trackKey='', rows=[], active=-2, manual=false, disposed=false, request=null, serial=0, timer=0, animation=0, info={};
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const stopAnimation=()=>{ cancelAnimationFrame(animation); animation=0; };
@@ -75,7 +75,7 @@ export function mountLyrics(host, root) {
   }
   async function load() {
     const version=++serial;request?.abort();request=new AbortController();
-    const meta=info.recording;attribution.hidden=!meta?.id;
+    const meta=info.recording;
     display('',meta?.id?'Loading lyrics…':'Confirm this recording in Audio Manager to find lyrics.',false);
     if(!meta?.id){ const body=host.dataset.lyricsBody || ''; if(body && (!host.dataset.lyricsTrack || host.dataset.lyricsTrack===info.id)) display(body,'User-provided lyrics',parseLrc(body).some(r=>r.t!==null)); return; }
     if(!Number.isFinite(audio?.duration)||audio.readyState<1){status.textContent='Waiting for track metadata…';return;}

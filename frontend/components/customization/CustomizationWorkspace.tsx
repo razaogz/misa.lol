@@ -3,7 +3,7 @@
 import { elementBox, updateElementLayout, type LayoutViewport } from "@/lib/element-layout";
 import { motion } from "framer-motion";
 import { SiDiscord } from "react-icons/si";
-import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Trash2, Type, Upload, UsersRound, Volume2, WandSparkles, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Maximize2, Move, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Trash2, Type, Upload, UsersRound, Volume2, WandSparkles, X, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { PortfolioPanel } from "@/components/customization/PortfolioPanel";
 import { WidgetsPanel } from "@/components/customization/WidgetsPanel";
 import { useEffect, useRef, useState, type CSSProperties, type ElementType } from "react";
@@ -11,7 +11,7 @@ import { EffectColors } from "./EffectColors";
 import { ImageCropModal } from "@/components/customization/ImageCropModal";
 import { AudioCropModal } from "@/components/customization/AudioCropModal";
 import { PlaylistEditor } from "@/components/customization/PlaylistEditor";
-import { useDraftPreview } from "@/lib/draft-preview";
+import { DraftPreviewBoundary, useDraftPreview } from "@/lib/draft-preview";
 import { ProfilePreviewButton } from "@/components/profile/ProfilePreviewButton";
 import { ProfileRenderer } from "@/components/profile/ProfileRenderer";
 import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
@@ -55,6 +55,10 @@ const cropSpec: Record<CropKey, { title: string; aspect: number; width: number; 
 };
 
 export function CustomizationWorkspace() {
+  return <DraftPreviewBoundary><CustomizationContent /></DraftPreviewBoundary>;
+}
+
+function CustomizationContent() {
   const { active: previewTabOpen } = useDraftPreview();
   const t = useT();
   const { config, updateConfig, resetConfig, saveProfile, saveState, profileReady } = useProfile();
@@ -127,7 +131,7 @@ export function CustomizationWorkspace() {
     {fullPreview && <div className="fixed inset-0 z-[100] flex flex-col bg-[#07070a]">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[.06] bg-[#0b0b10]/90 px-3 sm:px-4">
         <div className="flex items-center gap-2 text-sm font-medium text-white"><Maximize2 size={15} className="text-[#fecdd3]" />{t("customize.fullView", undefined, "Full view")}</div>
-        <button type="button" aria-label="Close full view" onClick={() => setFullPreview(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg leading-none text-zinc-400 transition hover:bg-white/[.06] hover:text-white">Ã—</button>
+        <button type="button" aria-label="Close full view" onClick={() => { setFullPreview(false); setManualMove(false); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[.06] hover:text-white"><X size={18} aria-hidden="true" /></button>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 p-3">
         {(["desktop", "mobile"] as const).map((viewport) => <Button key={viewport} variant={layoutViewport === viewport ? "accent" : "ghost"} aria-pressed={layoutViewport === viewport} onClick={() => setLayoutViewport(viewport)}>{viewport === "desktop" ? "Desktop layout" : "Mobile layout"}</Button>)}
@@ -136,7 +140,7 @@ export function CustomizationWorkspace() {
       <div className="relative min-h-0 flex-1 overflow-auto" dir="ltr">
         <div className="mx-auto h-full" style={{ width: layoutViewport === "mobile" ? "min(100%, 390px)" : "100%" }}><ProfileRenderer config={config} preview fitViewport layoutViewport={layoutViewport} manualPositioning={manualMove} onLayoutChange={setSettings} /></div>
         </div>
-      {manualMove ? <div className="z-20 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/[.1] bg-[#0b0b10]/90 p-2 shadow-2xl backdrop-blur-sm"><Button variant="ghost" className="h-9 min-h-0 px-3 text-xs" onClick={resetFramePosition}><RotateCcw size={13} />{t("common.reset")}</Button><Button variant="ghost" aria-label="Zoom out" className="h-9 min-h-0 w-9 min-w-0 px-0" onClick={() => adjustFrameScale(-10)} ><ZoomOut size={15} /></Button><span className="min-w-12 text-center font-mono text-xs text-zinc-300">{elementBox(config.settings, "frame", layoutViewport).width || "Auto"}px</span><Button variant="ghost" aria-label="Zoom in" className="h-9 min-h-0 w-9 min-w-0 px-0" onClick={() => adjustFrameScale(10)} ><ZoomIn size={15} /></Button><Button variant="accent" className="h-9 min-h-0 px-4 text-xs" onClick={() => setManualMove(false)}>{t("customize.exitMove", undefined, "Exit move mode")}</Button></div> : null}
+      {manualMove ? <div className="z-20 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/[.1] bg-[#0b0b10]/90 p-2 shadow-2xl backdrop-blur-sm"><Button variant="ghost" className="h-9 min-h-0 px-3 text-xs" onClick={resetFramePosition}><RotateCcw size={13} />{t("common.reset")}</Button><Button variant="ghost" aria-label="Zoom out" className="h-9 min-h-0 w-9 min-w-0 px-0" onClick={() => adjustFrameScale(-10)} ><ZoomOut size={15} /></Button><span className="min-w-12 text-center font-mono text-xs text-zinc-300">{currentFrame.width ? `${currentFrame.width}px` : "Auto"}</span><Button variant="ghost" aria-label="Zoom in" className="h-9 min-h-0 w-9 min-w-0 px-0" onClick={() => adjustFrameScale(10)} ><ZoomIn size={15} /></Button><Button variant="accent" className="h-9 min-h-0 px-4 text-xs" onClick={() => setManualMove(false)}>{t("customize.exitMove", undefined, "Exit move mode")}</Button></div> : null}
     </div>}
     <AudioCropModal
       open={Boolean(audioCrop)}

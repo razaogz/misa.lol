@@ -11,7 +11,7 @@ def bounded(value, low, high, default=0):
 def normalize_box(element, value):
     return {
         "x": bounded(value.get("x"), -100, 100),
-        "y": bounded(value.get("y"), 0, 400),
+        "y": bounded(value.get("y"), -400 if element == "frame" else 0, 400),
         "width": bounded(value.get("width"), 260 if element == "frame" else 160, 1040) if value.get("width") else 0,
         "height": bounded(value.get("height"), 0, 1000),
     }

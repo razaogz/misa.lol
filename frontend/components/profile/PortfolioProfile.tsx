@@ -41,7 +41,7 @@ export function PortfolioProfile({ config, preview, rootRef, frameStyle }: { con
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => void) | undefined;
-    const url = "/dashboard/portfolio-scene.mjs";
+    const url = "/dashboard/portfolio-scene.mjs?v=20260922-scroll";
     void import(/* webpackIgnore: true */ url).then((module: { mountPortfolioScene: (root: HTMLElement, options: { animation: string; onActive: (id: string) => void }) => () => void }) => {
       if (!disposed && rootRef.current) cleanup = module.mountPortfolioScene(rootRef.current, { animation, onActive: setActive });
     });
@@ -50,7 +50,7 @@ export function PortfolioProfile({ config, preview, rootRef, frameStyle }: { con
   return <WidgetResolutionProvider config={config} preview={preview}>
     <div ref={root} className="portfolio-profile" data-profile-variant="Portfolio" data-hero={centered ? "centered" : "classic"}>
       <section className="portfolio-hero" data-portfolio-section="hero" aria-label="Profile">
-        <ProfileLayoutElement id="frame"><div className="profile-glass portfolio-first-frame p-7 sm:p-9" style={frameStyle} onPointerMove={tilt} onPointerLeave={event => { event.currentTarget.style.transform = ""; }}><div className="profile-header">
+        <ProfileLayoutElement id="frame"><div className="profile-glass portfolio-first-frame p-7 sm:p-9" style={frameStyle} onPointerMove={tilt} onPointerLeave={event => { event.currentTarget.style.transform = ""; }}><div className="profile-header" data-identity-align={align}>
           {config.settings.showAvatar !== false && <ProfileAvatar config={config} />}
           <div className="profile-first-identity" style={{ textAlign: align }}><ProfileIdentity config={config} align={align} /><ProfileBio config={config} align={align} showLocation={false} /></div>
         </div><ProfileWidgets config={config} preview={preview} presence={<ProfileDiscord config={config} />} /><SocialLinks config={config} align={align} /><ProfileMeta config={config} align="left" /></div></ProfileLayoutElement>

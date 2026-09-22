@@ -84,7 +84,6 @@ export function ProfileIdentity({ config, align = "center" }: { config: ProfileC
         <ProfileBadges config={config} className="" />
       </div>
       {config.settings.showUsername !== false ? <p className="mt-1 text-xs text-white/35">@{config.profile.username}</p> : null}
-      {config.profile.uid ? <p className="mt-1 text-xs text-white/35">UID {config.profile.uid}</p> : null}
     </div>
   );
 }

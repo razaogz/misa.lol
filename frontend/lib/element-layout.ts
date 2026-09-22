@@ -13,7 +13,7 @@ export interface ElementLayouts {
 }
 export function constrainBox(id: LayoutElement, box: ElementBox): ElementBox {
   const limit = (n: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : 0)));
-  return { x: limit(box.x, -100, 100), y: limit(box.y, 0, 400), width: box.width ? limit(box.width, id === "frame" ? 260 : 160, 1040) : 0, height: limit(box.height, 0, 1000) };
+  return { x: limit(box.x, -100, 100), y: limit(box.y, id === "frame" ? -400 : 0, 400), width: box.width ? limit(box.width, id === "frame" ? 260 : 160, 1040) : 0, height: limit(box.height, 0, 1000) };
 }
 /** Version 1 audio used viewport coordinates on desktop. Its offsets have no
  * equivalent inside a media slot; retain its dimensions and mobile placement. */

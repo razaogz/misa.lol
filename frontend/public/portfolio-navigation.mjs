@@ -1,4 +1,4 @@
-import { mountPortfolioScene } from "./portfolio-scene.mjs";
+import { mountPortfolioScene } from "./portfolio-scene.mjs?v=20260922-scroll";
 // Canonical HTML uses the same section boundaries and styles as the React preview.
 const root = document.querySelector('[data-profile-kind="Portfolio"]');
 if (root) {

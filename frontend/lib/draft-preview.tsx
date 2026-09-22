@@ -7,6 +7,12 @@ import { useProfile } from "./profile-store";
 export const PREVIEW_MESSAGE = "misa-draft-preview-v1";
 const DraftPreviewContext = createContext<{ open: () => void; href: string; target: string; blocked: boolean; active: boolean } | null>(null);
 
+/** Reuse the dashboard preview session, or provide one when an editor is mounted independently. */
+export function DraftPreviewBoundary({ children }: { children: React.ReactNode }) {
+  const preview = useContext(DraftPreviewContext);
+  return preview ? <>{children}</> : <DraftPreviewProvider>{children}</DraftPreviewProvider>;
+}
+
 /** Drafts only cross a same-origin, owner-checked window connection. Nothing is published or stored. */
 export function DraftPreviewProvider({ children }: { children: React.ReactNode }) {
   const { config, profileReady } = useProfile();

@@ -1,5 +1,7 @@
 "use client";
 
+import "@/public/profile-layout.css";
+
 import { PortfolioProfile } from "./PortfolioProfile";
 import { effectColor } from "@/lib/effect-colors";
 import { ProfileVolume } from "./ProfileVolume";
@@ -49,12 +51,12 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
       ? `"MisaDefaultFont", "Inter", ui-sans-serif, system-ui, sans-serif`
       : profileFont(s.profileFont);
   const pageFamily = s.profileFontScope === "all" ? family : "Inter, ui-sans-serif, system-ui, sans-serif";
-  const [entered, setEntered] = useState(embedded || !s.entryScreen);
+  const [entered, setEntered] = useState(manualPositioning || embedded || !s.entryScreen);
   const entryLock = useRef(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [quiet, setQuiet] = useState(false);
   useEffect(() => { setQuiet(prefersReducedMotion()); }, []);
-  useEffect(() => { entryLock.current = false; setEntered(embedded || !s.entryScreen); }, [embedded, s.entryScreen]);
+  useEffect(() => { entryLock.current = false; setEntered(manualPositioning || embedded || !s.entryScreen); }, [manualPositioning, embedded, s.entryScreen]);
   const enter = s.pageEnter || "Fade";
   const motionStart = screenshot
     ? { opacity: 1, scale: 1, scaleY: 1 }
@@ -176,7 +178,7 @@ function ModernCard({ config, preview, align }: { config: ProfileConfig; preview
     <>
       <ProfileBanner config={config} />
       <div className={config.assets.banner?.url ? "pt-5" : ""}>
-        <div className="profile-header">{config.settings.showAvatar !== false && <ProfileAvatar config={config} className="mb-5" />}
+        <div className="profile-header" data-identity-align={align}>{config.settings.showAvatar !== false && <ProfileAvatar config={config} className="mb-5" />}
         <div style={{ textAlign: align }}><ProfileIdentity config={config} align={align} /><ProfileBio config={config} align={align} /></div></div>
         <ProfileModules config={config} preview={preview} align={align} />
         <ProfileMeta config={config} align="left" />
@@ -188,7 +190,7 @@ function ModernCard({ config, preview, align }: { config: ProfileConfig; preview
 function SimplisticCard({ config, preview, align }: { config: ProfileConfig; preview: boolean; align: "left" | "center" | "right" }) {
   return (
     <>
-      <div className="profile-header">{config.settings.showAvatar !== false && <ProfileAvatar config={config} className="mb-4 h-20 w-20" />}
+      <div className="profile-header" data-identity-align={align}>{config.settings.showAvatar !== false && <ProfileAvatar config={config} className="mb-4 h-20 w-20" />}
       <div style={{ textAlign: align }}><ProfileIdentity config={config} align={align} /><ProfileBio config={config} align={align} /></div></div>
       <ProfileModules config={config} preview={preview} align={align} />
         <ProfileMeta config={config} align="left" />

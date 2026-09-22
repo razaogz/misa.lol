@@ -7,6 +7,38 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
   const failedImage = event => { event.currentTarget.style.display = 'none'; };
   images.forEach(image => { image.addEventListener('error', failedImage); if (image.complete && !image.naturalWidth) image.style.display = 'none'; });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  // Ease mouse-wheel steps while leaving touch, zoom and nested controls native.
+  const scrollHost = viewport || document.scrollingElement;
+  let wheelFrame = 0, wheelTarget = 0, lastFrame = 0;
+  const stopWheel = () => { cancelAnimationFrame(wheelFrame); wheelFrame = 0; };
+  const easeWheel = now => {
+    const dt = Math.min(64, now - lastFrame); lastFrame = now;
+    const current = scrollHost.scrollTop;
+    const next = current + (wheelTarget - current) * (1 - Math.exp(-dt / 65));
+    scrollHost.scrollTo({ top: Math.abs(wheelTarget - next) < .5 || Math.abs(next - current) < 1 ? wheelTarget : next, behavior: 'instant' });
+    if (Math.abs(wheelTarget - scrollHost.scrollTop) > .5) wheelFrame = requestAnimationFrame(easeWheel);
+    else wheelFrame = 0;
+  };
+  const wheel = event => {
+    if (reduced.matches || event.ctrlKey || event.shiftKey || !event.cancelable || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    for (let node = event.target instanceof Element ? event.target : null; node && node !== root && node !== scrollHost; node = node.parentElement) {
+      if (node.matches('input,textarea,select,[contenteditable],.synced-viewport')) return;
+      if (/(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1) return;
+    }
+    const max = scrollHost.scrollHeight - scrollHost.clientHeight;
+    if (max <= 0) return;
+    const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scrollHost.clientHeight : 1);
+    const base = wheelFrame ? wheelTarget : scrollHost.scrollTop;
+    const next = Math.max(0, Math.min(max, base + delta));
+    if (!wheelFrame && next === base) return;
+    event.preventDefault(); wheelTarget = next;
+    if (!wheelFrame) { lastFrame = performance.now(); wheelFrame = requestAnimationFrame(easeWheel); }
+  };
+  root.addEventListener('wheel', wheel, { passive: false });
+  root.addEventListener('pointerdown', stopWheel);
+  root.addEventListener('touchstart', stopWheel, { passive: true });
+  root.addEventListener('keydown', stopWheel);
+  reduced.addEventListener('change', stopWheel);
   const entriesByNode = new Map();
   let activeId = '';
   const groups = sections.flatMap(section => {
@@ -28,7 +60,7 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
       const score = visible / Math.min(viewportHeight, entry.boundingClientRect.height || 1);
       if (score > best) { best = score; current = section; }
       const focused = section.contains(document.activeElement);
-      section.dataset.portfolioPhase = focused || visible >= Math.min(viewportHeight, entry.boundingClientRect.height) * .12 ? 'visible' : entry.isIntersecting ? 'edge' : 'away';
+      section.dataset.portfolioPhase = section.dataset.portfolioPhase === 'visible' || focused || visible >= Math.min(viewportHeight, entry.boundingClientRect.height) * .12 ? 'visible' : entry.isIntersecting ? 'edge' : 'away';
     });
     const next = current?.dataset.portfolioSection || 'hero';
     if (next !== activeId) { activeId = next; onActive(next); }
@@ -44,6 +76,12 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
   update();
   return () => {
     observer.disconnect();
+    stopWheel();
+    root.removeEventListener('wheel', wheel);
+    root.removeEventListener('pointerdown', stopWheel);
+    root.removeEventListener('touchstart', stopWheel);
+    root.removeEventListener('keydown', stopWheel);
+    reduced.removeEventListener('change', stopWheel);
     images.forEach(image => image.removeEventListener("error", failedImage));
     root.removeEventListener('focusin', update);
     root.removeEventListener('focusout', update);

@@ -5,6 +5,7 @@ import { Button, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-store";
 import { useProfile, uploadProfileAsset, dataUrlToFile } from "@/lib/profile-store";
 import { premiumSettings } from "@/lib/premium";
+import { DraftPreviewBoundary } from "@/lib/draft-preview";
 import { SharingAppearance, type ShareCropKey } from "@/components/sharing/SharingAppearance";
 import { ImageCropModal } from "@/components/customization/ImageCropModal";
 import { ProfilePreviewButton } from "@/components/profile/ProfilePreviewButton";
@@ -15,6 +16,10 @@ import { PremiumLayout } from "./PremiumLayout";
 import { EffectColors } from "@/components/customization/EffectColors";
 
 export function PremiumView() {
+  return <DraftPreviewBoundary><PremiumContent /></DraftPreviewBoundary>;
+}
+
+function PremiumContent() {
   const { user } = useAuth();
   const { config, savedConfig, resetConfig, updateConfig, saveProfile, saveState, saveError, profileReady } = useProfile();
   const view = useSearchParams().get("view") || "general";

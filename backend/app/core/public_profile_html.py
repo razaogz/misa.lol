@@ -883,8 +883,7 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     )
     display_name_tag = f'<h1 id="display-name" class="{name_class}" style="{name_style}">{display_name}</h1>' if show_display_name else ""
     handle_tag = f'<p class="handle">@{username}</p>' if show_username else ""
-    uid_tag = f'<p class="handle">UID {escape(str(profile.get("uid") or ""))}</p>' if profile.get("uid") else ""
-    identity = f'<div class="profile-identity"><div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>{handle_tag}{uid_tag}{description_tag}{location_tag}</div>'
+    identity = f'<div class="profile-identity"><div class="name-row">{display_name_tag}{guild_tag}{verified}{badges_tag}</div>{handle_tag}{description_tag}{location_tag}</div>'
     discord_element = f'<div class="profile-media-slot"><div class="profile-element profile-element-discord" data-layout-element="discord" style="{element_style(settings, "discord")}">{discord_tile}</div></div>' if discord_tile else ""
     widget_markup = _public_widgets_markup([w for w in (widgets or []) if w.get("id") in {item.get("id") for item in config.get("widgets", [])}], settings)
     # Keep a single widget resolver / polling target; CSS places its cards beside presence.
@@ -892,13 +891,14 @@ def render_public_profile(config: dict, request: Request | None = None, widgets:
     if layout == "Sleek":
         card_inner = f'<div class="sleek-hero">{banner_tag}{avatar_tag}</div><div class="sleek-body">{identity}{modules}</div>'
     else:
-        card_inner = f'{banner_tag if layout == "Modern" else ""}<div class="card-body"><div class="profile-header">{avatar_tag}{identity}</div>{modules}</div>'
+        card_inner = f'{banner_tag if layout == "Modern" else ""}<div class="card-body"><div class="profile-header" data-identity-align="{content_align}">{avatar_tag}{identity}</div>{modules}</div>'
     if layout == "Portfolio":
         hero_meta = f'<div class="portfolio-metadata">{views_tag}{location_tag}</div>' if views_tag or location_tag else ""
         sections = _public_sections_markup(config, username_raw)
-        scroll = '<button type="button" class="portfolio-scroll" data-portfolio-next>Scroll for more<span aria-hidden="true">Ã¢â€ â€œ</span></button>' if sections else ""
+        scroll = '<button type="button" class="portfolio-scroll" data-portfolio-next>Scroll for more<span aria-hidden="true">&#8595;</span></button>' if sections else ""
         hero = str(premium.get("hero") or "Classic").lower()
-        first = f'<div class="profile-element profile-element-frame" data-layout-element="frame" style="{element_style(settings, "frame")}"><div class="card profile-glass portfolio-first-frame" style="background:{card_background if frame_visible else "transparent"};backdrop-filter:blur({card_blur if frame_visible else 0}px);box-shadow:{card_shadow if frame_visible else "none"}"><div class="profile-header">{avatar_tag}{identity}</div><div class="profile-media-row" data-profile-media-row>{discord_element}{widget_markup}</div><div class="socials">{links}</div>{meta_tag}</div></div>'
+        identity_align = "center" if hero == "centered" else content_align
+        first = f'<div class="profile-element profile-element-frame" data-layout-element="frame" style="{element_style(settings, "frame")}"><div class="card profile-glass portfolio-first-frame" style="background:{card_background if frame_visible else "transparent"};backdrop-filter:blur({card_blur if frame_visible else 0}px);box-shadow:{card_shadow if frame_visible else "none"}"><div class="profile-header" data-identity-align="{identity_align}">{avatar_tag}{identity}</div><div class="profile-media-row" data-profile-media-row>{discord_element}{widget_markup}</div><div class="socials">{links}</div>{meta_tag}</div></div>'
         card_inner = f'<div class="portfolio-profile" data-hero="{hero}"><section class="portfolio-hero" data-portfolio-section="hero" aria-label="Profile">{first}<div class="profile-mobile-audio" data-profile-mobile-audio></div>{scroll}</section>{sections}</div>'
     media_dock = f'<div class="profile-media-slot profile-audio-slot"><div class="profile-element profile-element-audio" data-layout-element="audio" style="{element_style(settings, "audio")}"><div class="media-dock"{" hidden" if entry_on else ""}>{audio_controls}</div></div></div>' if audio_controls else ""
     if layout == "Portfolio":
@@ -1101,7 +1101,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 .enter-unfold{{transform-origin:top center;animation:enter-unfold .55s ease both}}
 .enter-pop{{animation:enter-pop .45s cubic-bezier(.22,1,.36,1) both}}
 @media (prefers-reduced-motion:reduce){{.enter-fade,.enter-unfold,.enter-pop{{animation:none}}.codrops-rain-effect{{display:none}}}}
-</style><link rel="stylesheet" href="/dashboard/profile-layout.css"></head>
+</style><link rel="stylesheet" href="/dashboard/profile-layout.css?v=20260922-about-3"></head>
 <body data-profile-layout data-profile-kind="{layout}" style="--misa-profile-font:{font_stack};--profile-text-size:{font_size}px;--portfolio-radius:{profile_radius}px;--portfolio-border:{border_width if frame_visible and premium.get("borderEnabled", True) else 0}px {"dashed" if premium.get("borderType") == "Dashed" else "solid"} {border_css}" data-premium-hero="{premium.get("hero", "Classic")}" data-premium-border="{premium.get("borderType", "Static")}"{body_class}{cursor_attr} data-profile-user="{username}" data-audio-enabled="{1 if audio_enabled else 0}" data-volume="{volume_ratio}" data-tilt="{card_tilt}" data-name-effect="{escape(username_effect, quote=True)}" data-tab-title="{tab_title_on}" data-bio-type-ms="{bio_type_ms}" data-bio-delete-ms="{bio_delete_ms}" data-bio-pause-ms="{bio_pause_ms}" data-page-enter="{escape(page_enter, quote=True)}" data-click-preset="{premium.get("clickPreset", "")}" data-click-sound="{click_sound_on}"{f' data-click-src="{asset_src("clickSound")}"' if has_click else ""}>
 {background_tag}{video_tag}<div class="backdrop"></div>{effect_canvas_tag}{sakura_effect_tag}{rain_effect_tag}{effect_video_tag if background_effect == "None" else ""}
 {f'<button type="button" id="entry" class="entry profile-entry"><span>{entry_icon}<strong>{entry_text}</strong><span class="profile-entry-subtitle">{entry_subtitle}</span></span></button>' if entry_on else ""}
@@ -1121,7 +1121,7 @@ h1{{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em;color:#fff}}
 {PUBLIC_EMPTY_SCRIPT}
 {PUBLIC_LYRICS_SCRIPT if any(s.get("enabled") and s.get("type") == "lyrics" for s in config.get("sections", [])) else ""}
 {volume_runtime}{cursor_runtime}
-{chr(60) + 'script type="module" src="/dashboard/portfolio-navigation.mjs"></script>' if layout == "Portfolio" else ""}
+{chr(60) + 'script type="module" src="/dashboard/portfolio-navigation.mjs?v=20260922-scroll"></script>' if layout == "Portfolio" else ""}
 <script type="module" src="/dashboard/profile-widgets.mjs"></script>
 </body></html>"""
 

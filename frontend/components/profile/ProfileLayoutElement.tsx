@@ -1,5 +1,8 @@
 "use client";
 
+import { MoveDiagonal2 } from "lucide-react";
+import "@/public/profile-layout.css";
+
 import { createContext, useContext, useRef, type ReactNode, type PointerEvent } from "react";
 import { constrainBox, elementBox, elementStyle, updateElementLayout, type ElementBox, type LayoutElement, type LayoutViewport } from "@/lib/element-layout";
 import type { ProfileConfig } from "@/lib/types";
@@ -64,6 +67,6 @@ export function ProfileLayoutElement({ id, children }: { id: LayoutElement; chil
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation(); const box = elementBox(settings, id, viewport);
       commit({ ...box, width: (ref.current?.offsetWidth ?? box.width) + (event.key === "ArrowLeft" ? -8 : event.key === "ArrowRight" ? 8 : 0), height: (ref.current?.offsetHeight ?? box.height) + (event.key === "ArrowUp" ? -8 : event.key === "ArrowDown" ? 8 : 0) });
-    }}>↘</button>}
+    }}><MoveDiagonal2 size={16} aria-hidden="true" /></button>}
   </div>;
 }
