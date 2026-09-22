@@ -1,4 +1,4 @@
-import json
+﻿import json
 import hmac
 from datetime import datetime, timezone
 from typing import Any
@@ -48,6 +48,16 @@ async def init_admin_db(
     )
     if not initialize_schema:
         return
+    async with _pool.acquire() as schema_lock:
+        await schema_lock.execute("SELECT pg_advisory_lock(hashtext('misa_admin_schema_bootstrap'))")
+        try:
+            await _ensure_admin_schema(root_email)
+        finally:
+            await schema_lock.execute("SELECT pg_advisory_unlock(hashtext('misa_admin_schema_bootstrap'))")
+
+
+async def _ensure_admin_schema(root_email: str) -> None:
+    """Run startup schema work once when multiple application workers boot."""
     await ensure_badge_icons()
     await ensure_verification_requests()
     await ensure_discord_links()
@@ -228,11 +238,13 @@ async def ensure_discord_links() -> None:
                 show_avatar BOOLEAN NOT NULL DEFAULT TRUE,
                 show_decoration BOOLEAN NOT NULL DEFAULT TRUE,
                 show_guild_tag BOOLEAN NOT NULL DEFAULT TRUE,
+                show_status BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
         )
+        await _pool.execute("ALTER TABLE discord_links ADD COLUMN IF NOT EXISTS show_status BOOLEAN NOT NULL DEFAULT TRUE")
     except (asyncpg.PostgresError, OSError):
         return
 
@@ -1289,14 +1301,15 @@ async def save_discord_link(
     show_avatar: bool,
     show_decoration: bool,
     show_guild_tag: bool,
+    show_status: bool = True,
 ) -> dict[str, Any]:
     row = await _get_pool().fetchrow(
         """
         INSERT INTO discord_links (
             user_id, discord_id, refresh_token, access_token, access_expires_at,
-            show_avatar, show_decoration, show_guild_tag, updated_at
+            show_avatar, show_decoration, show_guild_tag, show_status, updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
         ON CONFLICT (user_id) DO UPDATE SET
             discord_id = EXCLUDED.discord_id,
             refresh_token = EXCLUDED.refresh_token,
@@ -1305,9 +1318,10 @@ async def save_discord_link(
             show_avatar = EXCLUDED.show_avatar,
             show_decoration = EXCLUDED.show_decoration,
             show_guild_tag = EXCLUDED.show_guild_tag,
+            show_status = EXCLUDED.show_status,
             updated_at = NOW()
         RETURNING user_id, discord_id, refresh_token, access_token, access_expires_at,
-                  show_avatar, show_decoration, show_guild_tag
+                  show_avatar, show_decoration, show_guild_tag, show_status
         """,
         UUID(user_id),
         discord_id,
@@ -1317,6 +1331,7 @@ async def save_discord_link(
         show_avatar,
         show_decoration,
         show_guild_tag,
+        show_status,
     )
     return dict(row) if row else {}
 
@@ -1331,7 +1346,7 @@ async def update_discord_prefs(user_id: str, **prefs: bool) -> dict[str, Any] | 
         SET show_avatar = $2, show_decoration = $3, show_guild_tag = $4, updated_at = NOW()
         WHERE user_id = $1
         RETURNING user_id, discord_id, refresh_token, access_token, access_expires_at,
-                  show_avatar, show_decoration, show_guild_tag
+                  show_avatar, show_decoration, show_guild_tag, show_status
         """,
         UUID(user_id),
         prefs.get("show_avatar", bool(current["show_avatar"])),

@@ -159,6 +159,8 @@ pub async fn migrate(pool: &PgPool) -> Result<()> {
             config JSONB NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS disabled_reason TEXT",
         "CREATE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username))",
         "CREATE TABLE IF NOT EXISTS reserved_usernames (
             username VARCHAR(32) PRIMARY KEY,

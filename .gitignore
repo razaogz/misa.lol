@@ -43,3 +43,8 @@ Thumbs.db
 **/tests/
 .env.example
 **/.env.example
+local-mail-capture.jsonl
+
+powershell.cmd
+
+backend/scripts/local_mail_capture.py
