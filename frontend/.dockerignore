@@ -1,1 +1,7 @@
-node_modules.nextdatatsconfig.tsbuildinfo.env.env.local.env*.local
+node_modules
+.next
+data
+tsconfig.tsbuildinfo
+.env
+.env.local
+.env*.local
