@@ -22,7 +22,7 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
   const wheel = event => {
     if (reduced.matches || event.ctrlKey || event.shiftKey || !event.cancelable || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
     for (let node = event.target instanceof Element ? event.target : null; node && node !== root && node !== scrollHost; node = node.parentElement) {
-      if (node.matches('input,textarea,select,[contenteditable],.synced-viewport')) return;
+      if (node.matches('input,textarea,select,[contenteditable]')) return;
       if (/(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1) return;
     }
     const max = scrollHost.scrollHeight - scrollHost.clientHeight;

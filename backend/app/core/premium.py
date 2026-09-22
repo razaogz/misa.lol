@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 SHARED_SETTINGS = ("layout", "pageEnter", "profileFont", "profileFontScope", "entryScreen", "entryText", "clickSound", "bioTypewriter", "bioTypeMs", "bioDeleteMs", "bioPauseMs", "cardTilt", "showViews", "showAvatar", "showSocials", "borderColor", "borderWidth", "profileRadius", "ogTitle", "ogDescription", "ogOverlayAvatar", "ogOverlayName", "ogOverlayAddress")
 PREMIUM_ASSETS = ("customFont", "clickSound", "entryIcon", "ogImage", "favicon")
-DEFAULTS = {"version": 1, "cursorEffect": "None", "cursorColor": "#ffffff", "clickPreset": "None", "entrySubtitle": "", "typewriterTexts": [], "hero": "Classic", "borderType": "Static", "borderOpacity": 100, "borderEnabled": True}
+DEFAULTS = {"version": 1, "cursorEffect": "None", "cursorColor": "#ffffff", "clickPreset": "None", "entrySubtitle": "", "typewriterTexts": [], "hero": "Classic", "borderType": "Static", "borderOpacity": 100, "borderEnabled": True, "lyricsHeight": 560}
 
 
 async def has_premium(user_id: str) -> bool:
@@ -31,6 +31,7 @@ def normalize_premium(raw):
     result["entrySubtitle"] = _plain_text(raw.get("entrySubtitle"), 160)
     result["borderOpacity"] = _clamp_int(raw.get("borderOpacity"), 100, 0, 100)
     result["borderEnabled"] = raw.get("borderEnabled") is not False
+    result["lyricsHeight"] = _clamp_int(raw.get("lyricsHeight"), 560, 320, 900)
     result["typewriterTexts"] = [_plain_text(s, 200) for s in raw.get("typewriterTexts", [])[:12] if isinstance(s, str) and s.strip()] if isinstance(raw.get("typewriterTexts"), list) else []
     colors = raw.get("effectColors")
     result["effectColors"] = {key: value.lower() if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else default for key, default in {"Fireflies": "#fcd271", "Snowflakes": "#ffffff", "Snow": "#ffffff", "Sakura": "#ffb7c5"}.items() if isinstance(colors, dict) and isinstance((value := colors.get(key)), str)}

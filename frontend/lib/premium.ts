@@ -15,8 +15,9 @@ export interface PremiumSettings {
   borderType: typeof BORDER_TYPES[number];
   borderOpacity: number;
   borderEnabled: boolean;
+  lyricsHeight: number;
 }
-export const PREMIUM_DEFAULTS: PremiumSettings = { version: 1, cursorEffect: "None", cursorColor: "#ffffff", clickPreset: "None", entrySubtitle: "", typewriterTexts: [], hero: "Classic", borderType: "Static", borderOpacity: 100, borderEnabled: true };
+export const PREMIUM_DEFAULTS: PremiumSettings = { version: 1, cursorEffect: "None", cursorColor: "#ffffff", clickPreset: "None", entrySubtitle: "", typewriterTexts: [], hero: "Classic", borderType: "Static", borderOpacity: 100, borderEnabled: true, lyricsHeight: 560 };
 export function premiumSettings(config: ProfileConfig): PremiumSettings {
   return { ...PREMIUM_DEFAULTS, ...config.settings.premium };
 }

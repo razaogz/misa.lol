@@ -43,13 +43,13 @@ const fmt = value => Number.isFinite(value) ? `${Math.floor(value/60)}:${String(
 /** Both React and canonical HTML use this view. It never creates an audio element. */
 export function mountLyrics(host, root) {
   host.classList.add('synced-player');
-  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">♫</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" tabindex="0" aria-label="Song lyrics"><div class="synced-lines"></div></div><footer><button type="button" class="synced-follow" hidden>Return to current line</button></footer>`;
-  const viewport=host.querySelector('.synced-viewport'), list=host.querySelector('.synced-lines'), status=host.querySelector('.synced-status'), seek=host.querySelector('input'), title=host.querySelector('strong'), art=host.querySelector('.synced-art'), times=host.querySelectorAll('time'), buttons=host.querySelectorAll('.synced-controls button'), follow=host.querySelector('.synced-follow');
-  let audio=null, trackKey='', rows=[], active=-2, manual=false, disposed=false, request=null, serial=0, timer=0, animation=0, info={};
+  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">♫</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" aria-label="Song lyrics"><div class="synced-lines"></div></div>`;
+  const viewport=host.querySelector('.synced-viewport'), list=host.querySelector('.synced-lines'), status=host.querySelector('.synced-status'), seek=host.querySelector('input'), title=host.querySelector('strong'), art=host.querySelector('.synced-art'), times=host.querySelectorAll('time'), buttons=host.querySelectorAll('.synced-controls button');
+  let audio=null, trackKey='', rows=[], active=-2, disposed=false, request=null, serial=0, timer=0, animation=0, info={};
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const stopAnimation=()=>{ cancelAnimationFrame(animation); animation=0; };
   function focusRow(immediate=false) {
-    const row=list.children[active]; if (!row || manual) return;
+    const row=list.children[active]; if (!row) return;
     const top=viewport.scrollTop+row.getBoundingClientRect().top-viewport.getBoundingClientRect().top-(viewport.clientHeight-row.clientHeight)/2;
     const target=Math.max(0,Math.min(top,viewport.scrollHeight-viewport.clientHeight));
     stopAnimation();
@@ -69,7 +69,9 @@ export function mountLyrics(host, root) {
     else if(immediate)focusRow(true);
   }
   function display(body, message, synced, timedRows) {
-    rows=timedRows || parseLrc(body); if(!synced)rows=rows.map(r=>({...r,t:null}));active=-2;manual=false;follow.hidden=true;
+    stopAnimation();
+    rows=synced ? (timedRows || parseLrc(body)).filter(row=>row.t!==null) : [];active=-2;
+    if(body && !rows.length)message="Synced lyrics are unavailable for this recording.";
     list.replaceChildren(...rows.map(row=>{const p=document.createElement('p');p.textContent=row.text || '♪';p.dir='auto';return p;}));
     host.dataset.lyricsState=synced?'synced':rows.length?'plain':'unavailable';status.textContent=message;viewport.scrollTop=0;paint(true);
   }
@@ -102,9 +104,6 @@ export function mountLyrics(host, root) {
   buttons[1].onclick=()=>{if(audio){if(audio.paused)void audio.play().catch(()=>{status.textContent='Playback could not start. Try Play again.';});else audio.pause();}};
   buttons[0].onclick=()=>root.querySelector('[data-player-prev],#audio-prev')?.click();buttons[2].onclick=()=>root.querySelector('[data-player-next],#audio-next')?.click();
   seek.oninput=()=>{if(audio&&Number.isFinite(audio.duration)){audio.currentTime=Number(seek.value);paint(true);}};
-  const suspend=()=>{manual=true;stopAnimation();follow.hidden=false;};
-  viewport.addEventListener('wheel',suspend,{passive:true});viewport.addEventListener('touchstart',suspend,{passive:true});viewport.addEventListener('pointerdown',suspend);viewport.addEventListener('keydown',suspend);
-  follow.onclick=()=>{manual=false;follow.hidden=true;focusRow();};
   const observer=new MutationObserver(records=>{if(records.some(r=>r.target===audio||[...r.addedNodes,...r.removedNodes].some(n=>n.nodeType===1&&(n.matches?.('audio')||n.querySelector?.('audio')))))bind();});
   observer.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['data-track-info']});
   const resize=new ResizeObserver(()=>{list.style.setProperty("--lyric-focus-padding",`${viewport.clientHeight/2}px`);focusRow(true);});resize.observe(viewport);resize.observe(list);
