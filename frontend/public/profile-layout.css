@@ -17,7 +17,7 @@
 .profile-media-slot { min-width:0; position:relative; container:media-slot / inline-size; }
 .profile-module-card { width:100%; height:82px; min-height:82px; box-sizing:border-box; }
 .profile-module-card:has(> [role=status]) { height:auto; }
-.profile-audio-slot { order:1; }
+.profile-audio-slot { order:1; width:100%; max-width:340px; margin-inline:auto; }
 .profile-media-slot > .profile-element > :first-child { min-width:0; min-height:inherit; overflow-wrap:anywhere; }
 .profile-element-widget > :first-child { display:flex; flex-wrap:wrap; }
 .profile-element-discord > :first-child { flex-wrap:wrap; }
