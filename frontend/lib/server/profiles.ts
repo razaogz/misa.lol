@@ -161,7 +161,9 @@ export async function getPublicTrackAssetUrl(username: string, trackId: string, 
     LIMIT 1
   `, [username.toLowerCase(), trackId, kind]);
   const url = (row?.url || "").trim();
-  return url || null;
+  if (url) return url;
+  if (trackId !== "track-1" || (kind !== "audio" && kind !== "artwork")) return null;
+  return getPublicAssetUrl(username, kind === "artwork" ? "audioArtwork" : "audio");
 }
 
 export async function getShareCardBits(username: string): Promise<Record<string, unknown> | null> {
