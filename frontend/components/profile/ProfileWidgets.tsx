@@ -71,7 +71,7 @@ export function ProfileWidgets({ config, presence }: { config: ProfileConfig; pr
 }
 
 export function WidgetCard({ widget, swap, accent, ink }: { widget: ResolvedWidget; swap: boolean; accent: string; ink: string }) {
-  const className = `flex items-center gap-3 rounded-2xl border p-3 text-left no-underline ${swap ? "" : "border-white/[.1] bg-black/25 text-white"} ${widget.status !== "ok" ? "opacity-85" : ""}`;
+  const className = `profile-module-card flex items-center gap-3 rounded-2xl border p-3 text-left no-underline ${swap ? "" : "border-white/[.1] bg-black/25 text-white"} ${widget.status !== "ok" ? "opacity-85" : ""}`;
   const style = swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined;
   const inner = (
     <>
@@ -96,7 +96,7 @@ export function WidgetCard({ widget, swap, accent, ink }: { widget: ResolvedWidg
 
 function WidgetSkeleton({ swap, accent, ink }: { swap: boolean; accent: string; ink: string }) {
   return (
-    <div className={`flex animate-pulse items-center gap-3 rounded-2xl border p-3 ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, borderColor: `${ink}33` } : undefined}>
+    <div className={`profile-module-card flex animate-pulse items-center gap-3 rounded-2xl border p-3 ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, borderColor: `${ink}33` } : undefined}>
       <div className={`h-14 w-14 rounded-xl ${swap ? "" : "bg-white/[.08]"}`} style={swap ? { backgroundColor: `${ink}22` } : undefined} />
       <div className="min-w-0 flex-1 space-y-2">
         <div className={`h-3 w-2/3 rounded ${swap ? "" : "bg-white/[.08]"}`} style={swap ? { backgroundColor: `${ink}22` } : undefined} />

@@ -232,7 +232,7 @@ export function DiscordPresenceTile({ config }: { config: ProfileConfig }) {
   const discordName = (discord?.globalName || discord?.username || "").trim();
   const statusLabel = status ? DISCORD_STATUS_LABELS[status] : "";
   return (
-    <div className={`relative flex min-h-[5rem] min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 sm:h-full flex-1 ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
+    <div className={`profile-module-card relative flex min-w-0 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 flex-1 ${swap ? "" : "border-white/[.1] bg-black/25"}`} style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}>
       <div className="relative h-12 w-12 shrink-0">
         {src ? <img src={src} alt="" className="h-full w-full rounded-full object-cover" /> : <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-semibold ${swap ? "" : "bg-white/[.08] text-white"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>{(discordName || config.profile.displayName).slice(0, 1)}</div>}
         {status ? <span className="absolute -bottom-0.5 -right-0.5 z-[4] h-4 w-4"><DiscordStatusGlyph status={status} className="block h-full w-full" /></span> : null}

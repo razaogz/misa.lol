@@ -171,7 +171,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
 
   return (
     <div
-      className={`relative z-20 mt-6 rounded-2xl border p-2 text-left ${swap ? "" : "border-white/[.1] bg-black/25"}`}
+      className={`profile-module-card relative z-20 mt-6 flex flex-col justify-center rounded-2xl border p-2 text-left ${swap ? "" : "border-white/[.1] bg-black/25"}`}
       style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}
       onClick={keepOnCard}
       onPointerDown={keepOnCard}
@@ -200,7 +200,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
         onEnded={ended}
       />
       {mediaError && <p role="status" className="mb-2 text-xs opacity-70">This audio could not be played. Try another track.</p>}
-      <div className="profile-player-layout flex min-w-0 flex-nowrap items-center gap-2">
+      <div className="profile-player-layout flex w-full min-w-0 flex-nowrap items-center gap-2">
         <div className={`profile-player-art flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
           {artwork ? <img src={artwork} alt="" className="h-full w-full object-cover" /> : <Volume2 size={18} className={swap ? "" : "text-white/40"} style={swap ? { color: ink } : undefined} />}
         </div>
