@@ -48,7 +48,7 @@ export function elementBox(settings: ProfileConfig["settings"], id: LayoutElemen
   return constrainBox(id, {
     x: (settings.profileFrameX ?? 0) * 2 + (settings.cardAlign === "left" ? -100 : settings.cardAlign === "right" ? 100 : 0),
     y: Math.max(0, (settings.profileFrameY ?? 0) * 4),
-    width: (width === 430 ? 880 : width) * (settings.profileFrameScale ?? 100) / 100,
+    width: width === 430 ? 880 : width,
     height: settings.profileFrameHeight ?? 0,
   });
 }

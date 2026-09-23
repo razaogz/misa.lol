@@ -85,24 +85,24 @@ function CustomizationContent() {
   const tabIcon = config.assets.favicon?.url || config.assets.avatar?.url || "";
   const setSettings = (patch: Partial<typeof config.settings>) => updateConfig((current) => {
     const { profileFrameWidth, profileFrameHeight, profileFrameScale, profileFrameX, profileFrameY, cardAlign, ...rest } = patch;
-    const hasFrameChange = [profileFrameWidth, profileFrameHeight, profileFrameScale, profileFrameX, profileFrameY, cardAlign].some((value) => value !== undefined);
+    const hasFrameChange = [profileFrameWidth, profileFrameHeight, profileFrameX, profileFrameY, cardAlign].some((value) => value !== undefined);
     if (!hasFrameChange) return { ...current, settings: { ...current.settings, ...patch } };
     const frame = elementBox(current.settings, "frame", layoutViewport);
     const next = { ...frame,
       ...(profileFrameWidth !== undefined ? { width: profileFrameWidth } : {}),
       ...(profileFrameHeight !== undefined ? { height: profileFrameHeight } : {}),
-      ...(profileFrameScale !== undefined ? { width: Math.min(1040, (layoutViewport === "mobile" ? 358 : 880) * profileFrameScale / 100) } : {}),
+
       ...(profileFrameX !== undefined ? { x: profileFrameX * 2 } : {}),
       ...(profileFrameY !== undefined ? { y: Math.max(0, profileFrameY * 4) } : {}),
       ...(cardAlign !== undefined ? { x: cardAlign === "left" ? -100 : cardAlign === "right" ? 100 : 0 } : {}),
     };
-    return { ...current, settings: { ...current.settings, ...rest, elementLayouts: updateElementLayout(current.settings, layoutViewport, "frame", next) } };
+    return { ...current, settings: { ...current.settings, ...rest, ...(profileFrameScale !== undefined ? { profileFrameScale } : {}), elementLayouts: updateElementLayout(current.settings, layoutViewport, "frame", next) } };
   });
   const setProfile = (patch: Partial<typeof config.profile>) => updateConfig((current) => ({ ...current, profile: { ...current.profile, ...patch } }));
   const uploadRevision = useRef<Record<string, number>>({});
   const setAsset = (key: keyof typeof config.assets, asset: ProfileAsset | boolean | number | string) => { uploadRevision.current[key === "background" || key === "backgroundVideo" ? "backgroundMedia" : key] = (uploadRevision.current[key === "background" || key === "backgroundVideo" ? "backgroundMedia" : key] || 0) + 1; updateConfig((current) => ({ ...current, assets: { ...current.assets, [key]: asset } })); };
   const currentFrame = elementBox(config.settings, "frame", layoutViewport);
-  const layoutConfig = { ...config, settings: { ...config.settings, profileFrameWidth: currentFrame.width || 358, profileFrameHeight: currentFrame.height, profileFrameX: currentFrame.x / 2, profileFrameY: currentFrame.y / 4, profileFrameScale: Math.round((currentFrame.width || 358) / (layoutViewport === "mobile" ? 358 : 880) * 100), cardAlign: (currentFrame.x < 0 ? "left" : currentFrame.x > 0 ? "right" : "center") as SocialAlign } };
+  const layoutConfig = { ...config, settings: { ...config.settings, profileFrameWidth: currentFrame.width || 358, profileFrameHeight: currentFrame.height, profileFrameX: currentFrame.x / 2, profileFrameY: currentFrame.y / 4, profileFrameScale: config.settings.profileFrameScale ?? 100, cardAlign: (currentFrame.x < 0 ? "left" : currentFrame.x > 0 ? "right" : "center") as SocialAlign } };
   const openManualMove = () => { setLayoutViewport(previewViewport); setManualMove(true); setFullPreview(true); };
   const resetFramePosition = () => setSettings({ elementLayouts: updateElementLayout(config.settings, layoutViewport, "frame", { x: 0, y: 0, width: layoutViewport === "desktop" ? 880 : 0, height: 0 }) });
   const resetCurrentLayout = () => { const layouts = normalizeLayouts(config.settings.elementLayouts); setSettings({ elementLayouts: { ...layouts, [layoutViewport]: {} } }); };
