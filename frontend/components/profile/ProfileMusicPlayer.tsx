@@ -171,7 +171,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
 
   return (
     <div
-      className={`relative z-20 mt-6 rounded-2xl border p-3 text-left ${swap ? "" : "border-white/[.1] bg-black/25"}`}
+      className={`relative z-20 mt-6 rounded-2xl border p-2 text-left ${swap ? "" : "border-white/[.1] bg-black/25"}`}
       style={swap ? { backgroundColor: accent, color: ink, borderColor: `${ink}33` } : undefined}
       onClick={keepOnCard}
       onPointerDown={keepOnCard}
@@ -200,14 +200,14 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
         onEnded={ended}
       />
       {mediaError && <p role="status" className="mb-2 text-xs opacity-70">This audio could not be played. Try another track.</p>}
-      <div className="profile-player-layout flex min-w-0 flex-wrap items-center gap-3">
-        <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:h-14 sm:w-14  ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
+      <div className="profile-player-layout flex min-w-0 flex-nowrap items-center gap-2">
+        <div className={`profile-player-art flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg ${swap ? "" : "bg-white/[.06]"}`} style={swap ? { backgroundColor: `${ink}1a` } : undefined}>
           {artwork ? <img src={artwork} alt="" className="h-full w-full object-cover" /> : <Volume2 size={18} className={swap ? "" : "text-white/40"} style={swap ? { color: ink } : undefined} />}
         </div>
-        <div className="min-w-0 flex-[1_1_100px]">
-          <p className={`truncate text-sm font-medium ${swap ? "" : "text-white"}`}>{trackTitle(track)}</p>
-          <div className="mt-2 flex min-w-0 items-center gap-2">
-            <span className={`shrink-0 font-mono text-[10px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(currentTime)}</span>
+        <div className="profile-player-meta min-w-0 flex-[1_1_0]">
+          <p className={`truncate text-[11px] font-semibold sm:text-xs ${swap ? "" : "text-white"}`}>{trackTitle(track)}</p>
+          <div className="profile-player-progress mt-1 flex min-w-0 flex-nowrap items-center gap-1.5">
+            <span className={`shrink-0 font-mono text-[9px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(currentTime)}</span>
             <input
               aria-label="Seek"
               type="range"
@@ -219,18 +219,18 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
                 if (audioRef.current) audioRef.current.currentTime = next;
                 setCurrentTime(next);
               }}
-              className={`h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`}
+              className={`h-1 min-w-8 flex-1 cursor-pointer appearance-none rounded-full ${swap ? "" : "bg-white/[.12]"}`}
               style={{ accentColor: sliderAccent, backgroundColor: swap ? `${ink}22` : undefined }}
             />
-            <span className={`shrink-0 font-mono text-[10px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(duration)}</span>
+            <span className={`shrink-0 font-mono text-[9px] ${swap ? "" : "text-white/40"}`} style={swap ? { opacity: 0.6 } : undefined}>{formatTime(duration)}</span>
           </div>
         </div>
-        <div className={`flex shrink-0 items-center gap-0.5 `}>
-          <button type="button" data-player-prev disabled={tracks.length < 2} onClick={() => step(-1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Previous track"><SkipBack size={15} fill="currentColor" /></button>
-          <button type="button" onClick={toggle} className={`grid h-9 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/80 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
-            {playing ? <Pause size={20} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
+        <div className="profile-player-controls flex shrink-0 flex-nowrap items-center gap-0">
+          <button type="button" data-player-prev disabled={tracks.length < 2} onClick={() => step(-1)} className={`grid h-8 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Previous track"><SkipBack size={13} fill="currentColor" /></button>
+          <button type="button" onClick={toggle} className={`grid h-8 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/80 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label={playing ? "Pause" : "Play"}>
+            {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
           </button>
-          <button type="button" data-player-next disabled={tracks.length < 2} onClick={() => step(1)} className={`grid h-8 w-7 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Next track"><SkipForward size={15} fill="currentColor" /></button>
+          <button type="button" data-player-next disabled={tracks.length < 2} onClick={() => step(1)} className={`grid h-8 w-8 place-items-center rounded-lg transition ${swap ? "" : "text-white/45 hover:bg-white/[.08] hover:text-white"}`} style={swap ? { color: ink } : undefined} aria-label="Next track"><SkipForward size={13} fill="currentColor" /></button>
         </div>
       </div>
     </div>
