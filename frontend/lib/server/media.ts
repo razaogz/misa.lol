@@ -186,12 +186,13 @@ export async function publicAudio(request: Request, url: string | null | undefin
     if (![200, 206, 304, 416].includes(upstream.status)) return null;
 
     const headers = new Headers();
-    for (const name of ["accept-ranges", "cache-control", "content-length", "content-range", "content-type", "etag", "last-modified"]) {
+    for (const name of ["accept-ranges", "content-length", "content-range", "content-type", "etag", "last-modified"]) {
       const value = upstream.headers.get(name);
       if (value) headers.set(name, value);
     }
     if (!headers.has("Content-Type")) headers.set("Content-Type", "audio/mpeg");
     if (!headers.has("Accept-Ranges")) headers.set("Accept-Ranges", "bytes");
+    headers.set("Cache-Control", "public, max-age=300, must-revalidate");
     headers.set("X-Content-Type-Options", "nosniff");
     return new NextResponse(upstream.status === 304 || upstream.status === 416 ? null : upstream.body, {
       status: upstream.status,

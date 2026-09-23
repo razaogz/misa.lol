@@ -18,6 +18,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [mediaError, setMediaError] = useState(false);
+  const [sourceFallback, setSourceFallback] = useState<{ base: string; src: string } | null>(null);
   const [muted] = useState(false);
   const [repeat] = useState<RepeatMode>("all");
   const [shuffle] = useState(false);
@@ -31,8 +32,10 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
   }, [tracks, shuffle]);
   const safeIndex = tracks.length ? Math.min(index, tracks.length - 1) : 0;
   const track = tracks[safeIndex];
-  const src = track ? (preview ? track.audio.url || "" : publicTrackUrls(config.profile.username, track).audio) : "";
-  const artwork = track ? audioArtworkUrl(config.assets, track) || (preview ? "" : publicTrackUrls(config.profile.username, track).artwork) : "";
+  const publicUrls = track ? publicTrackUrls(config.profile.username, track) : { audio: "", artwork: "" };
+  const baseSrc = track ? (preview ? track.audio.url || "" : publicUrls.audio) : "";
+  const src = sourceFallback?.base === baseSrc ? sourceFallback.src : baseSrc;
+  const artwork = track ? audioArtworkUrl(config.assets, track) || (preview ? "" : publicUrls.artwork) : "";
 
   useEffect(() => { playingRef.current = playing; }, [playing]);
   useEffect(() => { notify(track?.id || null, playing); }, [notify, track?.id, playing]);
@@ -60,15 +63,20 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
       srcRef.current = "";
       playingRef.current = false;
       setPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+      setMediaError(false);
       return;
     }
     if (srcRef.current === src) return;
     setMediaError(false);
+    setCurrentTime(0);
+    setDuration(0);
     audio.pause();
-    audio.currentTime = 0;
+    audio.preload = "metadata";
     srcRef.current = src;
     audio.src = src;
-    audio.preload = "metadata";
+    audio.load();
     if (playingRef.current || (autoplay && !preview)) {
       void audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     }
@@ -81,8 +89,10 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
       const audio = audioRef.current;
       if (!audio || !src) return;
       if (srcRef.current !== src) {
+        audio.preload = "metadata";
         srcRef.current = src;
         audio.src = src;
+        audio.load();
       }
       playingRef.current = true;
       void audio.play()
@@ -127,7 +137,7 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      if (!audio.src && src) audio.src = src;
+      if (!audio.src && src) { audio.preload = "metadata"; audio.src = src; audio.load(); }
       void audio.play().then(() => setPlaying(true)).catch(() => undefined);
     } else {
       audio.pause();
@@ -171,9 +181,21 @@ export function ProfileMusicPlayer({ config, preview = false, autoplay = false }
         data-track-info={JSON.stringify({ id: track.id, title: trackTitle(track), artwork, src, recording: track.recording, count: tracks.length })}
         preload="none"
         onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        onLoadedMetadata={() => { setDuration(audioRef.current?.duration || 0); setMediaError(false); }}
         onPlay={() => { setMediaError(false); setPlaying(true); }}
-        onError={() => { playingRef.current = false; setPlaying(false); setMediaError(true); }}
+        onError={() => {
+          playingRef.current = false;
+          setPlaying(false);
+          if (preview && src === baseSrc && publicUrls.audio && publicUrls.audio !== baseSrc) {
+            setSourceFallback({ base: baseSrc, src: publicUrls.audio });
+            return;
+          }
+          if (publicUrls.audio && src === publicUrls.audio) {
+            setSourceFallback({ base: baseSrc, src: `${publicUrls.audio}?misa_retry=${Date.now()}` });
+            return;
+          }
+          setMediaError(true);
+        }}
         onPause={() => setPlaying(false)}
         onEnded={ended}
       />

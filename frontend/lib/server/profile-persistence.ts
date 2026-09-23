@@ -61,7 +61,30 @@ export function sanitizeProfilePayload(raw: unknown, user: User, existing: Profi
     config.settings.premium = { ...PREMIUM_DEFAULTS, ...previous.settings.premium, lyricsHeight: number(record(incomingSettings.premium).lyricsHeight, previous.settings.premium?.lyricsHeight ?? 560, 320, 900) };
   }
   config.settings.entryText = text(incomingSettings.entryText, 160) || "click to enter..."; config.settings.ogTitle = text(incomingSettings.ogTitle, 70); config.settings.ogDescription = text(incomingSettings.ogDescription, 200);
-  config.assets = { ...previous.assets, audioTitle: text(incomingAssets.audioTitle, 80), audioEnabled: bool(incomingAssets.audioEnabled, true), volume: number(incomingAssets.volume, 65, 0, 100), tracks: Array.isArray(incomingAssets.tracks) ? incomingAssets.tracks.slice(0, 8).map((item, index) => { const track = record(item); return { id: /^[\w-]{2,40}$/.test(String(track.id || "")) ? String(track.id) : `track-${index + 1}`, title: text(track.title, 80) || "Track", audio: asset(record(track.audio), {}), artwork: asset(record(track.artwork), {}), recording: lyricsRecording(track.recording) }; }).filter((track) => Boolean(track.audio.url)) : [] };
+  const previousTracks = new Map(previous.assets.tracks.map((track) => [track.id, track]));
+  config.assets = {
+    ...previous.assets,
+    audioTitle: text(incomingAssets.audioTitle, 80),
+    audioEnabled: bool(incomingAssets.audioEnabled, true),
+    volume: number(incomingAssets.volume, 65, 0, 100),
+    tracks: Array.isArray(incomingAssets.tracks)
+      ? incomingAssets.tracks
+        .slice(0, 8)
+        .map((item, index) => {
+          const track = record(item);
+          const id = /^[\w-]{2,40}$/.test(String(track.id || "")) ? String(track.id) : `track-${index + 1}`;
+          const stored = previousTracks.get(id);
+          return {
+            id,
+            title: text(track.title, 80) || "Track",
+            audio: asset(record(track.audio), stored?.audio),
+            artwork: asset(record(track.artwork), stored?.artwork),
+            recording: lyricsRecording(track.recording),
+          };
+        })
+        .filter((track) => Boolean(track.audio.url))
+      : [],
+  };
   for (const key of urlKinds) (config.assets as Record<string, unknown>)[key] = asset(incomingAssets[key], (previous.assets as Record<string, unknown>)[key]);
   config.socials = Array.isArray(input.socials) ? input.socials.slice(0, 40).map((item, index) => { const social = record(item); return { id: text(social.id,80) || `social-${index}`, platform: (text(social.platform,32) || "Custom URL") as ProfileConfig["socials"][number]["platform"], label: text(social.label,64), value: text(social.value,500), enabled: Boolean(social.enabled), displayMode: social.displayMode === "text" ? "text" : "link", clicks: 0, action: social.action === "copy" ? "copy" : "open" }; }) : [];
   config.widgets = Array.isArray(input.widgets) ? input.widgets.slice(0, 8).map((item,index) => { const widget=record(item); return { id:text(widget.id,40)||`widget-${index}`, type:text(widget.type,24) as ProfileConfig["widgets"][number]["type"], enabled:Boolean(widget.enabled), value:text(widget.value,500) }; }).filter((widget) => ["youtube","spotify","discord","telegram","roblox","github","lastfm","timezone","weather"].includes(widget.type)) : [];
