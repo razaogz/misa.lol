@@ -6,6 +6,7 @@ import { compactProfileForSave, savePayloadTooLarge } from "./audio";
 import { cloneMockProfile } from "./mock-data";
 import { normalizeProfileSocials } from "./socials";
 import type { ProfileAsset, ProfileConfig } from "./types";
+import { profileFingerprint, resolveSavedDraft } from "./profile-save";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 interface ProfileContextValue {
@@ -30,13 +31,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
 function SessionProfileProvider({ children, user, authReady }: { children: React.ReactNode; user: AuthUser | null; authReady: boolean }) {
   const [config, setConfig] = useState<ProfileConfig>(() => profileFromAuthenticatedUser(user));
+  const configRef = useRef(config);
   const [savedConfig, setSavedConfig] = useState<ProfileConfig>(() => profileFromAuthenticatedUser(user));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
   const hasAuthenticatedProfile = Boolean(user && user.profile !== undefined);
   const [profileReady, setProfileReady] = useState(() => !user || hasAuthenticatedProfile);
-  const lastSavedRef = useRef(user?.username && hasAuthenticatedProfile ? JSON.stringify(profileFromAuthenticatedUser(user)) : "");
+  const lastSavedRef = useRef(user?.username && hasAuthenticatedProfile ? profileFingerprint(profileFromAuthenticatedUser(user)) : "");
   const hydratedUserRef = useRef<string | null>(hasAuthenticatedProfile ? user?.id || null : null);
+  const saveRequestRef = useRef(0);
 
   const persist = useCallback(async (nextConfig: ProfileConfig) => {
     if (!user) { setSaveState("error"); setSaveError("You are not signed in."); return; }
@@ -47,7 +50,7 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
       return;
     }
     const profileToSave = normalizeDashboardProfile(nextConfig);
-    const snapshot = JSON.stringify(profileToSave);
+    const snapshot = profileFingerprint(profileToSave);
     if (snapshot === lastSavedRef.current) { setSaveState("saved"); return; }
     let previous: ProfileConfig | null = null;
     try { previous = lastSavedRef.current ? JSON.parse(lastSavedRef.current) as ProfileConfig : null; } catch { previous = null; }
@@ -57,6 +60,7 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
       setSaveError("That playlist is too large to save at once. Use smaller files or fewer tracks.");
       return;
     }
+    const requestId = ++saveRequestRef.current;
     setSaveState("saving");
     setSaveError("");
     try {
@@ -66,12 +70,18 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
       try { result = raw ? JSON.parse(raw) as typeof result : {}; } catch { /* The proxy may return an HTML error page. */ }
       if (!response.ok && !result.detail && !result.error) result.detail = `Profile save failed (server returned ${response.status}).`;
       if (!response.ok || !result.profile) throw new Error(result.detail || result.error || "Profile save failed. Please try again.");
+      if (requestId !== saveRequestRef.current) return;
       const saved = normalizeDashboardProfile(result.profile);
-      lastSavedRef.current = JSON.stringify(saved);
+      lastSavedRef.current = profileFingerprint(saved);
       setSavedConfig(saved);
-      setConfig(current => JSON.stringify(normalizeDashboardProfile(current)) === snapshot ? saved : current);
+      setConfig(current => {
+        const next = resolveSavedDraft(normalizeDashboardProfile(current), snapshot, saved);
+        configRef.current = next;
+        return next;
+      });
       setSaveState("saved");
     } catch (error) {
+      if (requestId !== saveRequestRef.current) return;
       setSaveState("error");
       setSaveError(error instanceof Error ? error.message : "Profile save failed. Please try again.");
     }
@@ -86,8 +96,10 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
     }
     if (user.profile !== undefined) {
       const next = profileFromAuthenticatedUser(user);
+      configRef.current = next;
+      setConfig(next);
       setSavedConfig(next);
-      lastSavedRef.current = user.username ? JSON.stringify(next) : "";
+      lastSavedRef.current = user.username ? profileFingerprint(next) : "";
       hydratedUserRef.current = user.id;
       setProfileReady(true);
       return;
@@ -101,8 +113,9 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
         if (cancelled) return;
         const normalized = normalizeDashboardProfile(next);
         setSavedConfig(normalized);
+        configRef.current = normalized;
         setConfig(normalized);
-        lastSavedRef.current = user.username ? JSON.stringify(normalized) : "";
+        lastSavedRef.current = user.username ? profileFingerprint(normalized) : "";
         hydratedUserRef.current = user.id;
         setSaveState("idle");
         setSaveError("");
@@ -124,14 +137,21 @@ function SessionProfileProvider({ children, user, authReady }: { children: React
   const value = useMemo<ProfileContextValue>(() => ({
     config,
     savedConfig,
-    updateConfig: (updater) => { setConfig((current) => updater(current)); setSaveState("idle"); setSaveError(""); },
-    resetConfig: () => { setConfig(structuredClone(savedConfig)); setSaveState("idle"); setSaveError(""); },
-    saveProfile: async (nextConfig) => { await persist(nextConfig || config); },
+    updateConfig: (updater) => {
+      const next = updater(configRef.current);
+      configRef.current = next;
+      setConfig(next);
+      setSaveState("idle");
+      setSaveError("");
+    },
+    resetConfig: () => { const next = structuredClone(savedConfig); configRef.current = next; setConfig(next); setSaveState("idle"); setSaveError(""); },
+    saveProfile: async (nextConfig) => { await persist(nextConfig || configRef.current); },
     hydrateFromServer: (nextConfig) => {
       const normalized = normalizeDashboardProfile(nextConfig);
-      lastSavedRef.current = JSON.stringify(normalized);
+      lastSavedRef.current = profileFingerprint(normalized);
       hydratedUserRef.current = user?.id || null;
       setSavedConfig(normalized);
+      configRef.current = normalized;
       setConfig(normalized);
       setProfileReady(true);
       setSaveState("saved");

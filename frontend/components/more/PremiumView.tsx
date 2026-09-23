@@ -11,6 +11,7 @@ import { ImageCropModal } from "@/components/customization/ImageCropModal";
 import { ProfilePreviewButton } from "@/components/profile/ProfilePreviewButton";
 import { useSearchParams } from "next/navigation";
 import type { ProfileAsset, ProfileConfig } from "@/lib/types";
+import { profileFingerprint } from "@/lib/profile-save";
 import { PremiumGeneral } from "./PremiumGeneral";
 import { PremiumLayout } from "./PremiumLayout";
 import { EffectColors } from "@/components/customization/EffectColors";
@@ -26,7 +27,7 @@ function PremiumContent() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [crop, setCrop] = useState<{ key: ShareCropKey; asset: ProfileAsset } | null>(null);
-  const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
+  const dirty = profileFingerprint(config) !== profileFingerprint(savedConfig);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };

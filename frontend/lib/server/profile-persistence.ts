@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cloneMockProfile } from "@/lib/mock-data";
-import { PREMIUM_DEFAULTS } from "@/lib/premium";
+import { sanitizeIntegrationCard, sanitizePremiumSettings } from "@/lib/premium";
 import { normalizeLayouts, type ElementLayouts } from "@/lib/element-layout";
 import type { ProfileConfig } from "@/lib/types";
 import { database, one } from "./postgres";
@@ -28,6 +28,7 @@ function asset(raw: unknown, previous: unknown) {
   const finalUrl = url === "misa:keep" ? String(old.url || "") : url === "misa:remove" ? null : url || null;
   return { url: finalUrl, name: text(incoming.name, 80), type: text(incoming.type, 40) };
 }
+
 
 function lyricsRecording(raw: unknown) {
   const value = record(raw);
@@ -57,10 +58,8 @@ export function sanitizeProfilePayload(raw: unknown, user: User, existing: Profi
   for (const key of settingKeys) { const candidate = String(incomingSettings[key] || ""); config.settings[key] = colors.test(candidate) ? candidate : (previous.settings[key] || config.settings[key]) as string; }
   for (const [key, fallback, min, max] of [["profileOpacity",10,0,80],["backgroundOpacity",88,20,100],["profileBlur",24,0,40],["profileRadius",24,0,80],["profileFrameOpacity",100,0,100],["profileFrameScale",100,50,150],["profileFrameWidth",430,260,800],["profileFrameHeight",0,0,1000],["profileFrameX",0,-45,45],["profileFrameY",0,-45,45],["fontSize",16,12,22],["letterSpacing",0,-2,8],["borderWidth",1,0,8],["bioTypeMs",55,20,160],["bioDeleteMs",35,20,160],["bioPauseMs",1200,400,4000]] as const) (config.settings as Record<string, unknown>)[key] = number(incomingSettings[key], fallback, min, max);
   for (const key of ["profileGradient","showViews","showBadges","showSocials","showJoinDate","showDiscordStatus","showUsername","showProfileFrame","showAvatar","showAvatarBorder","showDisplayName","bioTypewriter","tabTitleAnimate","clickSound","cardTilt","entryScreen","usernameGlow","socialGlow","badgeGlow","monochromeIcons","widgetColorSwap","ogOverlayAvatar","ogOverlayName","ogOverlayAddress"] as const) (config.settings as Record<string, unknown>)[key] = bool(incomingSettings[key], Boolean((previous.settings as Record<string, unknown>)[key]));
-  for (const [key, allowed] of [["layout",["Default","Modern","Simplistic","Sleek","Portfolio"]],["avatarShape",["circle","rounded","square"]],["bannerShape",["rounded","square","pill"]],["buttonStyle",["glass","solid","outline"]],["profileFontScope",["all","name"]],["pageEnter",["None","Fade","Unfold","Pop"]],["backgroundEffect",["None","Snowflakes","Snow","Sakura","Rain","Fireflies"]],["usernameEffect",["None","Glow","Gradient","Shimmer","Rainbow","Fuzzy","Shuffle","Sparkle","Glitch","Pulse","Wave","Shadow", "Blue Sparkles", "Green Sparkles", "Pink Sparkles", "Red Sparkles", "White Sparkles", "Yellow Sparkles", "Wish Lanterns", "Crystal Rain", "Tiny Crowns", "Gold Sparkles", "Pink Hearts"]],["socialAlign",["left","center","right"]],["cardAlign",["left","center","right"]]] as const) { const value = String(incomingSettings[key] || ""); (config.settings as Record<string, unknown>)[key] = (allowed as readonly string[]).includes(value) ? value : (previous.settings as Record<string, unknown>)[key]; }
-  if (incomingSettings.premium && typeof incomingSettings.premium === "object" && !Array.isArray(incomingSettings.premium)) {
-    config.settings.premium = { ...PREMIUM_DEFAULTS, ...previous.settings.premium, lyricsHeight: number(record(incomingSettings.premium).lyricsHeight, previous.settings.premium?.lyricsHeight ?? 560, 320, 900) };
-  }
+  for (const [key, allowed] of [["layout",["Default","Modern","Simplistic","Sleek","Portfolio"]],["avatarShape",["circle","rounded","square"]],["bannerShape",["rounded","square","pill"]],["buttonStyle",["glass","solid","outline"]],["profileFont",["Inter","font-2","font-3","font-4","font-5","font-6","font-7","font-8","font-9","font-10","font-11"]],["profileFontScope",["all","name"]],["pageEnter",["None","Fade","Unfold","Pop"]],["backgroundEffect",["None","Snowflakes","Snow","Sakura","Rain","Fireflies"]],["usernameEffect",["None","Glow","Gradient","Shimmer","Rainbow","Fuzzy","Shuffle","Sparkle","Glitch","Pulse","Wave","Shadow", "Blue Sparkles", "Green Sparkles", "Pink Sparkles", "Red Sparkles", "White Sparkles", "Yellow Sparkles", "Wish Lanterns", "Crystal Rain", "Tiny Crowns", "Gold Sparkles", "Pink Hearts"]],["socialAlign",["left","center","right"]],["cardAlign",["left","center","right"]]] as const) { const value = String(incomingSettings[key] || ""); (config.settings as Record<string, unknown>)[key] = (allowed as readonly string[]).includes(value) ? value : (previous.settings as Record<string, unknown>)[key]; }
+  config.settings.premium = sanitizePremiumSettings(incomingSettings.premium, previous.settings.premium);
   const submittedLayouts = Object.prototype.hasOwnProperty.call(incomingSettings, "elementLayouts")
     ? incomingSettings.elementLayouts
     : previous.settings.elementLayouts;
@@ -93,7 +92,26 @@ export function sanitizeProfilePayload(raw: unknown, user: User, existing: Profi
   for (const key of urlKinds) (config.assets as Record<string, unknown>)[key] = asset(incomingAssets[key], (previous.assets as Record<string, unknown>)[key]);
   config.socials = Array.isArray(input.socials) ? input.socials.slice(0, 40).map((item, index) => { const social = record(item); return { id: text(social.id,80) || `social-${index}`, platform: (text(social.platform,32) || "Custom URL") as ProfileConfig["socials"][number]["platform"], label: text(social.label,64), value: text(social.value,500), enabled: Boolean(social.enabled), displayMode: social.displayMode === "text" ? "text" : "link", clicks: 0, action: social.action === "copy" ? "copy" : "open" }; }) : [];
   config.widgets = Array.isArray(input.widgets) ? input.widgets.slice(0, 8).map((item,index) => { const widget=record(item); return { id:text(widget.id,40)||`widget-${index}`, type:text(widget.type,24) as ProfileConfig["widgets"][number]["type"], enabled:Boolean(widget.enabled), value:text(widget.value,500) }; }).filter((widget) => ["youtube","spotify","discord","telegram","roblox","github","lastfm","timezone","weather"].includes(widget.type)) : [];
-  config.sections = Array.isArray(input.sections) ? input.sections.slice(0,12).map((item,index) => { const section=record(item); const kind=text(section.type,24); return { id:text(section.id,40)||`${kind}-${index}`, type:kind as ProfileConfig["sections"][number]["type"], enabled:Boolean(section.enabled), title:text(section.title,80), body:text(section.body, kind === "lyrics" ? 8000 : 4000), href:safeUrl(section.href), tags:Array.isArray(section.tags) ? section.tags.slice(0,16).map((tag)=>text(tag,24)).filter(Boolean) : [], cover:asset(section.cover,{}), subtitle:text(section.subtitle,160) }; }).filter((section) => ["about","project","skills","text","lyrics","integration"].includes(section.type)) : [];
+  const previousSections = new Map(previous.sections.map((section) => [section.id, section]));
+  config.sections = Array.isArray(input.sections) ? input.sections.slice(0, 12).map((item, index) => {
+    const section = record(item);
+    const kind = text(section.type, 24);
+    const id = text(section.id, 40) || `${kind}-${index}`;
+    const stored = previousSections.get(id);
+    return {
+      id,
+      type: kind as ProfileConfig["sections"][number]["type"],
+      enabled: Boolean(section.enabled),
+      title: text(section.title, 80),
+      body: text(section.body, kind === "lyrics" ? 8000 : 4000),
+      href: safeUrl(section.href),
+      tags: Array.isArray(section.tags) ? section.tags.slice(0, 16).map((tag) => text(tag, 24)).filter(Boolean) : [],
+      cover: asset(section.cover, stored?.cover),
+      subtitle: text(section.subtitle, 160),
+      leftCard: sanitizeIntegrationCard(section.leftCard),
+      rightCard: sanitizeIntegrationCard(section.rightCard),
+    };
+  }).filter((section) => ["about", "project", "skills", "text", "lyrics", "integration"].includes(section.type)) : [];
   config.badges = previous.badges; return config;
 }
 

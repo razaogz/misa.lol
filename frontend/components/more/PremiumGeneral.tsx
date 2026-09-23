@@ -4,7 +4,7 @@ import { Button, Modal, RangeControl } from "@/components/ui";
 import { useProfile, uploadProfileAsset } from "@/lib/profile-store";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { PROFILE_LAYOUTS } from "@/lib/profile-layout";
-import { CLICK_PRESETS, CURSOR_EFFECTS, premiumSettings, type PremiumSettings } from "@/lib/premium";
+import { CLICK_PRESETS, CURSOR_EFFECTS, mergePremiumSettings, premiumSettings, type PremiumSettings } from "@/lib/premium";
 import { playClickSound } from "@/lib/enter";
 import type { ProfileConfig } from "@/lib/types";
 import { PremiumColor, PremiumPanel, PremiumSelect, PremiumToggle } from "./PremiumControls";
@@ -17,7 +17,7 @@ export function PremiumGeneral() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const settings = (patch: Partial<ProfileConfig["settings"]>) => updateConfig(c => ({ ...c, settings: { ...c.settings, premium: premiumSettings(c), ...patch } }));
-  const premium = (patch: Partial<PremiumSettings>) => updateConfig(c => ({ ...c, settings: { ...c.settings, premium: { ...premiumSettings(c), ...patch } } }));
+  const premium = (patch: Partial<PremiumSettings>) => updateConfig(c => mergePremiumSettings(c, patch));
   const upload = async (kind: "customFont" | "clickSound" | "entryIcon", file: File) => {
     setBusy(true); setError("");
     try { const asset = await uploadProfileAsset(kind, file, true); updateConfig(c => ({ ...c, settings: { ...c.settings, premium: premiumSettings(c) }, assets: { ...c.assets, [kind]: asset } })); }
