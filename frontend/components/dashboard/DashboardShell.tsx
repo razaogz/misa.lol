@@ -99,15 +99,15 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex h-[76px] shrink-0 items-center justify-between px-5">
+      <div className="relative flex h-[76px] shrink-0 items-center px-5 pe-16">
         <Link href="/" onClick={close} className="flex items-center gap-3">
           <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-2xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
           <span className="text-[15px] font-semibold tracking-[-.02em]">Misa<span className="text-[#fb7185]">.lol</span></span>
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="ms-auto flex items-center gap-1">
           {onToggleDesktop && <button type="button" className="sidebar-close hidden md:flex" onClick={onToggleDesktop} aria-label="Close navigation" title="Close navigation"><X size={18} strokeWidth={1.8} /></button>}
-          <button type="button" className="sidebar-close md:hidden" onClick={close} aria-label={t("nav.close")}><X size={18} /></button>
         </div>
+        <button type="button" className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[.06] hover:text-white active:bg-white/[.1] md:hidden" onClick={close} aria-label={t("nav.close")}><X size={20} strokeWidth={2} /></button>
       </div>
       <div className="relative px-4">
         <label className="flex h-10 w-full items-center gap-2.5 rounded-xl border border-white/[.06] bg-white/[.025] px-3 text-start text-xs text-zinc-500 transition focus-within:border-white/[.16] focus-within:text-zinc-300">
