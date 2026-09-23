@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-store";
+import { DiscordLiveProvider } from "@/lib/discord-live";
 import { PREVIEW_MESSAGE } from "@/lib/draft-preview";
 import type { ProfileConfig } from "@/lib/types";
 import { ProfileRenderer } from "@/components/profile/ProfileRenderer";
@@ -24,7 +25,9 @@ function DraftPreview() {
     return () => window.removeEventListener("message", receive);
   }, [user?.id]);
   const config = draft?.owner === user?.id ? draft?.config : null;
-  if (!config) return <main className="grid min-h-[100svh] place-items-center bg-[#07070a] p-6 text-center text-zinc-300"><p>{!isReady ? "Loading preview…" : !user ? "Sign in to your account and open Profile Preview from the editor." : "Open Profile Preview from your editor to connect this tab to your current draft."}</p></main>;
+  if (!config) return <main className="grid min-h-[100svh] place-items-center bg-[#07070a] p-6 text-center text-zinc-300"><p>{!isReady ? "Loading preview..." : !user ? "Sign in to your account and open Profile Preview from the editor." : "Open Profile Preview from your editor to connect this tab to your current draft."}</p></main>;
   return <div className="h-[100svh]"><ProfilePageMetadata config={config} draft /><ProfileRenderer config={config} preview fitViewport /></div>;
 }
-export default function PreviewPage() { return <AuthProvider><DraftPreview /></AuthProvider>; }
+export default function PreviewPage() {
+  return <AuthProvider><DiscordLiveProvider><DraftPreview /></DiscordLiveProvider></AuthProvider>;
+}

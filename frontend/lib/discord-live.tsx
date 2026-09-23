@@ -97,7 +97,7 @@ export function DiscordLiveProvider({ children }: { children: React.ReactNode })
   const { user, isReady, refresh } = useAuth();
   const pathname = usePathname();
   const [state, setState] = useState<DiscordState | null>(null);
-  const routeNeedsDiscord = pathname === "/" || pathname.startsWith("/customize") || pathname.startsWith("/security") || pathname.startsWith("/constellations");
+  const routeNeedsDiscord = pathname === "/" || pathname.startsWith("/customize") || pathname.startsWith("/preview") || pathname.startsWith("/security") || pathname.startsWith("/constellations");
 
   const reload = useCallback(async () => {
     if (!user) {
