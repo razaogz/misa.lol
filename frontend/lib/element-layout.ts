@@ -3,8 +3,8 @@ import type { ProfileConfig } from "./types";
 
 export type LayoutElement = "frame" | "discord" | "audio" | `widget:${string}`;
 export type LayoutViewport = "desktop" | "mobile";
-/** x is a percentage of available horizontal travel; y, width and height are pixels.
- * A zero width fills the container and a zero height fits content. */
+/** Frame x is a percentage of available horizontal travel. Other x values offset
+ * within their slot; y, width and height are pixels. Only the frame is resizable. */
 export interface ElementBox { x: number; y: number; width: number; height: number }
 export interface ElementLayouts {
   version: 1 | 2;
@@ -13,10 +13,15 @@ export interface ElementLayouts {
 }
 export function constrainBox(id: LayoutElement, box: ElementBox): ElementBox {
   const limit = (n: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, Number.isFinite(n) ? n : 0)));
-  return { x: limit(box.x, -100, 100), y: limit(box.y, id === "frame" ? -400 : 0, 400), width: box.width ? limit(box.width, id === "frame" ? 260 : 160, 1040) : 0, height: limit(box.height, 0, 1000) };
+  return {
+    x: limit(box.x, -100, 100),
+    y: limit(box.y, -400, 400),
+    width: id === "frame" && box.width ? limit(box.width, 260, 1040) : 0,
+    height: id === "frame" ? limit(box.height, 0, 1000) : 0,
+  };
 }
 /** Version 1 audio used viewport coordinates on desktop. Its offsets have no
- * equivalent inside a media slot; retain its dimensions and mobile placement. */
+ * equivalent inside a media slot; retain mobile placement but drop old sizing. */
 export function normalizeLayouts(layouts?: ElementLayouts): ElementLayouts {
   const next: ElementLayouts = { version: 2 };
   for (const viewport of ["desktop", "mobile"] as const) {
@@ -54,6 +59,7 @@ export function elementStyle(settings: ProfileConfig["settings"], id: LayoutElem
     style[`--${viewport}-width`] = box.width ? `${box.width}px` : "100%";
     style[`--${viewport}-height`] = `${box.height}px`;
     style[`--${viewport}-x`] = (box.x + 100) / 200;
+    style[`--${viewport}-offset-x`] = `${box.x / 2}%`;
     style[`--${viewport}-y`] = `${box.y}px`;
   }
   return style as CSSProperties;

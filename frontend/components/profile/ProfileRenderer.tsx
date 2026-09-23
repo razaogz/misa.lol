@@ -85,7 +85,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const measure = () => setMeasuredViewport(root.clientWidth < 900 ? "mobile" : "desktop");
+    const measure = () => setMeasuredViewport(root.clientWidth < 768 ? "mobile" : "desktop");
     const observer = new ResizeObserver(measure);
     observer.observe(root); measure();
     const height = () => root.style.setProperty("--profile-viewport-height", `${fitViewport || screenshot ? root.clientHeight : window.innerHeight}px`);
