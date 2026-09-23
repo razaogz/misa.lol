@@ -2,6 +2,7 @@ import "server-only";
 
 import { cloneMockProfile } from "@/lib/mock-data";
 import { PREMIUM_DEFAULTS } from "@/lib/premium";
+import { normalizeLayouts, type ElementLayouts } from "@/lib/element-layout";
 import type { ProfileConfig } from "@/lib/types";
 import { database, one } from "./postgres";
 import type { User } from "./users";
@@ -60,6 +61,10 @@ export function sanitizeProfilePayload(raw: unknown, user: User, existing: Profi
   if (incomingSettings.premium && typeof incomingSettings.premium === "object" && !Array.isArray(incomingSettings.premium)) {
     config.settings.premium = { ...PREMIUM_DEFAULTS, ...previous.settings.premium, lyricsHeight: number(record(incomingSettings.premium).lyricsHeight, previous.settings.premium?.lyricsHeight ?? 560, 320, 900) };
   }
+  const submittedLayouts = Object.prototype.hasOwnProperty.call(incomingSettings, "elementLayouts")
+    ? incomingSettings.elementLayouts
+    : previous.settings.elementLayouts;
+  config.settings.elementLayouts = normalizeLayouts(record(submittedLayouts) as unknown as ElementLayouts);
   config.settings.entryText = text(incomingSettings.entryText, 160) || "click to enter..."; config.settings.ogTitle = text(incomingSettings.ogTitle, 70); config.settings.ogDescription = text(incomingSettings.ogDescription, 200);
   const previousTracks = new Map(previous.assets.tracks.map((track) => [track.id, track]));
   config.assets = {

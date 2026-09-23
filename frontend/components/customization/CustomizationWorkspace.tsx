@@ -1,6 +1,6 @@
 "use client";
 
-import { elementBox, updateElementLayout, type LayoutViewport } from "@/lib/element-layout";
+import { elementBox, normalizeLayouts, updateElementLayout, type LayoutViewport } from "@/lib/element-layout";
 import { motion } from "framer-motion";
 import { SiDiscord } from "react-icons/si";
 import { AlignCenter, AlignLeft, AlignRight, AppWindow, Brush, CalendarDays, Check, CircleDot, Crop, Eye, Image as ImageIcon, Laptop, Layers, LayoutTemplate, Move, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Shield, SlidersHorizontal, Sparkles, Trash2, Type, Upload, UsersRound, Volume2, WandSparkles, X, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
@@ -78,6 +78,9 @@ function CustomizationContent() {
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
+  useEffect(() => {
+    if (!fullPreview) setLayoutViewport(previewViewport);
+  }, [fullPreview, previewViewport]);
   const shareCopy = sharePageCopy(config);
   const tabIcon = config.assets.favicon?.url || config.assets.avatar?.url || "";
   const setSettings = (patch: Partial<typeof config.settings>) => updateConfig((current) => {
@@ -102,6 +105,7 @@ function CustomizationContent() {
   const layoutConfig = { ...config, settings: { ...config.settings, profileFrameWidth: currentFrame.width || 358, profileFrameHeight: currentFrame.height, profileFrameX: currentFrame.x / 2, profileFrameY: currentFrame.y / 4, profileFrameScale: Math.round((currentFrame.width || 358) / (layoutViewport === "mobile" ? 358 : 880) * 100), cardAlign: (currentFrame.x < 0 ? "left" : currentFrame.x > 0 ? "right" : "center") as SocialAlign } };
   const openManualMove = () => { setLayoutViewport(previewViewport); setManualMove(true); setFullPreview(true); };
   const resetFramePosition = () => setSettings({ elementLayouts: updateElementLayout(config.settings, layoutViewport, "frame", { x: 0, y: 0, width: layoutViewport === "desktop" ? 880 : 0, height: 0 }) });
+  const resetCurrentLayout = () => { const layouts = normalizeLayouts(config.settings.elementLayouts); setSettings({ elementLayouts: { ...layouts, [layoutViewport]: {} } }); };
   const adjustFrameScale = (delta: number) => { const frame = elementBox(config.settings, "frame", layoutViewport); setSettings({ elementLayouts: updateElementLayout(config.settings, layoutViewport, "frame", { ...frame, width: Math.min(1040, Math.max(260, (frame.width || 358) + delta * 4)) }) }); };
   const uploadAsset = async (key: keyof typeof config.assets, file: File) => {
     const revision = uploadRevision.current[key === "background" || key === "backgroundVideo" ? "backgroundMedia" : key] = (uploadRevision.current[key === "background" || key === "backgroundVideo" ? "backgroundMedia" : key] || 0) + 1;
@@ -156,7 +160,7 @@ function CustomizationContent() {
       </div>
       {manualMove && <div className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/[.1] bg-[#0b0b10]/95 px-3 py-2 shadow-2xl backdrop-blur-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" className="h-10 min-h-0 px-3 text-xs" onClick={resetFramePosition}><RotateCcw size={13} />Reset frame</Button>
+          <Button variant="ghost" className="h-10 min-h-0 px-3 text-xs" onClick={resetFramePosition}><RotateCcw size={13} />Reset frame</Button><Button variant="ghost" className="h-10 min-h-0 px-3 text-xs" onClick={resetCurrentLayout}><RotateCcw size={13} />Reset {layoutViewport} layout</Button>
           <span className="ml-1 text-xs text-zinc-400">Frame width</span>
           <Button variant="ghost" aria-label="Narrower frame" className="h-10 min-h-0 w-10 min-w-0 px-0" onClick={() => adjustFrameScale(-10)}><ZoomOut size={15} /></Button>
           <span className="min-w-12 text-center font-mono text-xs text-zinc-300">{currentFrame.width ? String(currentFrame.width) + "px" : "Auto"}</span>
