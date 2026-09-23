@@ -43,7 +43,7 @@ const fmt = value => Number.isFinite(value) ? `${Math.floor(value/60)}:${String(
 /** Both React and canonical HTML use this view. It never creates an audio element. */
 export function mountLyrics(host, root) {
   host.classList.add('synced-player');
-  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">♫</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" aria-label="Song lyrics"><div class="synced-lines"></div></div>`;
+  host.innerHTML = `<header class="synced-header"><div class="synced-art" aria-hidden="true">&#9835;</div><div class="synced-track"><strong></strong><div class="synced-progress"><time>0:00</time><input type="range" aria-label="Seek track" min="0" max="1" step="0.01" value="0"><time>0:00</time></div></div><div class="synced-controls"><button type="button" aria-label="Previous track">${icons.previous}</button><button type="button" aria-label="Play" class="synced-play">${icons.play}</button><button type="button" aria-label="Next track">${icons.next}</button></div></header><p class="synced-status" role="status"></p><div class="synced-viewport" aria-label="Song lyrics"><div class="synced-lines"></div></div>`;
   const viewport=host.querySelector('.synced-viewport'), list=host.querySelector('.synced-lines'), status=host.querySelector('.synced-status'), seek=host.querySelector('input'), title=host.querySelector('strong'), art=host.querySelector('.synced-art'), times=host.querySelectorAll('time'), buttons=host.querySelectorAll('.synced-controls button');
   let audio=null, trackKey='', rows=[], active=-2, disposed=false, request=null, serial=0, timer=0, animation=0, info={};
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
@@ -71,22 +71,22 @@ export function mountLyrics(host, root) {
   function display(body, message, synced, timedRows) {
     stopAnimation();
     rows=synced ? (timedRows || parseLrc(body)).filter(row=>row.t!==null) : [];active=-2;
-    if(body && !rows.length)message="Synced lyrics are unavailable for this recording.";
-    list.replaceChildren(...rows.map(row=>{const p=document.createElement('p');p.textContent=row.text || '♪';p.dir='auto';return p;}));
+    if(body && !rows.length && !message)message="Synced lyrics are unavailable for this recording.";
+    list.replaceChildren(...rows.map(row=>{const p=document.createElement('p');p.textContent=row.text || '\u266A';p.dir='auto';return p;}));
     host.dataset.lyricsState=synced?'synced':rows.length?'plain':'unavailable';status.textContent=message;viewport.scrollTop=0;paint(true);
   }
   async function load() {
     const version=++serial;request?.abort();request=new AbortController();
     const meta=info.recording;
-    display('',meta?.id?'Loading lyrics…':'Confirm this recording in Audio Manager to find lyrics.',false);
+    display('',meta?.id?'Loading lyrics...':'Confirm this recording in Audio Manager to find lyrics.',false);
     if(!meta?.id){ const body=host.dataset.lyricsBody || ''; if(body && (!host.dataset.lyricsTrack || host.dataset.lyricsTrack===info.id)) display(body,'User-provided lyrics',parseLrc(body).some(r=>r.t!==null)); return; }
-    if(!Number.isFinite(audio?.duration)||audio.readyState<1){status.textContent='Waiting for track metadata…';return;}
+    if(!Number.isFinite(audio?.duration)||audio.readyState<1){status.textContent='Waiting for track metadata...';return;}
     try { const data=await getRecording(meta.id,request.signal); if(disposed||version!==serial)return;
       if(!data){display('','No lyrics found for this recording.',false);return;}
-      if(data.instrumental){display('','Instrumental — no lyrics.',false);host.dataset.lyricsState='instrumental';return;}
+      if(data.instrumental){display('','Instrumental - no lyrics.',false);host.dataset.lyricsState='instrumental';return;}
       const same=Number.isFinite(audio?.duration)&&Math.abs(audio.duration-Number(data.duration))<=2;
-      if(!same){display(data.plainLyrics||data.syncedLyrics||'','Recording duration differs — lyrics are not synchronized.',false);host.dataset.lyricsState='mismatch';return;}
-      display(data.syncedLyrics||data.plainLyrics||'',data.timingWarning || (data.rows?.length || data.syncedLyrics ? '' : data.plainLyrics?'Plain lyrics — timing unavailable.':'No lyrics available.'),Boolean(data.rows?.length || data.syncedLyrics),data.rows);
+      if(!same){display(data.plainLyrics||data.syncedLyrics||'','Recording duration differs - lyrics are not synchronized.',false);host.dataset.lyricsState='mismatch';return;}
+      display(data.syncedLyrics||data.plainLyrics||'',data.timingWarning || (data.rows?.length || data.syncedLyrics ? '' : data.plainLyrics?'Plain lyrics - timing unavailable.':'No lyrics available.'),Boolean(data.rows?.length || data.syncedLyrics),data.rows);
     } catch(error){if(disposed||version!==serial||error.name==='AbortError')return;display('','Lyrics temporarily unavailable. Music can still play.',false);host.dataset.lyricsState='error';}
   }
   function bind() {
@@ -96,11 +96,11 @@ export function mountLyrics(host, root) {
     try{info=JSON.parse(audio.dataset.trackInfo||'{}');}catch{info={};}
     buttons.forEach((b,i)=>b.disabled=i!==1&&!(info.count>1));title.textContent=info.title||'Profile audio';
     const key=JSON.stringify([info.id,info.src,info.recording,host.dataset.lyricsBody]);
-    if(key!==trackKey){trackKey=key;art.replaceChildren();if(info.artwork){const image=document.createElement('img');image.src=info.artwork;image.alt='';image.onerror=()=>{art.textContent='♫';};art.append(image);}else art.textContent='♫';void load();}
+    if(key!==trackKey){trackKey=key;art.replaceChildren();if(info.artwork){const image=document.createElement('img');image.src=info.artwork;image.alt='';image.onerror=()=>{art.textContent='\u266B';};art.append(image);}else art.textContent='\u266B';void load();}
     paint();
   }
-  const event=e=>{if(e.type==='loadedmetadata')void load();paint(e.type==='seeking'||e.type==='seeked'||e.type==='loadedmetadata');};
-  const events=['timeupdate','play','pause','seeking','seeked','loadedmetadata','durationchange','waiting','stalled','ratechange','ended'];
+  const event=e=>{if(e.type==='error'){display('','This audio could not be played. Check the uploaded file.',false);host.dataset.lyricsState='audio-error';return;}if(e.type==='loadedmetadata')void load();paint(e.type==='seeking'||e.type==='seeked'||e.type==='loadedmetadata');};
+  const events=['timeupdate','play','pause','seeking','seeked','loadedmetadata','durationchange','waiting','stalled','ratechange','ended','error'];
   buttons[1].onclick=()=>{if(audio){if(audio.paused)void audio.play().catch(()=>{status.textContent='Playback could not start. Try Play again.';});else audio.pause();}};
   buttons[0].onclick=()=>root.querySelector('[data-player-prev],#audio-prev')?.click();buttons[2].onclick=()=>root.querySelector('[data-player-next],#audio-next')?.click();
   seek.oninput=()=>{if(audio&&Number.isFinite(audio.duration)){audio.currentTime=Number(seek.value);paint(true);}};

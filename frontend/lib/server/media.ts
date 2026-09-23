@@ -58,7 +58,7 @@ export function configuredMediaHosts(): string[] {
     .map((h) => h.trim().toLowerCase())
     .filter(Boolean));
   // Keep FastAPI parity: upload responses use this configured public origin.
-  for (const value of [process.env.R2_PUBLIC_BASE_URL, process.env.MISA_R2_PUBLIC_BASE_URL]) {
+  for (const value of [process.env.R2_PUBLIC_BASE_URL, process.env.MISA_R2_PUBLIC_BASE_URL, process.env.MISA_SUPABASE_URL]) {
     try {
       const host = value ? new URL(value).hostname.toLowerCase() : "";
       if (host) hosts.add(host);
@@ -134,6 +134,73 @@ export function mediaResponse(url: string | null | undefined): NextResponse | nu
   return null;
 }
 
+function dataAudioResponse(request: Request, bytes: Buffer, mime: string): NextResponse {
+  const headers = new Headers({
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "private, no-store",
+    "Content-Type": mime,
+  });
+  const range = request.headers.get("range");
+  if (!range) {
+    headers.set("Content-Length", String(bytes.length));
+    return new NextResponse(new Uint8Array(bytes), { status: 200, headers });
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(range.trim());
+  if (!match || (!match[1] && !match[2])) {
+    headers.set("Content-Range", `bytes */${bytes.length}`);
+    return new NextResponse(null, { status: 416, headers });
+  }
+  const suffixLength = match[1] ? null : Number(match[2]);
+  const start = suffixLength === null ? Number(match[1]) : Math.max(0, bytes.length - suffixLength);
+  const requestedEnd = match[2] && match[1] ? Number(match[2]) : bytes.length - 1;
+  const end = Math.min(requestedEnd, bytes.length - 1);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= bytes.length || end < start) {
+    headers.set("Content-Range", `bytes */${bytes.length}`);
+    return new NextResponse(null, { status: 416, headers });
+  }
+  const chunk = bytes.subarray(start, end + 1);
+  headers.set("Content-Length", String(chunk.length));
+  headers.set("Content-Range", `bytes ${start}-${end}/${bytes.length}`);
+  return new NextResponse(new Uint8Array(chunk), { status: 206, headers });
+}
+
+export async function publicAudio(request: Request, url: string | null | undefined): Promise<NextResponse | null> {
+  const safe = safeAssetUrl(url, "audio");
+  if (!safe) return null;
+  const decoded = decodeDataUrl(safe);
+  if (decoded) return dataAudioResponse(request, decoded.bytes, decoded.mime);
+
+  try {
+    const upstreamHeaders = new Headers({ Accept: "audio/*", "Accept-Encoding": "identity" });
+    for (const name of ["range", "if-range", "if-none-match", "if-modified-since"]) {
+      const value = request.headers.get(name);
+      if (value) upstreamHeaders.set(name, value);
+    }
+    const upstream = await fetch(safe, {
+      cache: "no-store",
+      headers: upstreamHeaders,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (![200, 206, 304, 416].includes(upstream.status)) return null;
+
+    const headers = new Headers();
+    for (const name of ["accept-ranges", "cache-control", "content-length", "content-range", "content-type", "etag", "last-modified"]) {
+      const value = upstream.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "audio/mpeg");
+    if (!headers.has("Accept-Ranges")) headers.set("Accept-Ranges", "bytes");
+    headers.set("X-Content-Type-Options", "nosniff");
+    return new NextResponse(upstream.status === 304 || upstream.status === 416 ? null : upstream.body, {
+      status: upstream.status,
+      headers,
+    });
+  } catch {
+    return null;
+  }
+}
 export function publicMedia(url: string | null | undefined, kind: string): NextResponse | null {
   const safe = safeAssetUrl(url, kind);
   return safe ? mediaResponse(safe) : null;

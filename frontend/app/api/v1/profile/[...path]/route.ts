@@ -5,6 +5,7 @@ import {
   ASSET_KIND_TYPES,
   ASSET_KINDS,
   fallbackFaviconResponse,
+  publicAudio,
   publicMedia,
   type AssetKind,
 } from "@/lib/server/media";
@@ -38,6 +39,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!path.length) return apiError("Not found.", 404);
 
   const handle = path[0].trim().toLowerCase();
+  const routeMedia = (url: string | null | undefined, kind: string) =>
+    kind === "audio" ? publicAudio(request, url) : Promise.resolve(publicMedia(url, kind));
 
   // 1. GET /api/v1/profile/:username/widgets
   if (path.length === 2 && path[1] === "widgets") {
@@ -79,7 +82,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const section = sections.find((s) => s && s.id === sectionId && s.enabled);
     const cover = section && typeof section.cover === "object" ? (section.cover as Record<string, unknown>) : null;
     const url = typeof cover?.url === "string" ? cover.url : "";
-    const media = publicMedia(url, "image");
+    const media = await routeMedia(url, "image");
     if (media) return media;
     return apiError("Asset not found.", 404);
   }
@@ -93,12 +96,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const mediaType = ASSET_KIND_TYPES[kind];
     const publicUrl = await getPublicAssetUrl(handle, kind);
-    const media = publicMedia(publicUrl, mediaType);
+    const media = await routeMedia(publicUrl, mediaType);
     if (media) return media;
 
     if (kind === "favicon") {
       const avatarUrl = await getPublicAssetUrl(handle, "avatar");
-      const avatarMedia = publicMedia(avatarUrl, "image");
+      const avatarMedia = await routeMedia(avatarUrl, "image");
       if (avatarMedia) return avatarMedia;
       const bits = await getShareCardBits(handle);
       if (bits) {
@@ -113,7 +116,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (kind === "audio" || kind === "audioArtwork") {
       const fallback = kind === "audio" ? "audio" : "artwork";
       const track1Url = await getPublicTrackAssetUrl(handle, "track-1", fallback);
-      const trackMedia = publicMedia(track1Url, fallback === "audio" ? "audio" : "image");
+      const trackMedia = await routeMedia(track1Url, fallback === "audio" ? "audio" : "image");
       if (trackMedia) return trackMedia;
     }
 
@@ -125,7 +128,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     >;
     const item = assets[kind] as { url?: string } | undefined;
     const fallbackUrl = item?.url;
-    const fallbackMedia = publicMedia(fallbackUrl, mediaType);
+    const fallbackMedia = await routeMedia(fallbackUrl, mediaType);
     if (fallbackMedia) return fallbackMedia;
 
     if (kind === "audio" || kind === "audioArtwork") {
@@ -134,7 +137,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       const source = first
         ? (first[kind === "audio" ? "audio" : "artwork"] as { url?: string } | undefined)
         : undefined;
-      const firstMedia = publicMedia(source?.url, kind === "audio" ? "audio" : "image");
+      const firstMedia = await routeMedia(source?.url, kind === "audio" ? "audio" : "image");
       if (firstMedia) return firstMedia;
     }
 
@@ -151,12 +154,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (alias) return usernameRedirect(`/api/v1/profile/${alias}/tracks/${trackId}/${kind}`);
 
     const trackUrl = await getPublicTrackAssetUrl(handle, trackId, kind);
-    const media = publicMedia(trackUrl, kind === "audio" ? "audio" : "image");
+    const media = await routeMedia(trackUrl, kind === "audio" ? "audio" : "image");
     if (media) return media;
 
     if (kind === "artwork") {
       const avatarUrl = await getPublicAssetUrl(handle, "avatar");
-      const avatarMedia = publicMedia(avatarUrl, "image");
+      const avatarMedia = await routeMedia(avatarUrl, "image");
       if (avatarMedia) return avatarMedia;
     }
 
@@ -171,12 +174,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!track) return apiError("Asset not found.", 404);
 
     const source = track[kind] as { url?: string } | undefined;
-    const sourceMedia = publicMedia(source?.url, kind === "audio" ? "audio" : "image");
+    const sourceMedia = await routeMedia(source?.url, kind === "audio" ? "audio" : "image");
     if (sourceMedia) return sourceMedia;
 
     if (kind === "artwork") {
       const avatarItem = assets.avatar as { url?: string } | undefined;
-      const avatarMedia = publicMedia(avatarItem?.url, "image");
+      const avatarMedia = await routeMedia(avatarItem?.url, "image");
       if (avatarMedia) return avatarMedia;
     }
 
