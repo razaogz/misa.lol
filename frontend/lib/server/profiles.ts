@@ -1,12 +1,16 @@
 import "server-only";
 
+import { profileFeatureFlags, projectProfileFeatures } from "./profile-features";
+import type { ProfileConfig } from "@/lib/types";
+import { sanitizeProfilePayload } from "./profile-persistence";
+import { isSuspended } from "./users";
 import { currentRankForUser } from "./achievements";
 import { liveDiscordState } from "./discord";
 import { database, one } from "./postgres";
 import { hasActivePremium, publicProjection } from "./premium";
 import { userByUsername } from "./users";
 
-type StoredProfile = { config: unknown };
+type StoredProfile = { config: unknown; disabled_at?: unknown };
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : {};
@@ -29,10 +33,12 @@ export async function listUserBadgeGrants(userId: string) {
 }
 
 export async function publicProfile(username: string) {
+  if (!/^[a-z][a-z0-9_]{2,23}$/i.test(username)) return null;
   const user = await userByUsername(username.trim().toLowerCase());
-  if (!user?.username) return null;
+  if (!user?.username || isSuspended(user)) return null;
 
-  const stored = await one<StoredProfile>("SELECT config FROM profiles WHERE user_id = $1", [user.id]);
+  const stored = await one<StoredProfile>("SELECT config, disabled_at FROM profiles WHERE user_id = $1", [user.id]);
+  if (stored?.disabled_at) return null;
   let config = stored?.config && typeof stored.config === "object" ? object(stored.config) : {};
 
   // If nested under config.config
@@ -40,6 +46,8 @@ export async function publicProfile(username: string) {
     config = object(config.config);
   }
 
+  const premiumBase = config._premium_base;
+  config = { ...sanitizeProfilePayload(config, user, null, true), ...(premiumBase ? { _premium_base: premiumBase } : {}) };
   // Stamp identity
   const identity = object(config.profile);
   identity.username = user.username;
@@ -49,6 +57,7 @@ export async function publicProfile(username: string) {
   config.profile = identity;
 
   // View count
+  identity.views = 0;
   try {
     const stats = await one<{ views: number }>("SELECT views FROM profile_stats WHERE user_id = $1", [user.id]);
     identity.views = Number(stats?.views || 0);
@@ -62,6 +71,7 @@ export async function publicProfile(username: string) {
 
   // Authoritative active badges
   const grants = await listUserBadgeGrants(user.id);
+  config.badges = [];
   if (grants.length > 0) {
     const seen = new Set<string>();
     const badges = [];
@@ -116,7 +126,7 @@ export async function publicProfile(username: string) {
     delete config.discord;
   }
 
-  return config;
+  return projectProfileFeatures(config as unknown as ProfileConfig, await profileFeatureFlags());
 }
 
 export function profileLimits() {

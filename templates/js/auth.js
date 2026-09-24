@@ -491,9 +491,9 @@ function completeTelegramAuthFromHash() {
   if (!location.hash.startsWith(prefix)) return false;
   let data;
   try {
-    const raw = location.hash.slice(prefix.length);
+    const raw = location.hash.slice(prefix.length).replace(/-/g, "+").replace(/_/g, "/");
     const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
-    data = JSON.parse(atob(padded));
+    data = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(padded), c => c.charCodeAt(0))));
   } catch {
     return false;
   }

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (alias) return usernameRedirect(`/api/v1/profile/${alias}/widgets`);
     const profile = await publicProfile(handle);
     if (!profile) return apiError("Profile not found.", 404);
-    const widgets = await resolveProfileWidgets(profile as Record<string, unknown>);
+    const widgets = await resolveProfileWidgets(profile as unknown as Record<string, unknown>);
     return NextResponse.json({ widgets });
   }
 

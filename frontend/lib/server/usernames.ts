@@ -1,6 +1,6 @@
 import "server-only";
 import { database } from "./postgres";
-const reserved = new Set("about account admin analytics api auth badges css customize dashboard discord explore forgot-password google help host icons images index js links login logout me misa plus premium pricing privacy reset-password root settings signup static status support telegram templates terms www".split(" "));
+const reserved = new Set("about account admin analytics apple c community constellations fonts leaderboard lyrics p preview security sitemap api auth badges css customize dashboard discord explore forgot-password google help host icons images index js links login logout me misa plus premium pricing privacy reset-password root settings signup static status support telegram templates terms www".split(" "));
 export class UsernameError extends Error {
   status: number;
   constructor(message: string, status: number) { super(message); this.status = status; }

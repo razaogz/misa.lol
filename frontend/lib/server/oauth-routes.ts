@@ -1,4 +1,6 @@
 import "server-only";
+import { cookieSecure } from "./cookies";
+import { consumeTelegramPayload, matchesOAuthBrowser, oauthCookieName } from "./oauth-state";
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, rememberSignupIp, requestIpIsBanned, userIsBanned } from "./account-bans";
@@ -34,7 +36,9 @@ export async function startOAuth(request: NextRequest, provider: OAuthProvider) 
     if(link&&!await currentUser(request))return oauthError(request,"/login","not_authenticated");
     const nonce=provider==="google"||provider==="apple"?randomBytes(24).toString("base64url"):"";
     const state=await saveOAuthState(provider,next,nonce,link?"link":"login");
-    return redirect(request,authorizeUrl(provider,state,nonce));
+    const response = redirect(request,authorizeUrl(provider,state,nonce));
+    response.cookies.set(oauthCookieName(provider), state, { httpOnly: true, secure: cookieSecure(request), sameSite: provider === "apple" ? "none" : "lax", path: "/", maxAge: 600 });
+    return response;
   } catch { return oauthError(request,"/login","oauth_failed"); }
 }
 async function finishOAuth(request: NextRequest, identity: ProviderIdentity, next: string, link: boolean) {
@@ -57,7 +61,7 @@ async function finishOAuth(request: NextRequest, identity: ProviderIdentity, nex
   return {response,user};
 }
 const string = (value: unknown) => typeof value==="string"?value:null;
-const telegramBridge = `<!DOCTYPE html><title>Signing in</title><script>(()=>{try{if(!location.hash.startsWith('#tgAuthResult='))throw 0;const raw=location.hash.slice(14);const data=JSON.parse(atob(raw+'='.repeat((4-raw.length%4)%4)));const query=new URLSearchParams();for(const [key,value] of Object.entries(data)){if(value!==null&&value!==undefined&&value!=='')query.set(key,String(value));}const state=new URLSearchParams(location.search).get('state');if(state)query.set('state',state);if(!query.get('id')||!query.get('hash'))throw 0;location.replace(location.pathname+'?'+query.toString());}catch{location.replace('/login?error=oauth_failed');}})();</script>`;
+const telegramBridge = `<!DOCTYPE html><title>Signing in</title><script>(()=>{try{if(!location.hash.startsWith('#tgAuthResult='))throw 0;const raw=location.hash.slice(14).replace(/-/g,'+').replace(/_/g,'/');const data=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw+'='.repeat((4-raw.length%4)%4)),c=>c.charCodeAt(0))));history.replaceState(null,'',location.pathname+location.search);const query=new URLSearchParams();for(const [key,value] of Object.entries(data)){if(value!==null&&value!==undefined&&value!=='')query.set(key,String(value));}const state=new URLSearchParams(location.search).get('state');if(state)query.set('state',state);if(!query.get('id')||!query.get('hash'))throw 0;location.replace(location.pathname+'?'+query.toString());}catch{location.replace('/login?error=oauth_failed');}})();</script>`;
 export async function callbackOAuth(request: NextRequest, provider: OAuthProvider) {
   if(!nativeCoreEnabled())return apiError("Not found.",404);
   try {
@@ -70,8 +74,11 @@ export async function callbackOAuth(request: NextRequest, provider: OAuthProvide
       if(!params.get("hash"))return new NextResponse(telegramBridge,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer"}});
       if(!verifyTelegramAuth(Object.fromEntries(params),providerSetting(provider,"bot_token")))return oauthError(request,"/login","oauth_failed");
     }
-    const saved=await popOAuthState(params.get("state")||"",provider);
+    const state = params.get("state") || "";
+    if (!matchesOAuthBrowser(state, request.cookies.get(oauthCookieName(provider))?.value)) return oauthError(request,"/login","oauth_failed");
+    const saved=await popOAuthState(state,provider);
     if(!saved)return oauthError(request,"/login","oauth_failed");
+    if (provider === "telegram" && !await consumeTelegramPayload(Object.fromEntries(params))) return oauthError(request,"/login","oauth_failed");
     const next=safeNextPath(saved.next),link=saved.mode==="link",target=link?oauthDestination(true,next):"/login";
     if(params.get("error")||(provider!=="telegram"&&!params.get("code")&&!(provider==="apple"&&params.get("id_token"))))return oauthError(request,target,"oauth_denied");
     let identity:ProviderIdentity,tokens:Record<string,unknown>={};
@@ -99,7 +106,9 @@ export async function callbackOAuth(request: NextRequest, provider: OAuthProvide
     const current=await currentUser(request);
     if(link&&!current)return oauthError(request,"/login","not_authenticated");
     const ticket=await savePendingOAuth({identity,tokens,next,link,currentUserId:current?.id||null});
-    return redirect(request,challengePage()+"?ticket="+encodeURIComponent(ticket));
+    const response = redirect(request,challengePage()+"?ticket="+encodeURIComponent(ticket));
+    response.cookies.set(oauthCookieName(provider), "", { path: "/", maxAge: 0, httpOnly: true, secure: cookieSecure(request), sameSite: provider === "apple" ? "none" : "lax" });
+    return response;
   } catch { return oauthError(request,"/login","oauth_failed"); }
 }
 

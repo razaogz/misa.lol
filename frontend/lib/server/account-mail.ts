@@ -21,7 +21,7 @@ export async function sendAccountMail(to: string, kind: "email_change" | "email_
 }
 export function publicOrigin(request: NextRequest) {
   const configured = (process.env.MISA_PUBLIC_BASE_URL || "https://misa.lol").replace(/\/+$/, "");
-  const host = ((request.headers.get("x-forwarded-host") || "").split(",")[0].trim() || request.headers.get("host") || new URL(request.url).host).split("@").pop()!.trim();
+  const host = ((process.env.MISA_TRUST_PROXY === "true" ? request.headers.get("x-forwarded-host") || "" : "").split(",")[0].trim() || request.headers.get("host") || new URL(request.url).host).split("@").pop()!.trim();
   const hostname = host.split(":")[0].toLowerCase();
   if (hostname === "misa.lol" || hostname.endsWith(".misa.lol")) return "https://misa.lol";
   if (["localhost", "127.0.0.1", "0.0.0.0"].includes(hostname)) {

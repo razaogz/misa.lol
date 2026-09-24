@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "start": "next start",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --experimental-strip-types lib/__tests__/premium-save.test.ts",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --experimental-strip-types lib/__tests__/premium-save.test.ts && node --test tests/*.test.cjs",
     "build": "next build",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit"

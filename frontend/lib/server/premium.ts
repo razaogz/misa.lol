@@ -72,16 +72,16 @@ export function protectWrite(
   }
 
   const hasAdvancedSections = inSections.some((s: any) =>
-    s && typeof s === "object" && (s.leftCard || s.rightCard || s.subtitle || (s.type === "about" && s.tags) || s.type === "integration")
+    s && typeof s === "object" && (s.leftCard || s.rightCard || s.subtitle || (s.type === "about" && Array.isArray(s.tags) && s.tags.length > 0) || s.type === "integration")
   );
   if (hasAdvancedSections && JSON.stringify(inSections) !== JSON.stringify(oldSections)) {
     changed = true;
   }
 
-  const inEntryIcon = (inAssets.entryIcon as Record<string, unknown> | undefined)?.url;
-  const oldEntryIcon = (oldAssets.entryIcon as Record<string, unknown> | undefined)?.url;
-  if (inEntryIcon !== oldEntryIcon) {
-    changed = true;
+  for (const key of PREMIUM_ASSETS) {
+    const incomingUrl = (inAssets[key] as Record<string, unknown> | undefined)?.url || null;
+    const previousUrl = (oldAssets[key] as Record<string, unknown> | undefined)?.url || null;
+    if (incomingUrl !== previousUrl) changed = true;
   }
 
   if (base) {

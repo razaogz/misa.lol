@@ -1,4 +1,5 @@
 import "server-only";
+import { protectWrite, hasActivePremium } from "./premium";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { AdminError } from "./admin-auth";
@@ -385,7 +386,10 @@ export async function templatesRoute(request: NextRequest, path: string[]) {
       const merged = applyTemplateSnapshot(existing as unknown as Record<string, unknown> || {}, snapshot);
 
       const sanitized = sanitizeProfilePayload(merged, user, existing);
-      const saved = await persistProfile(user.id, sanitized);
+      let protectedProfile;
+      try { protectedProfile = protectWrite(sanitized as unknown as Record<string, unknown>, existing as unknown as Record<string, unknown> | null, await hasActivePremium(user.id)); }
+      catch { throw new AdminError("An active Premium entitlement is required for this template.", 403); }
+      const saved = await persistProfile(user.id, protectedProfile as unknown as typeof sanitized);
 
       return json({ profile: saved });
     }

@@ -1,3 +1,4 @@
+import { clientIp } from "@/lib/server/client-ip";
 import "server-only";
 
 import type { NextRequest } from "next/server";
@@ -10,8 +11,8 @@ export async function verifyTurnstile(request: NextRequest, token: unknown) {
   const form = new FormData();
   form.set("secret", secret);
   form.set("response", token);
-  const remoteip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (remoteip) form.set("remoteip", remoteip);
+  const remoteip = clientIp(request);
+  if (remoteip !== "unknown") form.set("remoteip", remoteip);
   const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form, cache: "no-store", signal: AbortSignal.timeout(10000) });
   if (!response.ok) return false;
   const result = await response.json() as { success?: boolean };

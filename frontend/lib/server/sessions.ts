@@ -1,3 +1,4 @@
+import { clientIp } from "@/lib/server/client-ip";
 import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -33,7 +34,7 @@ export async function createSession(userId: string, request: NextRequest, rememb
     created_at: now,
     last_seen_at: now,
     user_agent: (request.headers.get("user-agent") || "").slice(0, 240),
-    ip: (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "").split(",")[0].trim(),
+    ip: clientIp(request),
   };
   const client = await ready();
   await client.set(sessionKey(token), JSON.stringify(payload), "EX", ttlFor(remember));

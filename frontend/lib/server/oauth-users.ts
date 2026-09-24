@@ -33,10 +33,16 @@ export async function upsertOAuthUser(identity: ProviderIdentity, currentId: str
         email_verified=CASE WHEN email=$6 AND $7 THEN TRUE ELSE email_verified END,updated_at=NOW() WHERE id=$1`,
         [id, identity.displayName, identity.avatarUrl, identity.provider, identity.telegramUsername || null, identity.email, identity.emailVerified]);
     } else {
-      if (emailOwner) throw new OAuthConflict("account_exists");
+      let accountEmail = identity.email;
+      if (emailOwner) {
+        // Keep the unverified password account intact; the verified provider can still
+        // create a separate account and authenticate with its provider identity.
+        if (!identity.emailVerified || emailOwner.email_verified !== false || !emailOwner.password_hash || emailOwner.google_id || emailOwner.discord_id || emailOwner.telegram_id || emailOwner.apple_id) throw new OAuthConflict("account_exists");
+        accountEmail = null;
+      }
       id = randomUUID();
       await db.query(`INSERT INTO users (id,account_id,email,email_verified,display_name,avatar_url,${column},telegram_username) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [id, String(randomInt(100000000000,1000000000000)), identity.email, Boolean(identity.email && identity.emailVerified), identity.displayName, identity.avatarUrl, identity.providerId, identity.provider === "telegram" ? identity.telegramUsername || null : null]);
+        [id, String(randomInt(100000000000,1000000000000)), accountEmail, Boolean(accountEmail && identity.emailVerified), identity.displayName, identity.avatarUrl, identity.providerId, identity.provider === "telegram" ? identity.telegramUsername || null : null]);
     }
     const user = (await db.query<User>("SELECT * FROM users WHERE id=$1", [id])).rows[0];
     if (!user) throw new OAuthConflict("not_authenticated");

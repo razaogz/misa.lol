@@ -4,9 +4,8 @@ import type { NextRequest } from "next/server";
 import { database, one } from "./postgres";
 import { publicUser, type User } from "./users";
 
-export function clientIp(request: NextRequest) {
-  return (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
-}
+import { clientIp } from "./client-ip";
+export { clientIp } from "./client-ip";
 export function normalizeIp(raw: string) {
   const value = raw.trim();
   if (!isIP(value)) return null;

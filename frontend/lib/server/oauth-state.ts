@@ -33,6 +33,19 @@ export function verifyTelegramAuth(payload: Record<string, string>, token: strin
   const signature = Buffer.from(payload.hash || "");
   if (signature.length !== expected.length || !timingSafeEqual(signature, Buffer.from(expected))) return false;
   const date = Number(payload.auth_date);
-  return Number.isInteger(date) && date > 0 && now - date <= 86400 && date <= now;
+  return Number.isInteger(date) && date > 0 && now - date <= 300 && date <= now;
 }
 export const trustedEmailClaim = (value: unknown) => value === true || (typeof value === "string" && value.trim().toLowerCase() === "true");
+
+export const oauthCookieName = (provider: OAuthProvider) => `misa_oauth_${provider}`;
+export function matchesOAuthBrowser(state: string, cookie?: string) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(state) || !cookie) return false;
+  const a = Buffer.from(state), b = Buffer.from(cookie);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+export async function consumeTelegramPayload(payload: Record<string, string>) {
+  const client = redis();
+  if (client.status === "wait") await client.connect();
+  const key = createHash("sha256").update(payload.hash).digest("hex");
+  return await client.set(`telegram_used:${key}`, "1", "EX", 301, "NX") === "OK";
+}

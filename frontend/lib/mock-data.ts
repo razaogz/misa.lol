@@ -45,7 +45,11 @@ export const mockProfile: ProfileConfig = {
   sections: [],
 };
 
-export const cloneMockProfile = (): ProfileConfig => structuredClone(mockProfile);
+export const cloneMockProfile = (): ProfileConfig => ({
+  ...structuredClone(mockProfile),
+  profile: { username: "", displayName: "", description: "", location: "", views: 0, uid: "", joinedAt: "" },
+  socials: [], badges: [], widgets: [], sections: [],
+});
 
 export const platformOptions: ProfileConfig["socials"][number]["platform"][] = [
   "YouTube", "Discord", "Instagram", "X", "TikTok", "Telegram", "Spotify", "SoundCloud", "GitHub", "Reddit", "Twitch", "Snapchat", "Facebook", "LinkedIn", "Steam", "Roblox", "PayPal", "Pinterest", "Patreon", "Threads", "Kick", "Bitcoin", "Ethereum", "Litecoin", "Solana", "Email", "Custom URL",

@@ -28,6 +28,8 @@ services:
     environment:
       NODE_ENV: production
       MISA_NEXT_CORE_ROLLOUT: "${MISA_NEXT_CORE_ROLLOUT:-true}"
+      MISA_TRUST_PROXY: "true"
+      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-5}"
       MISA_INSTANCE_NAME: frontend
       MISA_APP_NAME: misa
       MISA_APP_VERSION: 0.1.0

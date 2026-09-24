@@ -1,7 +1,10 @@
+import { clientIp } from "@/lib/server/client-ip";
 import { rememberSignupIp, requestIpIsBanned } from "@/lib/server/account-bans";
 import { rememberSwitcherUser } from "@/lib/server/account-security";
 import argon2 from "argon2";
-import { NextRequest, NextResponse } from "next/server";
+import { mailerConfigured, publicOrigin, sendAccountMail } from "@/lib/server/account-mail";
+import { putAccountToken, popAccountToken } from "@/lib/server/account-tokens";
+import { after, NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/server/http";
 import { nativeCoreEnabled } from "@/lib/server/rollout";
 import { normalizeAccountEmail } from "@/lib/server/email-validation";
@@ -13,7 +16,7 @@ import { createEmailUser, touchLogin, userByEmail } from "@/lib/server/users";
 export const runtime = "nodejs";
 
 function clientKey(request: NextRequest) {
-  return (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+  return clientIp(request);
 }
 
 export async function POST(request: NextRequest) {
@@ -32,7 +35,17 @@ export async function POST(request: NextRequest) {
   try {
     if (await requestIpIsBanned(request)) return apiError("New accounts cannot be created from this network.", 403);
     if (await userByEmail(email)) return apiError("An account with this email already exists.", 409);
-    const user = await createEmailUser(email, await argon2.hash(password), email.split("@", 1)[0]);
+    const user = await createEmailUser(email, await argon2.hash(password), "New member");
+    if (mailerConfigured()) {
+      const verificationToken = await putAccountToken("email_change", { user_id: user.id, email });
+      const verificationUrl = `${publicOrigin(request)}/api/v1/auth/confirm-email?token=${verificationToken}`;
+      after(async () => {
+        if (!await sendAccountMail(email, "email_change", verificationUrl)) {
+          await popAccountToken("email_change", verificationToken);
+          console.error("Signup verification email delivery failed");
+        }
+      });
+    }
     await rememberSignupIp(user.id, request);
     await destroySession(request.cookies.get(SESSION_COOKIE)?.value);
     await touchLogin(user.id);

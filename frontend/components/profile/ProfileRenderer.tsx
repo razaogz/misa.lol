@@ -9,7 +9,7 @@ import { PremiumCursor } from "./PremiumCursor";
 import { AnimatePresence, motion } from "framer-motion";
 import { ProfileLayoutElement, ProfileLayoutProvider } from "./ProfileLayoutElement";
 import type { LayoutElement, LayoutViewport } from "@/lib/element-layout";
-import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileBio, ProfileIdentity, ProfileAudioModule, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
@@ -17,6 +17,7 @@ import { resolvedAudioSource, usesBackgroundVideoAudio } from "@/lib/audio";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { contentAlign, profileFont, profileLayout } from "@/lib/profile-layout";
 import { typeSize } from "@/lib/typography";
+import { cssUrl, normalizeDashboardProfile } from "@/lib/profile-normalize";
 import type { ProfileConfig } from "@/lib/types";
 
 function colorWithAlpha(value: string | undefined, alpha: number) {
@@ -31,7 +32,8 @@ function colorWithAlpha(value: string | undefined, alpha: number) {
 
 type LayoutSettingsPatch = Partial<ProfileConfig["settings"]>;
 
-export function ProfileRenderer({ config, preview = false, screenshot = false, className = "", manualPositioning = false, onLayoutChange, fitViewport = false, embedded = false, layoutViewport }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onLayoutChange?: (patch: LayoutSettingsPatch) => void; fitViewport?: boolean; embedded?: boolean; layoutViewport?: LayoutViewport }) {
+export function ProfileRenderer({ config: rawConfig, preview = false, screenshot = false, className = "", manualPositioning = false, onLayoutChange, fitViewport = false, embedded = false, layoutViewport }: { config: ProfileConfig; preview?: boolean; screenshot?: boolean; className?: string; manualPositioning?: boolean; onLayoutChange?: (patch: LayoutSettingsPatch) => void; fitViewport?: boolean; embedded?: boolean; layoutViewport?: LayoutViewport }) {
+  const config = useMemo(() => normalizeDashboardProfile(rawConfig), [rawConfig]);
   const rootRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<LayoutElement>("frame");
   const [measuredViewport, setMeasuredViewport] = useState<LayoutViewport>("desktop");
@@ -43,7 +45,7 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
   const selectedDefaultFont = defaultFonts.find((font) => font.id === s.profileFont);
   const layout = profileLayout(s);
   const align = contentAlign(s.socialAlign);
-  const customCursor = config.assets.cursor.url ? { cursor: `url(${config.assets.cursor.url}) 16 16, auto` } : undefined;
+  const customCursor = config.assets.cursor.url ? { cursor: `${cssUrl(config.assets.cursor.url)} 16 16, auto` } : undefined;
   const customFont = config.assets.customFont?.url || "";
   const family = customFont
     ? `"MisaProfile", "Inter", ui-sans-serif, system-ui, sans-serif`
@@ -125,8 +127,8 @@ export function ProfileRenderer({ config, preview = false, screenshot = false, c
     <div onClickCapture={portfolio && entered ? event => { if ((event.target as HTMLElement).closest("a,button") && !(event.target as HTMLElement).closest(".profile-entry")) tap(); } : undefined} data-profile-layout data-profile-kind={layout} data-premium-hero={s.premium?.hero} data-premium-border={s.premium?.borderEnabled ? s.premium.borderType : undefined} data-profile-preview={preview || screenshot || undefined} data-profile-embedded={embedded || undefined} data-layout-viewport={layoutViewport} ref={rootRef} className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-y-auto bg-[#07070a]" : "min-h-[100svh] bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, color: s.textColor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family, ["--portfolio-border" as string]: frameVisible && s.premium?.borderEnabled !== false ? `${s.borderWidth ?? 1}px ${s.premium?.borderType === "Dashed" ? "dashed" : "solid"} ${colorWithAlpha(s.borderColor, frameOpacity * (s.premium?.borderOpacity ?? 100) / 100)}` : "0 solid transparent", ["--lyrics-height" as string]: `${Math.max(320, Math.min(900, Number(s.premium?.lyricsHeight) || 560))}px`, ["--portfolio-radius" as string]: `${s.profileRadius}px`, ["--profile-text-size" as string]: `${typeSize(s.fontSize)}px`, ["--profile-frame-scale" as string]: (s.profileFrameScale ?? 100) / 100, ["--embedded-width" as string]: `${s.profileFrameWidth ?? 430}px`, ["--embedded-scale" as string]: (s.profileFrameScale ?? 100) / 100 } as CSSProperties}>
       {!embedded && <ProfileVolume config={config} rootRef={rootRef} />}
       {!embedded && !screenshot && <PremiumCursor config={config} rootRef={rootRef} />}
-      {customFont ? <style>{`@font-face{font-family:MisaProfile;src:url("${customFont}");font-display:swap}`}</style> : null}
-      {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:url("${selectedDefaultFont.url}");font-display:swap}`}</style> : null}
+      {customFont ? <style>{`@font-face{font-family:MisaProfile;src:${cssUrl(customFont)};font-display:swap}`}</style> : null}
+      {selectedDefaultFont?.url ? <style>{`@font-face{font-family:MisaDefaultFont;src:${cssUrl(selectedDefaultFont.url)};font-display:swap}`}</style> : null}
       {!embedded && <ProfileBackground config={config} videoRef={videoRef} reduceMotion={quiet} />}
       {!embedded && <div className="pointer-events-none absolute inset-0 bg-black/35" />}
       <div className="profile-composition relative z-10" style={{ perspective: s.cardTilt && !portfolio ? 900 : undefined, minHeight: embedded || fitViewport || screenshot ? "100%" : "100svh" }}>
@@ -230,7 +232,7 @@ function ProfileBackground({ config, videoRef, reduceMotion }: { config: Profile
   }, [background.url]);
   return (
     <div className="profile-background pointer-events-none absolute inset-0 overflow-hidden" style={{ backgroundColor: config.settings.backgroundColor }}>
-      <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: image ? "url(" + image + ")" : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
+      <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: image ? cssUrl(image) : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
       {backgroundVideo.url && <BackgroundVideo key={backgroundVideo.url} src={backgroundVideo.url} videoRef={videoRef} opacity={config.settings.backgroundOpacity / 100} />}
       <BackgroundEffectLayer color={effectColor(config)} effect={config.settings.backgroundEffect || "None"} className="z-[1]" />
       {config.settings.backgroundEffect === "None" && backgroundEffectVideo?.url ? <video className="absolute inset-0 z-[1] h-full w-full object-cover" src={backgroundEffectVideo.url} autoPlay={!reduceMotion} loop muted playsInline preload="metadata" aria-hidden="true" /> : null}

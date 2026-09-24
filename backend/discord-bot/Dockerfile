@@ -14,4 +14,7 @@ RUN uv pip install --no-cache -r requirements.txt
 
 COPY bot.py .
 
+RUN useradd --system --uid 65532 --no-create-home bot
+USER bot
+
 CMD ["python", "-u", "bot.py"]

@@ -3,8 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth, type AuthUser } from "./auth-store";
 import { compactProfileForSave, savePayloadTooLarge } from "./audio";
-import { cloneMockProfile } from "./mock-data";
-import { normalizeProfileSocials } from "./socials";
+import { normalizeDashboardProfile, profileDefaults } from "./profile-normalize";
+export { normalizeDashboardProfile } from "./profile-normalize";
 import type { ProfileAsset, ProfileConfig } from "./types";
 import { profileFingerprint, resolveSavedDraft } from "./profile-save";
 
@@ -238,44 +238,6 @@ export function useProfile() {
   return value;
 }
 
-function profileDefaults(): ProfileConfig {
-  const defaults = cloneMockProfile();
-  defaults.profile = {
-    username: "",
-    displayName: "",
-    description: "A little corner of the internet.",
-    location: "",
-    views: 0,
-    uid: "",
-    joinedAt: "",
-  };
-  defaults.socials = [];
-  defaults.badges = [];
-  defaults.widgets = [];
-  defaults.sections = [];
-  return defaults;
-}
-
-export function normalizeDashboardProfile(input: ProfileConfig): ProfileConfig {
-  const defaults = profileDefaults();
-  const incoming = (input && typeof input === "object" ? input : {}) as Partial<ProfileConfig>;
-  const assets = (incoming.assets && typeof incoming.assets === "object" ? incoming.assets : {}) as Partial<ProfileConfig["assets"]>;
-  const normalizedAssets = { ...defaults.assets, ...assets } as ProfileConfig["assets"];
-  for (const key of ["avatar", "banner", "background", "backgroundVideo", "backgroundEffectVideo", "audio", "audioArtwork", "cursor", "ogImage", "favicon", "customFont", "clickSound"] as const) {
-    if (!normalizedAssets[key] || typeof normalizedAssets[key] !== "object") normalizedAssets[key] = defaults.assets[key] || { url: null };
-  }
-  return normalizeProfileSocials({
-    ...defaults,
-    ...incoming,
-    profile: { ...defaults.profile, ...(incoming.profile || {}) },
-    settings: { ...defaults.settings, ...(incoming.settings || {}) },
-    assets: normalizedAssets,
-    socials: Array.isArray(incoming.socials) ? incoming.socials : defaults.socials,
-    badges: Array.isArray(incoming.badges) ? incoming.badges : defaults.badges,
-    widgets: Array.isArray(incoming.widgets) ? incoming.widgets : defaults.widgets,
-    sections: Array.isArray(incoming.sections) ? incoming.sections : defaults.sections,
-  } as ProfileConfig);
-}
 export async function loadProfileForUsername(username: string): Promise<ProfileConfig | null> {
   const normalized = username.trim().toLowerCase();
   try {

@@ -15,6 +15,9 @@ ENV MISA_NEXT_CORE_ROLLOUT=$MISA_NEXT_CORE_ROLLOUT
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
 
+RUN chown -R node:node /app/.next
+USER node
+
 EXPOSE 3000
 
 CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]

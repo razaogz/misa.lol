@@ -1,3 +1,4 @@
+import { clientIp } from "@/lib/server/client-ip";
 import { rememberSignupIp, userIsBanned } from "@/lib/server/account-bans";
 import { rememberSwitcherUser } from "@/lib/server/account-security";
 ﻿import argon2 from "argon2";
@@ -13,7 +14,7 @@ import { createMfaTicket, mfaEnabled } from "@/lib/server/mfa";
 export const runtime = "nodejs";
 
 function clientKey(request: NextRequest) {
-  return (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+  return clientIp(request);
 }
 
 export async function POST(request: NextRequest) {

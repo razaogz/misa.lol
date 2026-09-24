@@ -16,15 +16,20 @@ export async function GET(request: NextRequest) {
     const email = saved.email.trim().toLowerCase();
     const existing = await userByEmail(email);
     if (existing && existing.id !== saved.user_id) { await popAccountToken("email_change", token); return redirect("taken"); }
+    const db = await database().connect();
     try {
-      const updated = await database().query("UPDATE users SET email=$2,email_verified=TRUE,updated_at=NOW() WHERE id=$1 RETURNING id", [saved.user_id, email]);
-      if (!updated.rowCount) return redirect("invalid");
+      await db.query("BEGIN");
+      await db.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [saved.user_id]);
+      if (!await peekAccountToken("email_change", token)) { await db.query("ROLLBACK"); return redirect("invalid"); }
+      const updated = await db.query("UPDATE users SET email=$2,email_verified=TRUE,updated_at=NOW() WHERE id=$1 RETURNING id", [saved.user_id, email]);
+      if (!updated.rowCount || !await popAccountToken("email_change", token)) { await db.query("ROLLBACK"); return redirect("invalid"); }
+      await db.query("COMMIT");
     } catch (error) {
+      await db.query("ROLLBACK");
       if ((error as {code?: string}).code !== "23505") throw error;
       await popAccountToken("email_change", token);
       return redirect("taken");
-    }
-    await popAccountToken("email_change", token);
+    } finally { db.release(); }
     return redirect("confirmed");
   } catch { return apiError("Account storage is temporarily unavailable. Please try again.", 503); }
 }

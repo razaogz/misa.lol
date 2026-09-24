@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── Username Availability Check (Simulated) ──
+  // ── Username Availability Check ──
   const claimInput = document.querySelector('.claim-input__field');
   const availabilityIndicator = document.querySelector('.availability');
 
@@ -95,9 +95,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      debounceTimer = setTimeout(() => {
+      debounceTimer = setTimeout(async () => {
         availabilityIndicator.style.display = 'flex';
-        // Always show as available (static demo)
+        availabilityIndicator.textContent = 'Checking...';
+        try {
+          const response = await fetch('/api/v1/auth/available?username=' + encodeURIComponent(value));
+          if (!response.ok) throw new Error('Unavailable');
+          const result = await response.json();
+          if (claimInput.value.trim() !== value) return;
+          availabilityIndicator.textContent = result.available ? 'Available' : 'Unavailable';
+        } catch { availabilityIndicator.textContent = 'Could not check availability'; }
       }, 300);
     });
   }
@@ -195,7 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
       e.preventDefault();
-      const target = document.querySelector(this.getAttribute('href'));
+      const hash = this.getAttribute('href');
+      const target = hash && hash.length > 1 ? document.getElementById(hash.slice(1)) : null;
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }

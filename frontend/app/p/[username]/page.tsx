@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { PublicProfileView } from "@/components/profile/PublicProfileView";
 import { publicProfileOnServer } from "@/lib/public-profile-server";
 import type { Metadata } from "next";
@@ -16,5 +17,6 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
 export default async function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
   const profile = await publicProfileOnServer(username);
+  if (!profile) notFound();
   return <PublicProfileView username={username} initialProfile={profile} />;
 }

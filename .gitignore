@@ -41,6 +41,11 @@ Thumbs.db
 # Keep the remote repository limited to runtime website code
 *.md
 **/tests/
+!frontend/tests/
+frontend/tests/*
+!frontend/tests/audit-regressions.test.cjs
+!frontend/tests/server-loader.cjs
+!frontend/tests/audit-live.cjs
 .env.example
 **/.env.example
 local-mail-capture.jsonl
