@@ -1,4 +1,4 @@
-﻿# Performance report
+# Performance report
 
 Audit completed: 2026-09-26
 
@@ -24,6 +24,8 @@ Next.js production build First Load JS (before -> after, kB as reported by Next.
 Baseline values were recorded before the changes. Intermediate build after splitting optional profile modules reported 214 kB for Overview and 192 kB for public profiles; removing Framer Motion from the shared profile renderer produced the additional reduction. Route sizes can move slightly between builds as Next.js assigns shared chunks.
 
 Before deployment, local-origin TTFB samples (three requests each, measured from the VPS to its own Caddy/Next services) were: `/` 0.4–1.6 ms, `/dashboard` 1.7–2.5 ms, `/dashboard/analytics` 1.2–1.3 ms, and `/dashboard/customize` 1.2–1.5 ms. These are origin-local measurements and do not represent visitor latency. The previous static asset responses had an ETag but no Cache-Control header.
+
+After deployment, Caddy served the tested CSS asset with `Cache-Control: public, max-age=3600` and an ETag. The frontend container reported healthy; `/`, `/dashboard`, `/dashboard/analytics`, and `/dashboard/customize` returned HTTP 200. Three local-origin TTFB samples per route measured `/` 0.23–0.65 ms, `/dashboard` 1.53–3.08 ms, `/dashboard/analytics` 0.96–1.56 ms, and `/dashboard/customize` 0.89–1.38 ms. Compared with the pre-deploy local sample, results overlap on dashboard routes and remain too local/low-latency to establish user-facing gains.
 
 The browser/API behavior change is source-counted: old authenticated startup scheduled four data reads whether or not the sections were opened; the new path schedules zero until pointer or keyboard intent on one of those links, then only that section's loader runs. No browser lab or field Web Vitals collector was available in this environment, so LCP, INP, CLS, and public-network TTFB are not claimed.
 
