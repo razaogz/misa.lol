@@ -39,6 +39,10 @@
 .profile-move-handle,.profile-resize-handle { position:absolute; z-index:30; touch-action:none; min-width:44px; min-height:44px; border:1px solid rgba(255,255,255,.24); border-radius:12px; background:rgba(20,20,26,.94); box-shadow:0 8px 24px rgba(0,0,0,.4); color:#fff; font:600 12px system-ui; backdrop-filter:blur(12px); }
 .profile-move-handle { top:0; left:12px; display:flex; align-items:center; gap:6px; transform:translateY(-50%); padding:0 12px; cursor:grab; }
 .profile-move-handle:active { cursor:grabbing; }
+/* Keep movable media controls out of the preview; keyboard focus reveals their accessible handles. */
+.profile-element-discord > .profile-move-handle,.profile-element-audio > .profile-move-handle,.profile-element-widget > .profile-move-handle { opacity:0;pointer-events:none; }
+.profile-element-discord > .profile-move-handle:focus-visible,.profile-element-audio > .profile-move-handle:focus-visible,.profile-element-widget > .profile-move-handle:focus-visible { opacity:1;pointer-events:auto; }
+
 .profile-element[data-selected=true] > .profile-move-handle,.profile-move-handle:hover { border-color:#fb7185; background:#3f1826; }
 .profile-resize-handle { right:0; bottom:0; display:grid; place-items:center; transform:translate(25%,25%); cursor:nwse-resize; }
 .profile-resize-handle:hover { border-color:#fb7185; background:#3f1826; }
@@ -227,6 +231,13 @@ body[data-profile-kind=Portfolio] .portfolio-profile[data-hero=centered] .portfo
 .portfolio-profile[data-hero=centered] .portfolio-first-frame .profile-header { flex-direction:column; text-align:center; }
 .portfolio-hero > .profile-mobile-audio { margin-top:20px; }
 .profile-entry { position:absolute; inset:0; z-index:100; display:grid; place-items:center; width:100%; min-height:100%; border:0; padding:24px; background:#000b; backdrop-filter:blur(5px); color:white; text-align:center; cursor:pointer; }
+.profile-entry { transition:opacity .5s ease; }
+.profile-entry.is-leaving { opacity:0;pointer-events:none; }
+.profile-enter-fade { animation:enter-fade .55s cubic-bezier(.22,1,.36,1) both; }
+.profile-enter-unfold { animation:enter-unfold .55s cubic-bezier(.22,1,.36,1) both; }
+.profile-enter-pop { animation:enter-pop .55s cubic-bezier(.22,1,.36,1) both; }
+@media(prefers-reduced-motion:reduce) { .profile-entry { transition:none; } .profile-enter-fade,.profile-enter-unfold,.profile-enter-pop { animation:none; } }
+
 .profile-entry > span { animation:entry-text-in .5s ease both; }
 .profile-entry strong { font-size:clamp(26px,3vw,40px); line-height:1.2; font-weight:750; }
 .profile-entry .profile-entry-subtitle { font-size:clamp(16px,1.5vw,20px); opacity:.65; max-width:40em; }

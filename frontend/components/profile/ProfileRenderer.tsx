@@ -2,16 +2,14 @@
 
 import "@/public/profile-layout.css";
 
-import { PortfolioProfile } from "./PortfolioProfile";
+import dynamic from "next/dynamic";
 import { effectColor } from "@/lib/effect-colors";
 import { ProfileVolume } from "./ProfileVolume";
 import { PremiumCursor } from "./PremiumCursor";
-import { AnimatePresence, motion } from "framer-motion";
 import { ProfileLayoutElement, ProfileLayoutProvider } from "./ProfileLayoutElement";
 import type { LayoutElement, LayoutViewport } from "@/lib/element-layout";
 import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileBio, ProfileIdentity, ProfileAudioModule, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
-import { BackgroundEffectLayer } from "@/components/profile/BackgroundEffectLayer";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
 import { resolvedAudioSource, usesBackgroundVideoAudio } from "@/lib/audio";
 import { useDefaultFonts } from "@/lib/default-fonts";
@@ -19,6 +17,9 @@ import { contentAlign, profileFont, profileLayout } from "@/lib/profile-layout";
 import { typeSize } from "@/lib/typography";
 import { cssUrl, normalizeDashboardProfile } from "@/lib/profile-normalize";
 import type { ProfileConfig } from "@/lib/types";
+
+const PortfolioProfile = dynamic(() => import("./PortfolioProfile").then((module) => module.PortfolioProfile), { loading: () => null });
+const BackgroundEffectLayer = dynamic(() => import("@/components/profile/BackgroundEffectLayer").then((module) => module.BackgroundEffectLayer), { loading: () => null });
 
 function colorWithAlpha(value: string | undefined, alpha: number) {
   const raw = (value || "#ffffff").replace("#", "");
@@ -60,15 +61,7 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
   useEffect(() => { setQuiet(prefersReducedMotion()); }, []);
   useEffect(() => { entryLock.current = false; setEntered(manualPositioning || embedded || !s.entryScreen); }, [manualPositioning, embedded, s.entryScreen]);
   const enter = s.pageEnter || "Fade";
-  const motionStart = screenshot
-    ? { opacity: 1, scale: 1, scaleY: 1 }
-    : quiet || !entered || enter === "None"
-      ? false
-    : enter === "Unfold"
-      ? { opacity: 0, scaleY: 0.12 }
-      : enter === "Pop"
-        ? { opacity: 0, scale: 0.86 }
-        : { opacity: 0 };
+  const cardEnterClass = screenshot || quiet || enter === "None" ? "" : `profile-enter-${enter.toLowerCase()}`;
   const portfolio = layout === "Portfolio" && !embedded;
   const showFrame = s.showProfileFrame !== false;
   const frameOpacity = Math.min(100, Math.max(0, s.profileFrameOpacity ?? 100)) / 100;
@@ -132,20 +125,19 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
       {!embedded && <ProfileBackground config={config} videoRef={videoRef} reduceMotion={quiet} />}
       {!embedded && <div className="pointer-events-none absolute inset-0 bg-black/35" />}
       <div className="profile-composition relative z-10" style={{ perspective: s.cardTilt && !portfolio ? 900 : undefined, minHeight: embedded || fitViewport || screenshot ? "100%" : "100svh" }}>
-        <AnimatePresence>{!embedded && s.entryScreen && !entered && (
-          <motion.button type="button" className="profile-entry" style={{ fontFamily: family }} initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: quiet ? 0 : .5 }} onClick={event => { event.stopPropagation(); openPage(); }}>
+        {!embedded && s.entryScreen && (
+          <button type="button" aria-hidden={entered} tabIndex={entered ? -1 : 0} disabled={entered} className={`profile-entry${entered ? " is-leaving" : ""}`} style={{ fontFamily: family }} onClick={event => { event.stopPropagation(); openPage(); }}>
             <span className="flex flex-col items-center gap-3">
               {config.assets.entryIcon?.url && <img src={config.assets.entryIcon.url} alt="" className="profile-entry-icon" />}
               <strong>{s.entryText?.trim() && s.entryText !== "click to enter..." ? s.entryText : "Click anywhere to enter"}</strong>
               {s.premium?.entrySubtitle && <span className="profile-entry-subtitle">{s.premium.entrySubtitle}</span>}
             </span>
-          </motion.button>
-        )}</AnimatePresence>
-        <AnimatePresence initial={false}>
-          {entered && (
+          </button>
+        )}
+        {entered && (
             <>
             {portfolio ? <PortfolioProfile config={config} preview={preview} rootRef={rootRef} frameStyle={frameStyle} /> : <ProfileLayoutElement id="frame">
-              <motion.div key="profile-card" initial={motionStart} animate={{ opacity: 1, scale: 1, scaleY: 1 }} transition={{ duration: screenshot || quiet ? 0 : 0.55, ease: [0.22, 1, .36, 1] }} className="relative w-full" style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
+              <div className={`relative w-full ${cardEnterClass}`} style={{ transformOrigin: enter === "Unfold" ? "top center" : undefined, opacity: screenshot ? 1 : undefined }} onClick={(event) => { const node = event.target as HTMLElement; if (node.closest("a, button, [data-copy]")) tap(); }}>
                 <div
                   data-profile-variant={layout}
                   ref={cardRef}
@@ -159,13 +151,12 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
                   {layout === "Simplistic" && <SimplisticCard config={config} preview={preview} align={align} />}
                   {layout === "Sleek" && <SleekCard config={config} preview={preview} align={align} />}
                 </div>
-              </motion.div>
+              </div>
             </ProfileLayoutElement>}
               {!portfolio && <div data-profile-mobile-audio className="profile-mobile-audio" />}
 
             </>
-          )}
-        </AnimatePresence>
+        )}
         <div hidden data-profile-audio-waiting />
         <ProfileAudioModule config={config} preview={preview} rootRef={rootRef} viewport={viewport} entered={entered} />
       </div>
@@ -234,7 +225,7 @@ function ProfileBackground({ config, videoRef, reduceMotion }: { config: Profile
     <div className="profile-background pointer-events-none absolute inset-0 overflow-hidden" style={{ backgroundColor: config.settings.backgroundColor }}>
       <div className="absolute -inset-[10%] animate-background-drift" style={{ opacity: config.settings.backgroundOpacity / 100, backgroundImage: image ? cssUrl(image) : "radial-gradient(circle at 19% 10%, " + accent + "30, transparent 28%), radial-gradient(circle at 80% 75%, #3c205a70, transparent 32%), linear-gradient(135deg, #090a13, #140d25 48%, #07070a)", backgroundSize: "cover", backgroundPosition: "center" }} />
       {backgroundVideo.url && <BackgroundVideo key={backgroundVideo.url} src={backgroundVideo.url} videoRef={videoRef} opacity={config.settings.backgroundOpacity / 100} />}
-      <BackgroundEffectLayer color={effectColor(config)} effect={config.settings.backgroundEffect || "None"} className="z-[1]" />
+      {config.settings.backgroundEffect && config.settings.backgroundEffect !== "None" ? <BackgroundEffectLayer color={effectColor(config)} effect={config.settings.backgroundEffect} className="z-[1]" /> : null}
       {config.settings.backgroundEffect === "None" && backgroundEffectVideo?.url ? <video className="absolute inset-0 z-[1] h-full w-full object-cover" src={backgroundEffectVideo.url} autoPlay={!reduceMotion} loop muted playsInline preload="metadata" aria-hidden="true" /> : null}
     </div>
   );

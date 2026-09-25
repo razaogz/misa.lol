@@ -27,7 +27,7 @@ function NavLink({ href, label, icon: Icon, close }: DashboardNavItem & { close:
   const pathname = usePathname();
   const active = isActive(pathname, href);
   return (
-    <Link href={href} prefetch={href === "/" || href === "/analytics" || href === "/badges" || href === "/settings" || href === "/links"} onClick={close} className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition ${active ? "bg-[#e11d48]/20 shadow-[inset_0_0_0_1px_rgba(251,113,133,.18)]" : "hover:bg-white/[.055]"}`}>
+    <Link href={href} prefetch={false} data-dashboard-prefetch={href} onClick={close} className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition ${active ? "bg-[#e11d48]/20 shadow-[inset_0_0_0_1px_rgba(251,113,133,.18)]" : "hover:bg-white/[.055]"}`}>
       <Icon size={17} strokeWidth={active ? 2.1 : 1.8} className={active ? "text-[#fda4af]" : "text-zinc-300 group-hover:text-white"} />
       <span className="truncate">{label}</span>
       {active && <span className="absolute end-3 h-1.5 w-1.5 rounded-full bg-[#fecdd3] shadow-[0_0_10px_#e11d48]" />}

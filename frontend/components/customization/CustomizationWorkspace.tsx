@@ -77,8 +77,8 @@ function CustomizationContent() {
     return () => query.removeEventListener("change", sync);
   }, []);
   useEffect(() => {
-    if (!fullPreview) setLayoutViewport(previewViewport);
-  }, [fullPreview, previewViewport]);
+    setLayoutViewport(previewViewport);
+  }, [previewViewport]);
   const shareCopy = sharePageCopy(config);
   const tabIcon = config.assets.favicon?.url || config.assets.avatar?.url || "";
   const setSettings = (patch: Partial<typeof config.settings>) => updateConfig((current) => {
@@ -144,14 +144,13 @@ function CustomizationContent() {
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#e11d48]/15 text-[#fda4af]"><Move size={16} /></span>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-white">Arrange profile</div>
-            <div className="hidden truncate text-[11px] text-zinc-500 sm:block">Drag the labels to move items. Resize only the outer frame.</div>
+            <div className="hidden truncate text-[11px] text-zinc-500 sm:block">Use arrow keys on a focused item to move it. Resize the frame from its corner.</div>
           </div>
         </div>
         <button type="button" aria-label="Close layout editor" onClick={() => { setFullPreview(false); setManualMove(false); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[.06] hover:text-white"><X size={18} aria-hidden="true" /></button>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[.08] bg-[#0d0d12] px-3 py-2">
-        {(["desktop", "mobile"] as const).map((viewport) => <Button key={viewport} variant={layoutViewport === viewport ? "accent" : "ghost"} aria-pressed={layoutViewport === viewport} onClick={() => setLayoutViewport(viewport)}>{viewport === "desktop" ? "Desktop (768px+)" : "Mobile (under 768px)"}</Button>)}
-        <span className="text-xs text-zinc-500">Each screen size has its own layout. Arrow keys move a selected item.</span>
+      <div className="flex min-h-10 shrink-0 items-center border-b border-white/[.08] bg-[#0d0d12] px-3 py-2">
+        <span className="text-xs text-zinc-500">Editing the {layoutViewport} layout for this screen. Focus an item and use arrow keys to move it.</span>
       </div>
       <div className="relative min-h-0 flex-1 overflow-auto" dir="ltr">
         <div className="mx-auto h-full" style={{ width: layoutViewport === "mobile" ? "min(100%, 390px)" : "max(768px, 100%)" }}><LiveProfilePreview config={config} layoutViewport={layoutViewport} manualPositioning={manualMove} onLayoutChange={setSettings} /></div>

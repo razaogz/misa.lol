@@ -60,6 +60,7 @@ http://misa.lol, http://www.misa.lol {
 	# Static assets: css, js, icons, images, fonts, site.webmanifest, robots.txt
 	@static path /css/* /js/* /icons/* /images/* /fonts/* /site.webmanifest /robots.txt
 	handle @static {
+		header Cache-Control "public, max-age=3600"
 		root * /srv/templates
 		file_server
 	}
