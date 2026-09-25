@@ -46,7 +46,7 @@ function SectionCard({ item, config, preview, swap, accent, ink }: { item: Profi
     if (!projectConfigured(item)) return <EmptyContent title={item.title} subtitle={item.subtitle} />;
     const inner = (
       <>
-        {cover ? <img key={cover} src={cover} onError={event => { event.currentTarget.style.display = "none"; }} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : null}
+        {cover ? <img key={cover} src={cover} loading={preview ? "eager" : "lazy"} decoding="async" onError={event => { event.currentTarget.style.display = "none"; }} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : null}
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">{item.title}</h2>
           {item.body ? <Markdown body={item.body} className="mt-1 text-[13px] leading-5" style={muted} /> : null}

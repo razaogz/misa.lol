@@ -6,6 +6,7 @@ Audit completed: 2026-09-26
 
 - Dashboard startup eagerly warmed Analytics, Badges, and Constellations data after login, including when users never visited those pages. Navigation could also prefetch several route bundles independently. Replaced the timers with pointer and keyboard intent prefetching; only the selected data-backed section warms, and existing loaders retain their single-flight/TTL cache behavior. For a session that opens none of those sections, this removes four avoidable API requests (Analytics, Badges, and two Constellations reads).
 - Public profiles loaded portfolio and background effect code through the shared renderer regardless of whether a profile used those features, and imported Framer Motion for two entrance transitions. The optional views now load on demand; the entrance transitions use existing CSS keyframes and honor reduced-motion settings.
+- Project cover images in below-profile sections now use native lazy loading on public profiles and asynchronous decoding; editor previews stay eager so screenshot/capture flows keep their assets ready. This defers below-fold image requests without routing user media through the app optimizer.
 - Public static files served by Caddy had validators but no explicit browser cache lifetime. Added `Cache-Control: public, max-age=3600` to the public CSS, JS, icon, image, font, manifest, and robots asset handler. The dynamic configuration endpoint and HTML routes are outside that handler.
 - The Arrange Profile editor exposed movable badges over Discord, audio, and widget content, and presented desktop/mobile selector buttons. Those controls now follow the actual viewport; the movable badges stay hidden visually and remain revealable on keyboard focus. The frame badge and resizing remain available.
 - Existing architecture already avoids several common costs: account hydration batches independent reads, public profile metadata/page data share a request-scoped cached server load, the page hydrates the shared renderer without a duplicate profile fetch, and dashboard data loaders cache/in-flight-deduplicate. These paths were preserved.
@@ -34,6 +35,7 @@ The browser/API behavior change is source-counted: old authenticated startup sch
 - `frontend/components/dashboard/DashboardPrefetch.tsx`
 - `frontend/components/dashboard/DashboardShell.tsx`
 - `frontend/components/profile/ProfileRenderer.tsx`
+- `frontend/components/profile/ProfileSections.tsx`
 - `frontend/components/customization/CustomizationWorkspace.tsx`
 - `frontend/public/profile-layout.css`
 - `Caddyfile`
@@ -47,4 +49,4 @@ The browser/API behavior change is source-counted: old authenticated startup sch
 - `npm run build` passed and generated all 67 static pages/routes.
 - No API contracts, permission checks, database queries, authentication behavior, or public profile features were changed.
 
-After deployment, verify the Caddy asset response includes the new cache header and remeasure public routes with a real browser from representative networks. Collect field Web Vitals (LCP, INP, CLS) before making further frontend tuning decisions. Database/query and media work should be guided by production traces and actual slow-path evidence; no unproven indexes or architecture changes were introduced.
+A browser trace with representative public profiles is still needed to quantify deferred image bytes; the Next.js build confirms no route JavaScript regression. Collect field Web Vitals (LCP, INP, CLS) before making further frontend tuning decisions. Database/query and media work should be guided by production traces and actual slow-path evidence; no unproven indexes or architecture changes were introduced.
