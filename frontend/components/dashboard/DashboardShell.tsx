@@ -7,6 +7,8 @@ import { BarChart3, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Copy,
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LanguageSelect } from "@/components/dashboard/LanguageSelect";
 import { RuntimeErrorBoundary } from "@/components/dashboard/RuntimeErrorBoundary";
+import { ShareCard } from "@/components/sharing/ShareCard";
+import { Modal } from "@/components/ui";
 import { UsernameClaimGate } from "@/components/onboarding/UsernameClaimGate";
 import { useAuth } from "@/lib/auth-store";
 import { useI18n } from "@/lib/i18n";
@@ -50,6 +52,7 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [copiedAccountId, setCopiedAccountId] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const initials = config.profile.displayName.trim().slice(0, 1).toUpperCase() || "U";
   const avatarUrl = config.assets.avatar.url;
   const copyAccountId = async () => {
@@ -175,12 +178,13 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
         <div className="rounded-[24px] border border-white/[.06] bg-white/[.025] p-2">
           <NavLink href="/help" label={t("nav.help")} icon={CircleHelp} close={close} />
           {myPage ? <a href={myPage} target="_blank" rel="noopener noreferrer" className="mt-1 flex min-h-11 items-center gap-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 text-sm font-medium text-rose-100 transition hover:bg-rose-500/20"><ExternalLink size={17} />{t("nav.myPage", undefined, "My page")}</a> : <Link href="/settings" onClick={close} className="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-zinc-400"><ExternalLink size={17} />Complete your profile</Link>}
-          {myPage && <a href={myPage} target="_blank" rel="noopener noreferrer" className="mt-1 flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition hover:bg-white/[.055]"><Share2 size={17} className="text-zinc-300" />{t("nav.share")}</a>}
+          {myPage && <button type="button" onClick={() => { close(); setShareOpen(true); }} className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-sm font-medium text-white transition hover:bg-white/[.055]"><Share2 size={17} className="text-[#ff7896]" />{t("nav.share")}</button>}
         </div>
       </nav>
+      {myPage && <Modal open={shareOpen} onClose={() => setShareOpen(false)} title={t("nav.share", undefined, "Share your profile")}><ShareCard username={config.profile.username} /></Modal>}
       <div className="shrink-0 border-t border-white/[.06] p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-3 rounded-[26px] border border-white/[.06] bg-white/[.035] p-2.5 shadow-[0_12px_30px_rgba(0,0,0,.18)]">
-          {avatarUrl ? <Image src={avatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10" /> : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#5d4ea4] to-[#241d45] text-xs font-semibold text-white">{initials}</div>}
+          {avatarUrl ? <Image src={avatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10" /> : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#ff6685] to-[#650a29] text-xs font-semibold text-white">{initials}</div>}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">@{config.profile.username}</p>
             <div className="flex items-center gap-1">
@@ -241,11 +245,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (!localPreview && (!isReady || !user)) {
     return (
       <div className="app-shell min-h-[100svh] bg-[#07070a]" aria-busy="true">
-        <aside className="sidebar-glass fixed inset-y-0 start-0 hidden w-[280px] border-e p-4 md:block">
+        <aside className="sidebar-glass fixed inset-y-0 start-0 hidden w-[240px] border-e p-4 md:block">
           <div className="h-10 w-32 animate-pulse rounded-xl bg-white/[.06]" />
           <div className="mt-10 space-y-3">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-10 animate-pulse rounded-xl bg-white/[.035]" />)}</div>
         </aside>
-        <div className="md:ps-[280px]">
+        <div className="md:ps-[240px]">
           <header className="h-[68px] border-b border-white/[.06] bg-[#07070a]/80 md:hidden" />
           <main className="mx-auto max-w-[1360px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
             <div className="h-8 w-56 animate-pulse rounded-xl bg-white/[.07]" />
@@ -260,21 +264,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (!localPreview && !user?.username) return <UsernameClaimGate />;
   return (
     <div className="app-shell min-h-screen" dir={dir} lang={locale}>
-      <aside id="desktop-navigation" inert={sidebarCollapsed} aria-hidden={sidebarCollapsed} className={`sidebar-glass desktop-sidebar fixed inset-y-0 start-0 z-50 hidden w-[280px] border-e md:block ${sidebarCollapsed ? "is-collapsed" : ""}`}><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>
+      <aside id="desktop-navigation" inert={sidebarCollapsed} aria-hidden={sidebarCollapsed} className={`sidebar-glass desktop-sidebar fixed inset-y-0 start-0 z-50 hidden w-[240px] border-e md:block ${sidebarCollapsed ? "is-collapsed" : ""}`}><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>
       <button type="button" className={`sidebar-edge sidebar-glass fixed top-1/2 z-[51] hidden h-12 w-8 -translate-y-1/2 items-center justify-center rounded-xl border text-zinc-300 shadow-lg hover:text-white md:flex ${sidebarCollapsed ? "is-collapsed" : ""}`} onClick={toggleSidebar} aria-expanded={!sidebarCollapsed} aria-controls="desktop-navigation" aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
         {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
       </button>
       {open && (
         <>
           <button type="button" className="animate-fade-in fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)} aria-label={t("nav.close")} />
-          <aside ref={mobileSidebar} role="dialog" aria-modal="true" aria-label="Navigation" className="sidebar-glass animate-slide-in fixed inset-y-0 start-0 z-50 w-[min(288px,calc(100vw-16px))] border-e md:hidden"><SidebarContent close={() => setOpen(false)} /></aside>
+          <aside ref={mobileSidebar} role="dialog" aria-modal="true" aria-label="Navigation" className="sidebar-glass animate-slide-in fixed inset-y-0 start-0 z-50 w-[min(300px,86vw)] border-e md:hidden"><SidebarContent close={() => setOpen(false)} /></aside>
         </>
       )}
-      <div inert={open} className={`dashboard-content ${sidebarCollapsed ? "md:ps-10" : "md:ps-[280px]"}`}>
-        <header className="sticky top-0 z-30 flex h-[68px] items-center border-b border-white/[.06] bg-[#07070a]/70 px-4 backdrop-blur-xl sm:px-8 md:hidden">
-          <button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#e11d48]/30 bg-[#e11d48]/10 p-2 text-[#fecdd3] hover:bg-[#e11d48]/20" aria-label={t("nav.open")}><Menu size={19} /></button>
-          <div className="ms-3 flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#fb7185]">.lol</span></div>
-        </header>
+      <div inert={open} className={`dashboard-content ${sidebarCollapsed ? "md:ps-10" : "md:ps-[240px]"}`}>
+        <header className="sticky top-0 z-30 flex h-[68px] items-center gap-3 border-b border-[#ff7896]/10 bg-[#070609]/90 px-4 backdrop-blur-xl sm:px-6 md:hidden"><button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#f00646]/30 bg-[#f00646]/10 p-2 text-[#ffb2c0] hover:bg-[#f00646]/20" aria-label={t("nav.open")}><Menu size={19} /></button><div className="flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#ff5c7d]">.lol</span></div>{user?.username && <a href={publicProfileUrl(user.username)} target="_blank" rel="noreferrer" className="ms-auto inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#ff7896]/15 bg-[#f00646]/10 px-3 text-xs font-medium text-[#ffb2c0]">{t("common.viewLive")}<ExternalLink size={13} /></a>}</header>
         <RuntimeErrorBoundary resetKey={pathname}>{children}</RuntimeErrorBoundary>
       </div>
     </div>

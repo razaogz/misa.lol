@@ -44,7 +44,7 @@ function PremiumContent() {
     finally { setBusy(false); }
   };
   return <main className="mx-auto min-h-screen max-w-[1300px] px-4 py-8 sm:px-8 sm:py-11">
-    <PageHeader eyebrow="Make it yours" title="Premium" description="Fine-tune your profile’s presentation, modules and sharing appearance." action={<span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs ${allowed ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-white/10 text-zinc-400"}`}><Sparkles size={14} />{allowed ? "Premium active" : "Premium required"}</span>} />
+    <PageHeader eyebrow="Make it yours" title="Premium" description="Fine-tune your profile's presentation, modules and sharing appearance." action={<span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs ${allowed ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-white/10 text-zinc-400"}`}><Sparkles size={14} />{allowed ? "Premium active" : "Premium required"}</span>} />
     {!allowed && <p className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-400">Premium access is managed by the Misa.lol team. Your saved settings are kept if access expires.</p>}
     <h2 id="premium-view-title" className="mb-5 text-lg font-semibold">{view === "layout" ? "Layout Settings" : view === "metadata" ? "Profile Metadata" : "General"}</h2>
     <div aria-labelledby="premium-view-title" inert={!allowed || !profileReady || saveState === "saving"} className={!allowed ? "opacity-50" : ""}>

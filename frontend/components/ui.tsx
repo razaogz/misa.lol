@@ -1,15 +1,15 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Check, ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export const buttonStyles = {
-  primary: "bg-white/[.92] text-black hover:bg-white shadow-[0_8px_30px_rgba(255,255,255,.08)]",
+  primary: "bg-[#f00646] text-white hover:bg-[#ff2d63] shadow-[0_8px_28px_rgba(240,6,70,.22)]",
   subtle: "bg-white/[.045] text-white hover:bg-white/[.085] border border-white/[.09] shadow-[inset_0_1px_0_rgba(255,255,255,.05)]",
   ghost: "text-zinc-400 hover:bg-white/[.055] hover:text-white",
-  accent: "bg-gradient-to-br from-[#b7a9ff] via-[#e11d48] to-[#be123c] text-white hover:brightness-110 shadow-[0_8px_28px_rgba(155,135,245,.2),inset_0_1px_0_rgba(255,255,255,.25)]",
+  accent: "bg-gradient-to-br from-[#ff5578] via-[#f00646] to-[#8f0b34] text-white hover:brightness-110 shadow-[0_8px_28px_rgba(240,6,70,.24),inset_0_1px_0_rgba(255,235,240,.2)]",
 };
 
 export function Button({ children, variant = "subtle", className = "", type = "button", disabled = false, onClick }: { children: React.ReactNode; variant?: keyof typeof buttonStyles; className?: string; type?: "button" | "submit" | "reset"; disabled?: boolean; onClick?: () => void }) {
@@ -39,11 +39,11 @@ export function TextArea({ value, onChange, placeholder }: { value: string; onCh
 }
 
 export function PageHeader({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
-  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-[#fb7185]">{eyebrow && <><span className="h-1.5 w-1.5 rounded-full bg-[#fb7185]" />{eyebrow}</>}</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-[34px]">{title}</h1>{description && <p className="mt-2 max-w-2xl text-sm text-zinc-500">{description}</p>}</div>{action}</div>;
+  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-[#fb7185]">{eyebrow && <><span className="h-1.5 w-1.5 rounded-full bg-[#fb7185]" />{eyebrow}</>}</div><h1 className="dashboard-page-title text-[32px] text-white sm:text-[40px]">{title}</h1>{description && <p className="mt-2 max-w-2xl text-sm text-zinc-500">{description}</p>}</div>{action}</div>;
 }
 
 export function SectionTitle({ icon: Icon, title, description, action }: { icon?: LucideIcon; title: string; description?: string; action?: React.ReactNode }) {
-  return <div className="mb-4 flex items-start justify-between gap-3"><div className="flex gap-3">{Icon && <div className="icon-glass mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[#fda4af]"><Icon size={16} /></div>}<div><h2 className="font-medium text-white">{title}</h2>{description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}</div></div>{action}</div>;
+  return <div className="mb-4 flex items-start justify-between gap-3"><div className="flex gap-3">{Icon && <div className="icon-glass mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[#ff7896]"><Icon size={16} /></div>}<div><h2 className="font-medium text-white">{title}</h2>{description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}</div></div>{action}</div>;
 }
 
 export function Modal({ open, title, description, onClose, children, size = "md" }: { open: boolean; title: string; description?: string; onClose: () => void; children: React.ReactNode; size?: "md" | "lg" }) {
@@ -59,7 +59,7 @@ export function Modal({ open, title, description, onClose, children, size = "md"
     return () => { node.close(); previous?.focus(); };
   }, [open]);
   if (!open || typeof document === "undefined") return null;
-  return createPortal(<dialog ref={dialog} aria-labelledby={label} onCancel={event => { event.preventDefault(); closeRef.current(); }} onClick={event => { if (event.target === event.currentTarget) closeRef.current(); }} className={`glass-floating animate-modal-in fixed max-h-[85dvh] w-[calc(100%-32px)] overflow-y-auto rounded-[18px] border border-white/10 p-5 text-white shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm sm:p-6 ${size === "lg" ? "max-w-lg" : "max-w-md"}`}><div className="mb-6 flex items-start justify-between gap-3"><div><h2 id={label} className="text-lg font-semibold">{title}</h2>{description && <p className="mt-1 text-sm text-zinc-500">{description}</p>}</div><button type="button" onClick={onClose} className="sidebar-close flex" aria-label="Close">×</button></div>{children}</dialog>, document.body);
+  return createPortal(<dialog ref={dialog} aria-labelledby={label} onCancel={event => { event.preventDefault(); closeRef.current(); }} onClick={event => { if (event.target === event.currentTarget) closeRef.current(); }} className={`glass-floating animate-modal-in fixed max-h-[85dvh] w-[calc(100%-32px)] overflow-y-auto rounded-[18px] border border-white/10 p-5 text-white shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm sm:p-6 ${size === "lg" ? "max-w-lg" : "max-w-md"}`}><div className="mb-6 flex items-start justify-between gap-3"><div><h2 id={label} className="text-lg font-semibold">{title}</h2>{description && <p className="mt-1 text-sm text-zinc-500">{description}</p>}</div><button type="button" onClick={onClose} className="sidebar-close flex" aria-label="Close"><X size={17} /></button></div>{children}</dialog>, document.body);
 }
 
 export function MiniBar({ value, color = "#e11d48" }: { value: number; color?: string }) { return <div className="h-1.5 overflow-hidden rounded-full bg-white/[.07]"><div className="h-full rounded-full transition-all" style={{ width: `${value}%`, background: color }} /></div>; }

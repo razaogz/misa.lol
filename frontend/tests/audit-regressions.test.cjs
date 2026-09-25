@@ -151,12 +151,14 @@ test('public audio handles byte ranges and blocks unapproved storage hosts',asyn
 test('public and dashboard share renderer and reset restores persisted state',()=>{
  const publicView=fs.readFileSync(require('node:path').join(__dirname,'../components/profile/PublicProfileView.tsx'),'utf8');
  const customizer=fs.readFileSync(require('node:path').join(__dirname,'../components/customization/CustomizationWorkspace.tsx'),'utf8');
+ const overview=fs.readFileSync(require('node:path').join(__dirname,'../components/dashboard/Overview.tsx'),'utf8');
+ const sharedPreview=fs.readFileSync(require('node:path').join(__dirname,'../components/profile/LiveProfilePreview.tsx'),'utf8');
  const store=fs.readFileSync(require('node:path').join(__dirname,'../lib/profile-store.tsx'),'utf8');
- assert.match(publicView,/<ProfileRenderer/);assert.match(customizer,/ProfileRenderer/);assert.match(store,/resetConfig:.*structuredClone\(savedConfig\)/);
+ assert.match(publicView,/<ProfileRenderer/);assert.match(customizer,/LiveProfilePreview/);assert.match(overview,/LiveProfilePreview/);assert.match(sharedPreview,/<ProfileRenderer/);assert.match(store,/resetConfig:.*structuredClone\(savedConfig\)/);
 });
 
 
-test('verified OAuth claims release only an unverified email and never reuse its account, password or sessions',async()=>{
+test('verified OAuth claims create a separate identity and preserve an unverified password account',async()=>{
  const calls=[];
  const owner={...user,email_verified:false,password_hash:'attacker-password'};
  const api=load('lib/server/oauth-users.ts',{'./postgres':{database:()=>({connect:async()=>({query:async(sql,args)=>{

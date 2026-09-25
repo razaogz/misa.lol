@@ -145,7 +145,7 @@ function ViewsChart({ series }: { series: AnalyticsSummary["series"] }) {
           <path d={areaPath(values, top)} fill="url(#chartFill)" />
           <path d={linePath(values, top)} fill="none" stroke="#fb7185" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
           {values.map((value, index) => (
-            <circle key={index} cx={values.length === 1 ? 350 : (index / (values.length - 1)) * 700} cy={220 - (value / top) * 220} r="3.5" fill="#0d0d12" stroke="#bdb3ff" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            <circle key={index} cx={values.length === 1 ? 350 : (index / (values.length - 1)) * 700} cy={220 - (value / top) * 220} r="3.5" fill="#0d0d12" stroke="#ff7896" strokeWidth="2" vectorEffect="non-scaling-stroke" />
           ))}
         </svg>
       ) : null}
