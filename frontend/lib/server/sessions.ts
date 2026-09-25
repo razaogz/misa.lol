@@ -3,10 +3,10 @@ import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
-import { userIsBanned } from "./account-bans";
+
 import { cookieSecure } from "./cookies";
 import { redis } from "./redis";
-import { isSuspended, userById, type User } from "./users";
+import { isSuspended, publicUser, sessionUserById, type User } from "./users";
 
 export const SESSION_COOKIE = process.env.MISA_SESSION_COOKIE_NAME || "misa_session";
 const normalTtl = Number(process.env.MISA_SESSION_TTL_SECONDS || 604800);
@@ -71,21 +71,26 @@ export async function currentUser(request: NextRequest): Promise<User | null> {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = await sessionFor(token);
   if (!session || !token) return null;
-  const user = await userById(session.user_id);
-  if (!user || isSuspended(user) || await userIsBanned(user)) {
+  const account = await sessionUserById(session.user_id);
+  const user = account?.user || null;
+  if (!user || isSuspended(user) || (account?.banned && !publicUser(user).is_admin)) {
     await destroySession(token, session.user_id);
     return null;
   }
   const lastSeen = Date.parse(session.last_seen_at || "");
   const client = await ready();
+  const sessionTouch = client.pipeline();
   if (Number.isNaN(lastSeen) || Date.now() - lastSeen >= touchEveryMs) {
     session.last_seen_at = new Date().toISOString();
-    await client.set(sessionKey(token), JSON.stringify(session), "EX", ttlFor(Boolean(session.remember)));
+    sessionTouch.set(sessionKey(token), JSON.stringify(session), "EX", ttlFor(Boolean(session.remember)));
   } else {
-    await client.expire(sessionKey(token), ttlFor(Boolean(session.remember)));
+    sessionTouch.expire(sessionKey(token), ttlFor(Boolean(session.remember)));
   }
-  await client.sadd(userSessionsKey(user.id), token);
-  await client.expire(userSessionsKey(user.id), 7776000);
+  sessionTouch.sadd(userSessionsKey(user.id), token);
+  sessionTouch.expire(userSessionsKey(user.id), 7776000);
+  const touchResults = await sessionTouch.exec();
+  if (!touchResults) throw new Error("Session refresh failed.");
+  for (const [error] of touchResults) if (error) throw error;
   return user;
 }
 

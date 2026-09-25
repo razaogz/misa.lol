@@ -9,6 +9,34 @@ const user = { id:'11111111-1111-4111-8111-111111111111', username:'alice', disp
 const gate = { './rollout': {nativeCoreEnabled:()=>true}, './profile-features': {profileFeatureFlags:async()=>({}),disabledProfileChange:()=>null} };
 function request(path, body, headers={}) { return new NextRequest('https://misa.lol'+path,{method:body===undefined?'GET':'PUT',headers:{'content-type':'application/json',...headers},...(body===undefined?{}:{body:JSON.stringify(body)})}); }
 
+test('session user and ban status share one indexed SQL round trip', async () => {
+ const queries=[];
+ const api=load('lib/server/users.ts',{'./postgres':{one:async(sql,values)=>{queries.push({sql,values});return{...user,session_banned:true};}}});
+ const result=await api.sessionUserById(user.id);
+ assert.equal(queries.length,1);assert.deepEqual(queries[0].values,[user.id]);
+ assert.match(queries[0].sql,/EXISTS\(SELECT 1 FROM banned_accounts/);
+ assert.match(queries[0].sql,/EXISTS\(SELECT 1 FROM banned_ips/);
+ assert.equal(result.user.id,user.id);assert.equal(result.banned,true);
+});
+
+test('current session batches its three Redis refresh commands', async () => {
+ const token='session-token',commands=[],session={user_id:user.id,last_seen_at:new Date().toISOString()};
+ const client={status:'ready',get:async key=>key==='session:'+token?JSON.stringify(session):null,del:async()=>{},srem:async()=>{},pipeline(){const queued=[];const pipe={set:(...args)=>{queued.push(['set',...args]);return pipe;},expire:(...args)=>{queued.push(['expire',...args]);return pipe;},sadd:(...args)=>{queued.push(['sadd',...args]);return pipe;},exec:async()=>{commands.push(...queued);return queued.map(()=>[null,1]);}};return pipe;}};
+ const api=load('lib/server/sessions.ts',{'./redis':{redis:()=>client},'./users':{sessionUserById:async()=>({user:{...user,is_admin:false,suspended_at:null,suspended_until:null},banned:false}),isSuspended:()=>false,publicUser:value=>({is_admin:value.is_admin})}});
+ const req=request('/dashboard',undefined,{cookie:'misa_session='+token});
+ assert.equal((await api.currentUser(req)).id,user.id);
+ assert.deepEqual(commands.map(([command])=>command),['expire','sadd','expire']);
+});
+
+test('current session still revokes a banned account before refreshing Redis state', async () => {
+ const token='session-token',revoked=[],session={user_id:user.id,last_seen_at:new Date().toISOString()};
+ const client={status:'ready',get:async key=>key==='session:'+token?JSON.stringify(session):null,del:async key=>revoked.push(['del',key]),srem:async(key,value)=>revoked.push(['srem',key,value]),pipeline:()=>{throw new Error('Banned sessions must not refresh');}};
+ const api=load('lib/server/sessions.ts',{'./redis':{redis:()=>client},'./users':{sessionUserById:async()=>({user:{...user,is_admin:false,suspended_at:null,suspended_until:null},banned:true}),isSuspended:()=>false,publicUser:value=>({is_admin:value.is_admin})}});
+ const req=request('/dashboard',undefined,{cookie:'misa_session='+token});
+ assert.equal(await api.currentUser(req),null);
+ assert.deepEqual(revoked,[['del','session:'+token],['srem','user_sessions:'+user.id,token]]);
+});
+
 test('profile sanitizer accepts old/incomplete records and rejects forged authority, CSS and external assets',()=>{
  const api=load('lib/server/profile-persistence.ts');
  const input={profile:{displayName:'Alice',views:999,verified:true,is_admin:true},settings:{accentColor:'red; background:url(https://evil.test)',textColor:'#abc',iconColor:'#123456ab'},assets:{avatar:{url:'https://evil.test/a'},background:{url:'data:image/png;base64,AAAA'}},badges:[{id:'staff',owned:true}],rank:{id:'owner'},premium:true,socials:[{id:'gh',platform:'GitHub',value:'alice',enabled:true}]};

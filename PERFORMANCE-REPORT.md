@@ -10,6 +10,7 @@ Audit completed: 2026-09-26
 - Public static files served by Caddy had validators but no explicit browser cache lifetime. Added `Cache-Control: public, max-age=3600` to the public CSS, JS, icon, image, font, manifest, and robots asset handler. The dynamic configuration endpoint and HTML routes are outside that handler.
 - The Arrange Profile editor exposed movable badges over Discord, audio, and widget content, and presented desktop/mobile selector buttons. Those controls now follow the actual viewport; the movable badges stay hidden visually and remain revealable on keyboard focus. The frame badge and resizing remain available.
 - Existing architecture already avoids several common costs: account hydration batches independent reads, public profile metadata/page data share a request-scoped cached server load, the page hydrates the shared renderer without a duplicate profile fetch, and dashboard data loaders cache/in-flight-deduplicate. These paths were preserved.
+- Dashboard startup waits on `/api/v1/me`. Session validation previously performed separate sequential user and ban SQL reads, then three sequential Redis refresh operations. A session-specific indexed query now returns user and ban status together, and one Redis pipeline refreshes the session and user-session index. This removes three serial network round trips after the initial session-token read while preserving revocation, expiry, ban, and suspension checks.
 
 ## Measurements
 
@@ -36,6 +37,9 @@ The browser/API behavior change is source-counted: old authenticated startup sch
 - `frontend/components/dashboard/DashboardShell.tsx`
 - `frontend/components/profile/ProfileRenderer.tsx`
 - `frontend/components/profile/ProfileSections.tsx`
+- `frontend/lib/server/users.ts`
+- `frontend/lib/server/sessions.ts`
+- `frontend/tests/audit-regressions.test.cjs`
 - `frontend/components/customization/CustomizationWorkspace.tsx`
 - `frontend/public/profile-layout.css`
 - `Caddyfile`
@@ -45,8 +49,8 @@ The browser/API behavior change is source-counted: old authenticated startup sch
 
 - `npm run typecheck` passed.
 - `npm run lint` passed.
-- `npm test` passed: 94 tests.
+- `npm test` passed: 97 tests, including session query, batching, and ban-revocation regressions.
 - `npm run build` passed and generated all 67 static pages/routes.
-- No API contracts, permission checks, database queries, authentication behavior, or public profile features were changed.
+- API contracts and permission checks remain unchanged. Session verification retains the same ban, suspension, revocation, and TTL behavior while consolidating database and Redis round trips.
 
-A browser trace with representative public profiles is still needed to quantify deferred image bytes; the Next.js build confirms no route JavaScript regression. Collect field Web Vitals (LCP, INP, CLS) before making further frontend tuning decisions. Database/query and media work should be guided by production traces and actual slow-path evidence; no unproven indexes or architecture changes were introduced.
+A logged-in browser trace is needed to measure actual milliseconds saved by the auth-path change; only three serial round trips can be removed from source analysis, and the local browser helper was unavailable. A browser trace with representative public profiles is also needed to quantify deferred image bytes; the Next.js build confirms no route JavaScript regression. Collect field Web Vitals (LCP, INP, CLS) before making further frontend tuning decisions. Database/query and media work should be guided by production traces and actual slow-path evidence; no unproven indexes or architecture changes were introduced.

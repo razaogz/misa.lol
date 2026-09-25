@@ -32,6 +32,16 @@ export async function userById(id: string) {
   return one<User>(`SELECT ${columns} FROM users WHERE id = $1`, [id]);
 }
 
+export async function sessionUserById(id: string) {
+  const row = await one<User & { session_banned: boolean }>(`SELECT ${columns},
+    (EXISTS(SELECT 1 FROM banned_accounts b WHERE b.user_id=users.id)
+      OR EXISTS(SELECT 1 FROM banned_ips i WHERE i.ip=users.signup_ip)) AS session_banned
+    FROM users WHERE id = $1`, [id]);
+  if (!row) return null;
+  const { session_banned, ...user } = row;
+  return { user, banned: session_banned === true };
+}
+
 export async function userByEmail(email: string) {
   return one<User>(`SELECT ${columns} FROM users WHERE lower(email) = lower($1)`, [email]);
 }
