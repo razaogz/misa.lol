@@ -159,7 +159,7 @@ export function AccountTools() {
       </section>
 
       <section>
-        <SectionTitle icon={ShieldCheck} title={t("account.backup")} description={t("account.backupDesc")} action={<Link href="/help?article=backup-codes" className="text-xs text-[#ff7896] hover:text-white">{t("common.help")}</Link>} />
+        <SectionTitle icon={ShieldCheck} title={t("account.backup")} description={t("account.backupDesc")} action={<Link href="/help?article=backup-codes" className="text-xs text-[#ff6b8a] hover:text-white">{t("common.help")}</Link>} />
         <div className="surface space-y-4 rounded-2xl p-5 sm:p-6">
           <p className="text-sm text-zinc-400">
             {user?.mfaEnabled
@@ -212,7 +212,7 @@ export function AccountTools() {
       </section>
 
       <section>
-        <SectionTitle icon={Users} title={t("account.savedAccounts")} description={t("account.savedAccountsDesc")} action={<Link href="/help?article=sessions-switcher" className="text-xs text-[#ff7896] hover:text-white">{t("common.help")}</Link>} />
+        <SectionTitle icon={Users} title={t("account.savedAccounts")} description={t("account.savedAccountsDesc")} action={<Link href="/help?article=sessions-switcher" className="text-xs text-[#ff6b8a] hover:text-white">{t("common.help")}</Link>} />
         <div className="surface divide-y divide-white/[.06] rounded-2xl">
           {(user?.accounts || []).map((account) => (
             <div key={account.id} className="flex items-center gap-3 p-4">

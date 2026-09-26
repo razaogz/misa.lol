@@ -130,7 +130,7 @@ function SectionFields({ item, onChange }: { item: ProfileSection; onChange: (ne
         </div>
         <div>
           <FieldLabel>{t("customize.lrc")}</FieldLabel>
-          <textarea value={item.body} onChange={(event) => onChange({ body: event.target.value })} placeholder={"[00:12.00]First line\n[00:16.50]Second line"} rows={7} className="w-full resize-y rounded-[11px] border border-white/[.08] bg-white/[.025] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-[#e11d48]/60 focus:bg-white/[.04] focus:ring-2 focus:ring-[#e11d48]/10" />
+          <textarea value={item.body} onChange={(event) => onChange({ body: event.target.value })} placeholder={"[00:12.00]First line\n[00:16.50]Second line"} rows={7} className="w-full resize-y rounded-[10px] border border-white/[.08] bg-white/[.025] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-[#f00646]/60 focus:bg-white/[.04] focus:ring-2 focus:ring-[#f00646]/10" />
           <p className="mt-2 text-[11px] text-zinc-600">{t("customize.lyricsHint")}</p>
         </div>
       </div>
@@ -144,7 +144,7 @@ function SectionFields({ item, onChange }: { item: ProfileSection; onChange: (ne
       </div>
       <div>
         <FieldLabel>{t("customize.markdown")}</FieldLabel>
-        <textarea value={item.body} onChange={(event) => onChange({ body: event.target.value })} placeholder={"**Bold**, *italic*, [links](https://misa.lol), and lists."} rows={6} className="w-full resize-y rounded-[11px] border border-white/[.08] bg-white/[.025] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-[#e11d48]/60 focus:bg-white/[.04] focus:ring-2 focus:ring-[#e11d48]/10" />
+        <textarea value={item.body} onChange={(event) => onChange({ body: event.target.value })} placeholder={"**Bold**, *italic*, [links](https://misa.lol), and lists."} rows={6} className="w-full resize-y rounded-[10px] border border-white/[.08] bg-white/[.025] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-[#f00646]/60 focus:bg-white/[.04] focus:ring-2 focus:ring-[#f00646]/10" />
       </div>
     </div>
   );

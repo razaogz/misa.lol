@@ -38,7 +38,7 @@ export function LeaderboardView() {
       <PageHeader eyebrow="Leaderboard" title={t("community.title")} description={t("community.description")} />
       <div className="mb-6 flex flex-wrap gap-2">
         {RANGES.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setRange(id)} className={"rounded-xl border px-3 py-2 text-xs transition " + (range === id ? "border-[#e11d48]/60 bg-[#e11d48]/15 text-white" : "border-white/[.08] text-zinc-500 hover:border-[#e11d48]/35 hover:text-white")}>{label}</button>
+          <button key={id} type="button" onClick={() => setRange(id)} className={"rounded-xl border px-3 py-2 text-xs transition " + (range === id ? "border-[#f00646]/60 bg-[#f00646]/[.12] text-white" : "border-white/[.08] text-zinc-500 hover:border-[#f00646]/35 hover:text-white")}>{label}</button>
         ))}
       </div>
       {you && (
@@ -72,7 +72,7 @@ function EntryRow({ entry, href, highlight }: { entry: LeaderboardEntry; href: s
         <span className="block truncate text-sm font-medium">{entry.displayName}</span>
         <span className="block truncate text-xs text-zinc-500">@{entry.username}</span>
       </span>
-      <span className="flex items-center gap-1.5 text-sm text-zinc-300"><Eye size={14} className="text-[#fb7185]" />{entry.views.toLocaleString()}</span>
+      <span className="flex items-center gap-1.5 text-sm text-zinc-300"><Eye size={14} className="text-[#ff6b8a]" />{entry.views.toLocaleString()}</span>
     </a>
   );
 }

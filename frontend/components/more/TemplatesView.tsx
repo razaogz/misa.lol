@@ -225,8 +225,8 @@ export function TemplatesView({ creatorOnly = false }: { creatorOnly?: boolean }
                 };
                 reader.onerror = () => setError("Could not read that preview image.");
                 reader.readAsDataURL(file);
-              }} className="w-full rounded-xl border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-[#e11d48]/20 file:px-3 file:py-1.5 file:text-xs file:text-[#c9c0ff]" />
-              {previewImageUrl && <span className="flex items-center gap-2 text-[11px] text-zinc-500"><img src={previewImageUrl} alt="Template preview" className="h-12 w-20 rounded-lg border border-white/[.08] object-cover" /><span className="min-w-0 flex-1 truncate">{previewFileName}</span><button type="button" className="text-[#fda4af] hover:text-white" onClick={() => { setPreviewImageUrl(null); setPreviewFileName(""); }}>Remove</button></span>}
+              }} className="w-full rounded-xl border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-[#f00646]/[.09] file:px-3 file:py-1.5 file:text-xs file:text-[#c9c0ff]" />
+              {previewImageUrl && <span className="flex items-center gap-2 text-[11px] text-zinc-500"><img src={previewImageUrl} alt="Template preview" className="h-12 w-20 rounded-lg border border-white/[.08] object-cover" /><span className="min-w-0 flex-1 truncate">{previewFileName}</span><button type="button" className="text-[#ff6b8a] hover:text-white" onClick={() => { setPreviewImageUrl(null); setPreviewFileName(""); }}>Remove</button></span>}
             </label>
             <label className="flex items-center gap-3 text-xs text-zinc-500"><span>{t("templates.visibility", undefined, "Visibility")}</span><select value={visibility} onChange={(event) => setVisibility(event.target.value as ProfileTemplate["visibility"])} className="rounded-xl border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs text-zinc-200"><option value="public">{t("templates.public", undefined, "Public")}</option><option value="unlisted">{t("templates.unlisted", undefined, "Unlisted")}</option><option value="private">{t("templates.private", undefined, "Private")}</option></select></label>
             <div className="flex flex-wrap items-center gap-2">
@@ -234,7 +234,7 @@ export function TemplatesView({ creatorOnly = false }: { creatorOnly?: boolean }
                 {publishing ? t("templates.publishing") : t("templates.publishLook")}
               </Button>
               {publishing && <div className="flex w-36 items-center gap-2" role="progressbar" aria-label={t("templates.publishing")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={publishProgress}>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[.08]"><div className="h-full rounded-full bg-[#e11d48] transition-[width] duration-100" style={{ width: `${publishProgress}%` }} /></div>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[.08]"><div className="h-full rounded-full bg-[#f00646] transition-[width] duration-100" style={{ width: `${publishProgress}%` }} /></div>
                 <span className="w-8 text-right text-[10px] text-zinc-600">{publishProgress}%</span>
               </div>}
               <Link href="/customize"><Button variant="ghost">{t("templates.openCustomize")}</Button></Link>

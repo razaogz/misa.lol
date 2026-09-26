@@ -25,7 +25,7 @@ export function defaultSocialAction(link: Pick<SocialLink, "action" | "displayMo
 
 export const PLATFORM_URL_PREFIXES: Partial<Record<SocialPlatform, { display: string; hosts: string[] }>> = {
   YouTube: { display: "youtube.com/@", hosts: ["youtube.com", "m.youtube.com"] },
-  Discord: { display: "discord.gg/", hosts: ["discord.gg", "discord.com"] },
+  Discord: { display: "discord.gg/", hosts: ["discord.gg", "discord.com", "discordapp.com"] },
   Instagram: { display: "instagram.com/", hosts: ["instagram.com"] },
   X: { display: "x.com/", hosts: ["x.com", "twitter.com"] },
   TikTok: { display: "tiktok.com/@", hosts: ["tiktok.com"] },
@@ -55,7 +55,31 @@ function stripUrlDecorations(value: string) {
   return value.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
 }
 
+const DISCORD_INVITE = /^(?:discord\.gg|discord(?:app)?\.com\/invite)\/([A-Za-z0-9-]+)$/i;
+const DISCORD_PATH = /^discord(?:app)?\.com\/(?:users|servers|channels)\/\S+$/i;
+
+/**
+ * Discord is the one platform where two link families share a brand: `discord.gg/CODE`
+ * invites and `discord.com/users/ID` profiles. Both used to be flattened onto the invite
+ * prefix, so a pasted profile link became a dead `discord.gg/users/...` invite and the
+ * row looked broken. Keep each family on its own prefix and read a bare token as an
+ * invite code.
+ */
+function composeDiscordValue(handle: string) {
+  const raw = stripUrlDecorations(handle).replace(/^\/+/, "");
+  if (!raw) return "";
+  const invite = raw.match(DISCORD_INVITE);
+  if (invite) return `discord.gg/${invite[1]}`.slice(0, MAX_VALUE_LENGTH);
+  // Profile, server and channel links stay on discord.com; the legacy host is folded in.
+  if (DISCORD_PATH.test(raw)) return `discord.com/${raw.slice(raw.indexOf("/") + 1)}`.slice(0, MAX_VALUE_LENGTH);
+  // Leave another host untouched so the editor can still report it as a foreign host
+  // instead of silently rewriting it into a dead invite.
+  if (/^[a-z0-9.-]+\.[a-z]{2,}\//i.test(raw)) return raw.slice(0, MAX_VALUE_LENGTH);
+  return `discord.gg/${raw.replace(/^@/, "")}`.slice(0, MAX_VALUE_LENGTH);
+}
+
 export function extractSocialHandle(platform: SocialPlatform, value: string) {
+  if (platform === "Discord") return composeDiscordValue(value);
   const spec = platformUrlPrefix(platform);
   let handle = value.trim();
   if (!spec || !handle) return handle;
@@ -75,6 +99,7 @@ export function extractSocialHandle(platform: SocialPlatform, value: string) {
 }
 
 export function composeSocialValue(platform: SocialPlatform, handle: string) {
+  if (platform === "Discord") return composeDiscordValue(handle);
   const spec = platformUrlPrefix(platform);
   const cleaned = extractSocialHandle(platform, handle);
   if (!spec) return handle.trim().slice(0, MAX_VALUE_LENGTH);
@@ -208,7 +233,9 @@ export function normalizeSocialLink(raw: Partial<SocialLink> & { customIcon?: So
     platform,
     label: String(raw.label || platform).slice(0, 64),
     value: displayMode === "link" ? composeSocialValue(platform, String(raw.value || "")) : String(raw.value || "").slice(0, MAX_VALUE_LENGTH),
-    enabled: Boolean(raw.enabled),
+    // Only an explicit `false` hides a link. Configs written before `enabled` existed
+    // omit the field, and `Boolean(undefined)` silently hid every one of those rows.
+    enabled: raw.enabled !== false,
     displayMode,
     clicks: Number.isFinite(Number(raw.clicks)) ? Math.max(0, Number(raw.clicks)) : 0,
     action,

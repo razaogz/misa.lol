@@ -1,7 +1,39 @@
 import type { PageEnter, ProfileFont, UsernameEffect } from "./types";
 
 export const PROFILE_FONTS: ProfileFont[] = ["Inter", "font-2", "font-3", "font-4", "font-5", "font-6", "font-7", "font-8", "font-9", "font-10", "font-11"];
-export const USERNAME_EFFECTS: UsernameEffect[] = ["None", "Wish Lanterns", "Crystal Rain", "Tiny Crowns", "Gold Sparkles", "Pink Hearts"];
+/**
+ * Single source of truth for the effect picker. The `Record` shape fails to compile
+ * when a new UsernameEffect is added without a picker entry, and the server
+ * allowlist in profile-persistence has to be widened to match.
+ */
+const USERNAME_EFFECT_ENTRIES: Record<UsernameEffect, true> = {
+  "None": true,
+  "Glow": true,
+  "Gradient": true,
+  "Shimmer": true,
+  "Rainbow": true,
+  "Fuzzy": true,
+  "Shuffle": true,
+  "Sparkle": true,
+  "Glitch": true,
+  "Pulse": true,
+  "Wave": true,
+  "Shadow": true,
+  "Blue Sparkles": true,
+  "Green Sparkles": true,
+  "Pink Sparkles": true,
+  "Red Sparkles": true,
+  "White Sparkles": true,
+  "Yellow Sparkles": true,
+  "Wish Lanterns": true,
+  "Crystal Rain": true,
+  "Tiny Crowns": true,
+  "Gold Sparkles": true,
+  "Pink Hearts": true,
+};
+
+export const USERNAME_EFFECTS = Object.keys(USERNAME_EFFECT_ENTRIES) as UsernameEffect[];
+
 
 export const WEBP_NAME_EFFECTS: Partial<Record<UsernameEffect, string>> = {
   "Wish Lanterns": "wish-lanterns",

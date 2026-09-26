@@ -68,7 +68,7 @@ export function SocialLinks({ config, className = "mt-7", align }: { config: Pro
           const simplistic = settings.layout === "Simplistic";
           const className = `${simplistic ? "profile-social-button" : ""} pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl transition hover:-translate-y-1 ${styleKind === "solid" ? "border-0" : styleKind === "outline" ? "border-2 bg-transparent hover:bg-white/[.06]" : "border border-white/[.09] bg-white/[.055] hover:border-white/20 hover:bg-white/[.1]"}`;
           const style = styleKind === "solid"
-            ? { color: "#0b0b10", fill: "#0b0b10", backgroundColor: color, filter: glow ? `drop-shadow(0 0 10px ${color})` : "none" }
+            ? { color: "#0b0b0e", fill: "#0b0b0e", backgroundColor: color, filter: glow ? `drop-shadow(0 0 10px ${color})` : "none" }
             : { color, fill: color, borderColor: color, filter: glow ? `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 16px ${color})` : "none" };
           const icon = <SocialIcon platform={social.platform} size={17} color={color} customIcon={social.customIcon} monochrome={Boolean(settings.monochromeIcons)} />;
           if (action === "open") {

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type RefObject, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, Eye, MapPin } from "lucide-react";
+import { prefersReducedMotion } from "@/lib/enter";
+import { createTilt, tiltOffset } from "@/lib/tilt";
 import { ProfileLayoutElement } from "./ProfileLayoutElement";
 import { ProfileAvatar, ProfileMeta, ProfileBio, ProfileDiscord, ProfileIdentity } from "./ProfileCardModules";
 import { ProfileSections } from "./ProfileSections";
@@ -14,9 +16,17 @@ import type { ProfileConfig } from "@/lib/types";
 /** Uses the same draft, modules and media hosts as the compact profile layouts. */
 export function PortfolioProfile({ config, preview, rootRef, frameStyle }: { config: ProfileConfig; preview: boolean; rootRef: RefObject<HTMLDivElement | null>; frameStyle: CSSProperties }) {
   const root = useRef<HTMLDivElement>(null);
+  const tiltRef = useRef<HTMLDivElement>(null);
+  const heroTilt = useRef(createTilt({ maxX: 6, maxY: 5, perspective: 900 })).current;
   const [active, setActive] = useState("hero");
   const [navigationHost, setNavigationHost] = useState<HTMLDivElement | null>(null);
   useEffect(() => { setNavigationHost(rootRef.current); }, [rootRef]);
+  useEffect(() => {
+    if (prefersReducedMotion()) { heroTilt.stop(); return; }
+    heroTilt.attach(tiltRef.current);
+    if (!config.settings.cardTilt && tiltRef.current) tiltRef.current.style.transform = "";
+    return () => heroTilt.stop();
+  }, [heroTilt, config.settings.cardTilt]);
   const sections = portfolioPages(config);
   const sectionKey = sections.map(page => page.items.map(item => item.id).join(",")).join("|");
   const centered = config.settings.premium?.hero === "Centered";
@@ -32,11 +42,11 @@ export function PortfolioProfile({ config, preview, rootRef, frameStyle }: { con
     } else window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top, behavior });
   };
   const tilt = (event: PointerEvent<HTMLDivElement>) => {
-    if (!config.settings.cardTilt || event.pointerType !== "mouse" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const box = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - box.left) / box.width - .5, y = (event.clientY - box.top) / box.height - .5;
-    event.currentTarget.style.transform = `perspective(900px) rotateX(${-y * 5}deg) rotateY(${x * 6}deg)`;
+    if (!config.settings.cardTilt || event.pointerType !== "mouse" || !tiltRef.current) return;
+    const { x, y } = tiltOffset(tiltRef.current, event.clientX, event.clientY);
+    heroTilt.aim(x, y);
   };
+  const untilt = () => heroTilt.release();
   const animation = config.settings.pageEnter || "Fade";
   useEffect(() => {
     let disposed = false;
@@ -50,10 +60,10 @@ export function PortfolioProfile({ config, preview, rootRef, frameStyle }: { con
   return <WidgetResolutionProvider config={config} preview={preview}>
     <div ref={root} className="portfolio-profile" data-profile-variant="Portfolio" data-hero={centered ? "centered" : "classic"}>
       <section className="portfolio-hero" data-portfolio-section="hero" aria-label="Profile">
-        <ProfileLayoutElement id="frame"><div className="profile-glass portfolio-first-frame p-7 sm:p-9" style={frameStyle} onPointerMove={tilt} onPointerLeave={event => { event.currentTarget.style.transform = ""; }}><div className="profile-header" data-identity-align={align}>
+        <ProfileLayoutElement id="frame"><div ref={tiltRef} className="profile-glass portfolio-first-frame p-7 sm:p-9" style={frameStyle} onPointerMove={tilt} onPointerLeave={untilt}><div className="profile-header" data-identity-align={align}>
           {config.settings.showAvatar !== false && <ProfileAvatar config={config} />}
           <div className="profile-first-identity" style={{ textAlign: align }}><ProfileIdentity config={config} align={align} /><ProfileBio config={config} align={align} showLocation={false} /></div>
-        </div><ProfileWidgets config={config} preview={preview} presence={<ProfileDiscord config={config} />} /><SocialLinks config={config} align={align} /><ProfileMeta config={config} align="left" /></div></ProfileLayoutElement>
+        </div><ProfileWidgets config={config} preview={preview} presence={<ProfileDiscord config={config} />} /><SocialLinks config={config} className="portfolio-socials" align={align} /><ProfileMeta config={config} align={align} /></div></ProfileLayoutElement>
         <div data-profile-mobile-audio className="profile-mobile-audio" />
         {!!sections.length && <button type="button" className="portfolio-scroll" onClick={() => navigate(sections[0].id)}>Scroll for more<ArrowDown size={18} /></button>}
       </section>

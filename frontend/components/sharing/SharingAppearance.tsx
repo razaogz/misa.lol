@@ -36,7 +36,7 @@ export function SharingAppearance({
   return (
     <div className="rounded-2xl border border-white/[.07] bg-white/[.02] p-4">
       <div className="mb-4 flex gap-3">
-        <div className="icon-glass mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[#fda4af]">
+        <div className="icon-glass mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[#ff6b8a]">
           <Share2 size={16} />
         </div>
         <div>
@@ -45,13 +45,13 @@ export function SharingAppearance({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/[.08] bg-[#0b0b10]">
+      <div className="overflow-hidden rounded-2xl border border-white/[.08] bg-[#0b0b0e]">
         <div className="relative aspect-[1200/630] bg-[#08080d]">
           {cover ? (
 
             <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 22% 18%, ${config.settings.accentColor}66, transparent 36%), linear-gradient(135deg, ${config.settings.backgroundColor}, #07070a)` }} />
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 22% 18%, ${config.settings.accentColor}66, transparent 36%), linear-gradient(135deg, ${config.settings.backgroundColor}, #08080a)` }} />
           )}
           {(overlayAvatar || overlayName || overlayAddress) && (
             <div className="absolute inset-x-0 bottom-0 h-[42%] bg-gradient-to-t from-[#08080d]/90 via-[#08080d]/45 to-transparent" />

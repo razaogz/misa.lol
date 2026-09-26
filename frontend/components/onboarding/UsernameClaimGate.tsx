@@ -29,12 +29,12 @@ export function UsernameClaimGate() {
   };
 
   return (
-    <main dir={dir} lang={locale} className="grid min-h-screen place-items-center bg-[#07070a] px-5 text-white">
+    <main dir={dir} lang={locale} className="grid min-h-screen place-items-center bg-[#08080a] px-5 text-white">
       <section className="surface w-full max-w-[460px] rounded-2xl p-6 sm:p-8">
         <div className="mb-8 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#c5b8ff] via-[#e11d48] to-[#881337] text-white shadow-[0_0_25px_rgba(155,135,245,.28)]">
           <AtSign size={20} />
         </div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-[#fb7185]">{t("settings.generalTitle")}</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-[#ff6b8a]">{t("settings.generalTitle")}</p>
         <h1 className="text-2xl font-semibold tracking-[-.04em]">{t("helpArticles.claim-username.title")}</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-500">{t("helpArticles.claim-username.summary")}</p>
         <form onSubmit={claim} className="mt-7 space-y-4">
