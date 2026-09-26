@@ -1,5 +1,11 @@
 /** Shared foreground transitions for React previews and canonical public HTML. */
 export function mountPortfolioScene(root, { animation = 'Fade', onActive = () => {} } = {}) {
+  const MAX_WHEEL_STEP = 120;
+  // Reveal once a section is meaningfully on screen, and only drop it back once the
+  // section has left well behind. Two thresholds instead of one keep a slow scroll
+  // from flickering the staggered reveal in and out.
+  const REVEAL_IN = .3;
+  const REVEAL_OUT = .05;
   const scroller = root.querySelector('.profile-composition');
   const viewport = scroller && getComputedStyle(scroller).overflowY === 'auto' ? scroller : null;
   const sections = [...root.querySelectorAll('[data-portfolio-section]')];
@@ -10,14 +16,21 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
   // Ease mouse-wheel steps while leaving touch, zoom and nested controls native.
   const scrollHost = viewport || document.scrollingElement;
   let wheelFrame = 0, wheelTarget = 0, lastFrame = 0;
-  const stopWheel = () => { cancelAnimationFrame(wheelFrame); wheelFrame = 0; };
+  const stopWheel = () => { cancelAnimationFrame(wheelFrame); wheelFrame = 0; lastFrame = 0; };
   const easeWheel = now => {
-    const dt = Math.min(64, now - lastFrame); lastFrame = now;
+    const dt = lastFrame ? Math.min(64, now - lastFrame) : 16;
+    lastFrame = now;
     const current = scrollHost.scrollTop;
-    const next = current + (wheelTarget - current) * (1 - Math.exp(-dt / 65));
-    scrollHost.scrollTo({ top: Math.abs(wheelTarget - next) < .5 || Math.abs(next - current) < 1 ? wheelTarget : next, behavior: 'instant' });
+    const gap = wheelTarget - current;
+    // The exponential ease removes the per-event stepping of a raw wheel delta and
+    // stays identical on 60Hz and 144Hz displays. The step cap keeps the page
+    // tracking the wheel instead of queueing a backlog it then rushes through, which
+    // is what made fast downward scrolling read as a rubber band rather than a glide.
+    const eased = Math.abs(gap) * (1 - Math.exp(-dt / 70));
+    const step = Math.sign(gap) * Math.min(eased, MAX_WHEEL_STEP);
+    scrollHost.scrollTo({ top: Math.abs(gap) < .5 ? wheelTarget : current + step, behavior: 'instant' });
     if (Math.abs(wheelTarget - scrollHost.scrollTop) > .5) wheelFrame = requestAnimationFrame(easeWheel);
-    else wheelFrame = 0;
+    else { wheelFrame = 0; lastFrame = 0; }
   };
   const wheel = event => {
     if (reduced.matches || event.ctrlKey || event.shiftKey || !event.cancelable || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -57,10 +70,14 @@ export function mountPortfolioScene(root, { animation = 'Fade', onActive = () =>
       if (!entry) return;
       const visible = entry.intersectionRect.height;
       const viewportHeight = entry.rootBounds?.height || innerHeight;
-      const score = visible / Math.min(viewportHeight, entry.boundingClientRect.height || 1);
-      if (score > best) { best = score; current = section; }
+      const reach = Math.max(1, Math.min(viewportHeight, entry.boundingClientRect.height || 1));
+      const ratio = visible / reach;
+      if (ratio > best) { best = ratio; current = section; }
       const focused = section.contains(document.activeElement);
-      section.dataset.portfolioPhase = section.dataset.portfolioPhase === 'visible' || focused || visible >= Math.min(viewportHeight, entry.boundingClientRect.height) * .12 ? 'visible' : entry.isIntersecting ? 'edge' : 'away';
+      const phase = section.dataset.portfolioPhase;
+      section.dataset.portfolioPhase = focused || ratio >= REVEAL_IN || (phase === 'visible' && ratio > REVEAL_OUT)
+        ? 'visible'
+        : entry.isIntersecting ? 'edge' : 'away';
     });
     const next = current?.dataset.portfolioSection || 'hero';
     if (next !== activeId) { activeId = next; onActive(next); }

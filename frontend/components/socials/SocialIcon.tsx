@@ -30,7 +30,9 @@ export function SocialIcon({ platform, size = 18, color, customIcon, monochrome 
         />
       );
     }
-    return <img src={customIcon.url} alt="" width={size} height={size} className="h-full w-full rounded-md object-contain" />;
+    // `h-full w-full` would size a custom icon to the whole 40px button while brand
+    // icons render at `size`, so the row lost its baseline. Pin both axes to `size`.
+    return <img src={customIcon.url} alt="" width={size} height={size} style={{ width: size, height: size }} className="shrink-0 rounded-md object-contain" />;
   }
   const Icon = icons[platform] || FaLink;
   return <Icon size={size} color={color} style={color ? { color, fill: color } : undefined} aria-hidden="true" />;

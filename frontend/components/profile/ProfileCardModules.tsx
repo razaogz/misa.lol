@@ -254,15 +254,29 @@ export function ProfileAudioModule({ config, preview, rootRef, viewport, entered
   }, []);
   useLayoutEffect(() => {
     if (!host) return;
-    const target = (entered ? rootRef.current?.querySelector(viewport === "desktop" ? "[data-profile-media-row]" : "[data-profile-mobile-audio]") : null) || rootRef.current?.querySelector("[data-profile-audio-waiting]");
-    if ((hasPlaylist || hasVideoAudio) && target && host.parentElement !== target) {
+    const place = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      if (!hasPlaylist && !hasVideoAudio) { host.remove(); return; }
+      const target = (entered ? root.querySelector(viewport === "desktop" ? "[data-profile-media-row]" : "[data-profile-mobile-audio]") : null) || root.querySelector("[data-profile-audio-waiting]");
+      if (!target || host.parentElement === target) return;
       const audio = host.querySelector("audio");
       const playing = audio && !audio.paused;
       const parent = target as Element & { moveBefore?: (node: Node, child: Node | null) => void };
       if (parent.moveBefore && host.isConnected) parent.moveBefore(host, null);
       else parent.appendChild(host);
       if (playing && audio.paused) void audio.play().catch(() => undefined);
-    } else if (!hasPlaylist && !hasVideoAudio) host.remove();
+    };
+    place();
+    // The media row lives inside a lazily loaded Portfolio hero, so the target can
+    // mount long after the dependencies above last changed. Watch the subtree
+    // instead of guessing once: without this the player stays parked in the hidden
+    // waiting slot and never appears in the new-tab preview.
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new MutationObserver(place);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [host, viewport, rootRef, config.settings.layout, hasPlaylist, hasVideoAudio, entered]);
   if (!hasPlaylist && !hasVideoAudio) return null;
   // The portal host moves, but the player and its media element stay mounted.

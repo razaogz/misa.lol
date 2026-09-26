@@ -67,7 +67,7 @@ export function HelpCenterView() {
                 key={item}
                 type="button"
                 onClick={() => setCategory(item)}
-                className={`rounded-xl border px-3 py-2 text-xs ${category === item ? "border-[#e11d48]/50 bg-[#e11d48]/15 text-white" : "border-white/[.08] text-zinc-500 hover:text-white"}`}
+                className={`rounded-xl border px-3 py-2 text-xs ${category === item ? "border-[#f00646]/50 bg-[#f00646]/[.12] text-white" : "border-white/[.08] text-zinc-500 hover:text-white"}`}
               >
                 {categoryLabel(t, item)}
               </button>
@@ -76,9 +76,9 @@ export function HelpCenterView() {
           <div className="space-y-3">
             {results.map((item) => (
               <button key={item.id} type="button" onClick={() => openArticle(item.id)} className="surface surface-hover flex w-full items-start gap-4 rounded-2xl p-5 text-left">
-                <span className="icon-glass mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#fda4af]"><CircleHelp size={17} /></span>
+                <span className="icon-glass mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#ff6b8a]"><CircleHelp size={17} /></span>
                 <span>
-                  <span className="block text-[10px] font-semibold uppercase tracking-[.16em] text-[#fb7185]">{categoryLabel(t, item.category)}</span>
+                  <span className="block text-[10px] font-semibold uppercase tracking-[.16em] text-[#ff6b8a]">{categoryLabel(t, item.category)}</span>
                   <span className="mt-1 block text-sm font-medium text-white">{t(`helpArticles.${item.id}.title`, undefined, item.title)}</span>
                   <span className="mt-1 block text-xs leading-5 text-zinc-500">{t(`helpArticles.${item.id}.summary`, undefined, item.summary)}</span>
                 </span>
@@ -87,7 +87,7 @@ export function HelpCenterView() {
             {!results.length && <p className="surface rounded-2xl p-8 text-center text-sm text-zinc-500">{t("help.empty")}</p>}
             {liveHref && (
               <a href={liveHref} target="_blank" rel="noreferrer" className="surface surface-hover flex items-start gap-4 rounded-2xl p-5">
-                <span className="icon-glass mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#fda4af]"><Share2 size={17} /></span>
+                <span className="icon-glass mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#ff6b8a]"><Share2 size={17} /></span>
                 <span>
                   <span className="block text-sm font-medium text-white">{t("help.liveTitle")}</span>
                   <span className="mt-1 block text-xs leading-5 text-zinc-500">{t("help.liveDesc")}</span>
@@ -118,7 +118,7 @@ function ArticleView({ article, onBack }: { article: HelpArticle; onBack: () => 
       <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white">
         <ArrowLeft size={14} />{t("help.allGuides")}
       </button>
-      <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#fb7185]">{categoryLabel(t, article.category)}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#ff6b8a]">{categoryLabel(t, article.category)}</p>
       <h2 className="mt-2 text-xl font-semibold text-white">{t(`helpArticles.${article.id}.title`, undefined, article.title)}</h2>
       <p className="mt-2 text-sm text-zinc-500">{t(`helpArticles.${article.id}.summary`, undefined, article.summary)}</p>
       <div className="mt-5 space-y-3">

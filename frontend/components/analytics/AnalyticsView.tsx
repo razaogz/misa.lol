@@ -54,7 +54,7 @@ export function AnalyticsView() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, change, icon: Icon }) => (
           <div key={label} className="surface rounded-2xl p-5">
-            <div className="flex items-start justify-between"><span className="text-xs text-zinc-500">{label}</span><Icon size={16} className="text-[#fb7185]" /></div>
+            <div className="flex items-start justify-between"><span className="text-xs text-zinc-500">{label}</span><Icon size={16} className="text-[#ff6b8a]" /></div>
             <p className="mt-5 text-2xl font-semibold tracking-[-.04em]">{status === "loading" ? "—" : value}</p>
             <ChangeLine value={change} />
           </div>
@@ -138,14 +138,14 @@ function ViewsChart({ series }: { series: AnalyticsSummary["series"] }) {
         <svg viewBox="0 0 700 220" preserveAspectRatio="none" className="absolute inset-x-8 bottom-5 top-0 h-[220px] w-[calc(100%-2rem)] overflow-visible">
           <defs>
             <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stopColor="#e11d48" stopOpacity=".27" />
-              <stop offset="1" stopColor="#e11d48" stopOpacity="0" />
+              <stop offset="0" stopColor="#f00646" stopOpacity=".27" />
+              <stop offset="1" stopColor="#f00646" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path d={areaPath(values, top)} fill="url(#chartFill)" />
-          <path d={linePath(values, top)} fill="none" stroke="#fb7185" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+          <path d={linePath(values, top)} fill="none" stroke="#ff6b8a" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
           {values.map((value, index) => (
-            <circle key={index} cx={values.length === 1 ? 350 : (index / (values.length - 1)) * 700} cy={220 - (value / top) * 220} r="3.5" fill="#0d0d12" stroke="#ff7896" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            <circle key={index} cx={values.length === 1 ? 350 : (index / (values.length - 1)) * 700} cy={220 - (value / top) * 220} r="3.5" fill="#0d0d12" stroke="#ff6b8a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
           ))}
         </svg>
       ) : null}
@@ -174,7 +174,7 @@ function DeviceChart({ devices, total }: { devices: AnalyticsSummary["devices"];
         </div>
       </div>
       <div className="mt-6 space-y-3">
-        {[[t("analytics.desktop"), desktop, "#e11d48"], [t("analytics.mobile"), mobile, "#69cbb6"], [t("analytics.tablet"), tablet, "#e5a36f"]].map(([label, value, color]) => (
+        {[[t("analytics.desktop"), desktop, "#f00646"], [t("analytics.mobile"), mobile, "#69cbb6"], [t("analytics.tablet"), tablet, "#e5a36f"]].map(([label, value, color]) => (
           <div key={String(label)} className="flex items-center gap-2 text-xs">
             <span className="h-2 w-2 rounded-full" style={{ background: String(color) }} />
             <span className="flex-1 text-zinc-400">{label}</span>

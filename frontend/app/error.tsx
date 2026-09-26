@@ -9,8 +9,8 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   }, [error]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#07070a] px-5 text-zinc-200">
-      <section className="w-full max-w-md rounded-2xl border border-white/[.08] bg-[#0d0d12] p-6 text-center shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-[#08080a] px-5 text-zinc-200">
+      <section className="w-full max-w-md rounded-2xl border border-white/[.08] bg-[#0b0b0e] p-6 text-center shadow-2xl">
         <h1 className="text-lg font-semibold text-white">Something went wrong</h1>
         <p className="mt-2 text-sm text-zinc-500">The page failed to render. Try again or return to the dashboard.</p>
         <div className="mt-5 flex justify-center gap-2">

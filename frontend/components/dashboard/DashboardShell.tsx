@@ -27,10 +27,21 @@ function NavLink({ href, label, icon: Icon, close }: DashboardNavItem & { close:
   const pathname = usePathname();
   const active = isActive(pathname, href);
   return (
-    <Link href={href} prefetch={false} data-dashboard-prefetch={href} onClick={close} className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white transition ${active ? "bg-[#e11d48]/20 shadow-[inset_0_0_0_1px_rgba(251,113,133,.18)]" : "hover:bg-white/[.055]"}`}>
-      <Icon size={17} strokeWidth={active ? 2.1 : 1.8} className={active ? "text-[#fda4af]" : "text-zinc-300 group-hover:text-white"} />
+    <Link
+      href={href}
+      prefetch={false}
+      data-dashboard-prefetch={href}
+      onClick={close}
+      aria-current={active ? "page" : undefined}
+      className={`group relative flex h-9 items-center gap-2.5 rounded-[10px] pe-3 ps-3 text-[13px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 ${
+        active
+          ? "bg-[#f00646]/[.09] font-medium text-[#f4f4f5]"
+          : "font-normal text-[#a1a1aa] hover:bg-white/[.045] hover:text-[#f4f4f5]"
+      }`}
+    >
+      {active && <span aria-hidden="true" className="absolute inset-y-1.5 start-0 w-[2px] rounded-full bg-[#f00646]" />}
+      <Icon size={16} strokeWidth={active ? 2 : 1.75} className={`shrink-0 transition-colors duration-150 ${active ? "text-[#ff6b8a]" : "text-[#71717a] group-hover:text-[#a1a1aa]"}`} />
       <span className="truncate">{label}</span>
-      {active && <span className="absolute end-3 h-1.5 w-1.5 rounded-full bg-[#fecdd3] shadow-[0_0_10px_#e11d48]" />}
     </Link>
   );
 }
@@ -102,19 +113,19 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="relative flex h-[76px] shrink-0 items-center px-5 pe-16">
-        <Link href="/" onClick={close} className="flex items-center gap-3">
-          <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={36} height={36} className="h-9 w-9 rounded-2xl object-cover shadow-[0_0_25px_rgba(225,29,72,.28)]" />
-          <span className="text-[15px] font-semibold tracking-[-.02em]">Misa<span className="text-[#fb7185]">.lol</span></span>
+      <div className="relative flex h-16 shrink-0 items-center px-5 pe-16">
+        <Link href="/" onClick={close} className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0e] rounded-[10px]">
+          <Image src="/dashboard/apple-touch-icon.png" alt="Misa.lol" width={28} height={28} className="h-7 w-7 rounded-[8px] object-cover" />
+          <span className="text-[15px] font-semibold tracking-[-.02em] text-[#f4f4f5]">Misa<span className="text-[#ff6b8a]">.lol</span></span>
         </Link>
         <div className="ms-auto flex items-center gap-1">
-          {onToggleDesktop && <button type="button" className="sidebar-close hidden md:flex" onClick={onToggleDesktop} aria-label="Close navigation" title="Close navigation"><X size={18} strokeWidth={1.8} /></button>}
+          {onToggleDesktop && <button type="button" className="sidebar-close hidden md:flex" onClick={onToggleDesktop} aria-label="Close navigation" title="Close navigation"><X size={17} strokeWidth={1.8} /></button>}
         </div>
-        <button type="button" className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[.06] hover:text-white active:bg-white/[.1] md:hidden" onClick={close} aria-label={t("nav.close")}><X size={20} strokeWidth={2} /></button>
+        <button type="button" className="sidebar-close absolute end-3 top-1/2 -translate-y-1/2 md:hidden" onClick={close} aria-label={t("nav.close")}><X size={18} strokeWidth={1.9} /></button>
       </div>
       <div className="relative px-4">
-        <label className="flex h-10 w-full items-center gap-2.5 rounded-xl border border-white/[.06] bg-white/[.025] px-3 text-start text-xs text-zinc-500 transition focus-within:border-white/[.16] focus-within:text-zinc-300">
-          <Search size={15} />
+        <label className="flex h-9 w-full items-center gap-2.5 rounded-[10px] border border-white/[.07] bg-white/[.02] px-3 text-start text-xs text-[#52525b] transition-colors duration-150 focus-within:border-white/[.14] focus-within:bg-white/[.035] focus-within:text-[#a1a1aa]">
+          <Search size={14} className="shrink-0" />
           <input
             value={query}
             onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
@@ -129,70 +140,68 @@ function SidebarContent({ close, onToggleDesktop }: { close: () => void; onToggl
               }
             }}
             placeholder={t("nav.search")}
-            className="h-full w-full bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-500"
+            className="h-full w-full bg-transparent text-[13px] text-[#f4f4f5] outline-none placeholder:text-[#52525b]"
           />
         </label>
         {searchOpen && query.trim() && (
-          <div className="absolute inset-x-4 top-12 z-20 overflow-hidden rounded-xl border border-white/[.08] bg-[#0d0d14] py-1 shadow-xl">
-            {searchable.length === 0 ? <p className="px-3 py-2 text-xs text-zinc-600">{t("nav.searchEmpty")}</p> : searchable.map(({ label, href, icon: Icon }) => (
-              <Link key={href} href={href} prefetch={false} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); close(); }} className="flex h-9 items-center gap-2.5 px-3 text-xs text-zinc-400 hover:bg-white/[.05] hover:text-white">
-                <Icon size={14} />{label}
+          <div className="glass-floating absolute inset-x-4 top-[calc(100%+6px)] z-20 overflow-y-auto rounded-[12px] py-1">
+            {searchable.length === 0 ? <p className="px-3 py-2 text-xs text-[#52525b]">{t("nav.searchEmpty")}</p> : searchable.map(({ label, href, icon: Icon }) => (
+              <Link key={href} href={href} prefetch={false} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); close(); }} className="flex h-9 items-center gap-2.5 px-3 text-[13px] text-[#a1a1aa] transition-colors duration-150 hover:bg-white/[.05] hover:text-[#f4f4f5]">
+                <Icon size={14} className="shrink-0" />{label}
               </Link>
             ))}
           </div>
         )}
       </div>
-      <nav className="mt-6 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pb-5">
+      <nav className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-3 pb-5">
         {accountGroup ? (
           <div>
-            <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} className={`flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-start text-sm font-semibold text-white transition ${accountActive ? "bg-[#e11d48]/20" : "bg-white/[.035] hover:bg-white/[.06]"}`}>
-              <LayoutDashboard size={17} className={accountActive ? "text-[#fda4af]" : "text-zinc-300"} />
+            <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} className={`flex h-7 w-full items-center gap-2 rounded-[8px] px-3 text-start text-[11px] font-medium uppercase tracking-[.09em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 ${accountActive ? "text-[#a1a1aa]" : "text-[#52525b] hover:text-[#a1a1aa]"}`}>
+              <LayoutDashboard size={13} strokeWidth={1.9} className={accountActive ? "text-[#ff6b8a]" : ""} />
               <span className="flex-1">{accountGroup.label}</span>
-              <ChevronRight size={15} className={`transition-transform ${accountOpen ? "rotate-90" : ""}`} />
+              <ChevronRight size={13} className={`transition-transform duration-200 ${accountOpen ? "rotate-90" : ""}`} />
             </button>
-            {accountOpen ? <div className="mt-1.5 space-y-1 ps-2">{accountGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
+            {accountOpen ? <div className="mt-1 space-y-0.5">{accountGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
           </div>
         ) : null}
         {customizeGroup ? (
           <div>
-            <button type="button" onClick={() => setCustomizeOpen((open) => !open)} aria-expanded={customizeOpen} className={`flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-start text-sm font-semibold text-white transition ${customizeActive ? "bg-[#e11d48]/20" : "hover:bg-white/[.055]"}`}>
-              <Palette size={17} className={customizeActive ? "text-[#fda4af]" : "text-zinc-300"} />
+            <button type="button" onClick={() => setCustomizeOpen((open) => !open)} aria-expanded={customizeOpen} className={`flex h-7 w-full items-center gap-2 rounded-[8px] px-3 text-start text-[11px] font-medium uppercase tracking-[.09em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 ${customizeActive ? "text-[#a1a1aa]" : "text-[#52525b] hover:text-[#a1a1aa]"}`}>
+              <Palette size={13} strokeWidth={1.9} className={customizeActive ? "text-[#ff6b8a]" : ""} />
               <span className="flex-1">{customizeGroup.label}</span>
-              <ChevronRight size={15} className={`transition-transform ${customizeOpen ? "rotate-90" : ""}`} />
+              <ChevronRight size={13} className={`transition-transform duration-200 ${customizeOpen ? "rotate-90" : ""}`} />
             </button>
-            {customizeOpen ? <div className="mt-1.5 space-y-1 ps-2">{customizeGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
+            {customizeOpen ? <div className="mt-1 space-y-0.5">{customizeGroup.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}</div> : null}
           </div>
         ) : null}
         {linksGroup?.items.map((item) => <NavLink key={item.href} {...item} close={close} />)}
         {(user?.isAdmin || user?.isStaff) ? <NavLink href="/admin" label={t("nav.admin")} icon={ShieldCheck} close={close} /> : null}
         {moreItems.map((item) => item.href !== "/premium" ? <NavLink key={item.href} {...item} close={close} /> : <div key={item.href}>
-          <button type="button" onClick={() => { if (!premiumActive) setPremiumOpen(v => !v); else setPremiumOpen(true); }} aria-expanded={premiumOpen || premiumActive} className={`flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-start text-sm font-semibold text-white transition ${premiumActive ? "bg-[#e11d48]/20" : "hover:bg-white/[.055]"}`}><Sparkles size={17} className={premiumActive ? "text-[#fda4af]" : "text-zinc-300"} /><span className="flex-1">{item.label}</span><ChevronRight size={15} className={`transition-transform ${premiumOpen || premiumActive ? "rotate-90" : ""}`} /></button>
-          {(premiumOpen || premiumActive) && <div className="mt-1.5 space-y-1 ps-7">{premiumItems.map(child => { const active = premiumActive && (premiumView === child.view || (child.view === "general" && !["layout", "metadata"].includes(premiumView))); return <Link key={child.view} href={`/premium?view=${child.view}`} scroll={false} onClick={close} aria-current={active ? "page" : undefined} className={`flex min-h-10 items-center rounded-xl px-3 text-sm transition ${active ? "bg-white/[.06] text-white" : "text-zinc-400 hover:bg-white/[.04] hover:text-white"}`}>{child.label}</Link>; })}</div>}
+          <button type="button" onClick={() => { if (!premiumActive) setPremiumOpen(v => !v); else setPremiumOpen(true); }} aria-expanded={premiumOpen || premiumActive} className={`flex h-7 w-full items-center gap-2 rounded-[8px] px-3 text-start text-[11px] font-medium uppercase tracking-[.09em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 ${premiumActive ? "text-[#a1a1aa]" : "text-[#52525b] hover:text-[#a1a1aa]"}`}><Sparkles size={13} strokeWidth={1.9} className={premiumActive ? "text-[#ff6b8a]" : ""} /><span className="flex-1">{item.label}</span><ChevronRight size={13} className={`transition-transform duration-200 ${premiumOpen || premiumActive ? "rotate-90" : ""}`} /></button>
+          {(premiumOpen || premiumActive) && <div className="mt-1 space-y-0.5">{premiumItems.map(child => { const active = premiumActive && (premiumView === child.view || (child.view === "general" && !["layout", "metadata"].includes(premiumView))); return <Link key={child.view} href={`/premium?view=${child.view}`} scroll={false} onClick={close} aria-current={active ? "page" : undefined} className={`flex h-9 items-center gap-2.5 rounded-[10px] pe-3 ps-9 text-[13px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45 ${active ? "bg-[#f00646]/[.09] font-medium text-[#f4f4f5]" : "text-[#a1a1aa] hover:bg-white/[.045] hover:text-[#f4f4f5]"}`}>{child.label}</Link>; })}</div>}
         </div>)}
-        <div className="pt-2">
-          <div className="rounded-2xl border border-white/[.07] bg-white/[.025] p-2.5">
-            <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[.18em] text-zinc-400">{t("language.label")}</p>
-            <LanguageSelect compact />
-          </div>
+        <div className="pt-1">
+          <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[.09em] text-[#52525b]">{t("language.label")}</p>
+          <LanguageSelect compact />
         </div>
-        <div className="rounded-[24px] border border-white/[.06] bg-white/[.025] p-2">
+        <div className="border-t border-white/[.06] pt-3">
           <NavLink href="/help" label={t("nav.help")} icon={CircleHelp} close={close} />
-          {myPage ? <a href={myPage} target="_blank" rel="noopener noreferrer" className="mt-1 flex min-h-11 items-center gap-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 text-sm font-medium text-rose-100 transition hover:bg-rose-500/20"><ExternalLink size={17} />{t("nav.myPage", undefined, "My page")}</a> : <Link href="/settings" onClick={close} className="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-zinc-400"><ExternalLink size={17} />Complete your profile</Link>}
-          {myPage && <button type="button" onClick={() => { close(); setShareOpen(true); }} className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-sm font-medium text-white transition hover:bg-white/[.055]"><Share2 size={17} className="text-[#ff7896]" />{t("nav.share")}</button>}
+          {myPage ? <a href={myPage} target="_blank" rel="noopener noreferrer" className="flex h-9 items-center gap-2.5 rounded-[10px] pe-3 ps-3 text-[13px] font-medium text-[#ff6b8a] transition-colors duration-150 hover:bg-[#f00646]/[.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45"><ExternalLink size={16} strokeWidth={1.75} className="shrink-0" />{t("nav.myPage", undefined, "My page")}</a> : <Link href="/settings" onClick={close} className="flex h-9 items-center gap-2.5 rounded-[10px] pe-3 ps-3 text-[13px] text-[#52525b] transition-colors duration-150 hover:bg-white/[.045] hover:text-[#a1a1aa]"><ExternalLink size={16} strokeWidth={1.75} className="shrink-0" />Complete your profile</Link>}
+          {myPage && <button type="button" onClick={() => { close(); setShareOpen(true); }} className="flex h-9 w-full items-center gap-2.5 rounded-[10px] pe-3 ps-3 text-start text-[13px] font-medium text-[#a1a1aa] transition-colors duration-150 hover:bg-white/[.045] hover:text-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45"><Share2 size={16} strokeWidth={1.75} className="shrink-0" />{t("nav.share")}</button>}
         </div>
       </nav>
       {myPage && <Modal open={shareOpen} onClose={() => setShareOpen(false)} title={t("nav.share", undefined, "Share your profile")}><ShareCard username={config.profile.username} /></Modal>}
       <div className="shrink-0 border-t border-white/[.06] p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-        <div className="flex items-center gap-3 rounded-[26px] border border-white/[.06] bg-white/[.035] p-2.5 shadow-[0_12px_30px_rgba(0,0,0,.18)]">
-          {avatarUrl ? <Image src={avatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10" /> : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#ff6685] to-[#650a29] text-xs font-semibold text-white">{initials}</div>}
+        <div className="flex items-center gap-3 rounded-[12px] border border-white/[.07] bg-white/[.025] p-2">
+          {avatarUrl ? <Image src={avatarUrl} alt="" width={32} height={32} unoptimized className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/10" /> : <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[.07] text-[11px] font-semibold text-[#a1a1aa]">{initials}</div>}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">@{config.profile.username}</p>
+            <p className="truncate text-[13px] font-medium text-[#f4f4f5]">@{config.profile.username}</p>
             <div className="flex items-center gap-1">
-              <p className="truncate font-mono text-[10px] text-zinc-400">{user?.accountId || "Generating..."}</p>
-              {user?.accountId && <button type="button" aria-label="Copy Account ID" title="Copy Account ID" onClick={() => void copyAccountId()} className="rounded-full p-1 text-zinc-400 hover:bg-white/[.08] hover:text-white">{copiedAccountId ? <Check size={11} /> : <Copy size={11} />}</button>}
+              <p className="truncate font-mono text-[10px] text-[#52525b]">{user?.accountId || "Generating..."}</p>
+              {user?.accountId && <button type="button" aria-label="Copy Account ID" title="Copy Account ID" onClick={() => void copyAccountId()} className="rounded p-0.5 text-[#52525b] transition-colors duration-150 hover:bg-white/[.06] hover:text-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45">{copiedAccountId ? <Check size={11} /> : <Copy size={11} />}</button>}
             </div>
           </div>
-          <button type="button" aria-label={t("nav.logout")} title={t("nav.logout")} onClick={() => void logout()} className="rounded-full p-2 text-zinc-300 hover:bg-white/[.08] hover:text-white"><LogOut size={15} /></button>
+          <button type="button" aria-label={t("nav.logout")} title={t("nav.logout")} onClick={() => void logout()} className="rounded-[8px] p-1.5 text-[#71717a] transition-colors duration-150 hover:bg-white/[.06] hover:text-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45"><LogOut size={15} strokeWidth={1.8} /></button>
         </div>
       </div>
     </div>
@@ -244,17 +253,26 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (isPublicProfile || isAdminRoute) return <>{children}</>;
   if (!localPreview && (!isReady || !user)) {
     return (
-      <div className="app-shell min-h-[100svh] bg-[#07070a]" aria-busy="true">
+      <div className="app-shell min-h-[100svh]" aria-busy="true">
         <aside className="sidebar-glass fixed inset-y-0 start-0 hidden w-[240px] border-e p-4 md:block">
-          <div className="h-10 w-32 animate-pulse rounded-xl bg-white/[.06]" />
-          <div className="mt-10 space-y-3">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-10 animate-pulse rounded-xl bg-white/[.035]" />)}</div>
+          <div className="flex h-16 items-center gap-2.5 px-1"><div className="h-7 w-7 animate-pulse rounded-[8px] bg-white/[.07]" /><div className="h-3.5 w-20 animate-pulse rounded-[6px] bg-white/[.05]" /></div>
+          <div className="mt-2 h-9 animate-pulse rounded-[10px] bg-white/[.03]" />
+          <div className="mt-7 space-y-6">
+            {Array.from({ length: 3 }, (_, group) => (
+              <div key={group}>
+                <div className="mx-3 h-3 w-16 animate-pulse rounded-[5px] bg-white/[.045]" />
+                <div className="mt-3 space-y-1">{Array.from({ length: group === 2 ? 2 : 3 }, (_, item) => <div key={item} className="h-9 animate-pulse rounded-[10px] bg-white/[.03]" />)}</div>
+              </div>
+            ))}
+          </div>
         </aside>
         <div className="md:ps-[240px]">
-          <header className="h-[68px] border-b border-white/[.06] bg-[#07070a]/80 md:hidden" />
-          <main className="mx-auto max-w-[1360px] px-5 py-8 sm:px-8 sm:py-11 xl:px-12">
-            <div className="h-8 w-56 animate-pulse rounded-xl bg-white/[.07]" />
-            <div className="mt-4 h-4 w-full max-w-md animate-pulse rounded-lg bg-white/[.04]" />
-            <p className="mt-5 text-xs text-zinc-600">{isReady ? t("nav.redirecting") : t("nav.loading")}</p>
+          <header className="h-14 border-b border-white/[.06] bg-[#08080a]/85 md:hidden" />
+          <main className="mx-auto max-w-[1240px] px-5 py-8 sm:px-8 sm:py-11 xl:px-10">
+            <div className="h-3 w-24 animate-pulse rounded-[5px] bg-white/[.05]" />
+            <div className="mt-4 h-8 w-64 animate-pulse rounded-[10px] bg-white/[.07]" />
+            <div className="mt-4 h-4 w-full max-w-md animate-pulse rounded-[7px] bg-white/[.035]" />
+            <p className="mt-6 text-xs text-[#52525b]">{isReady ? t("nav.redirecting") : t("nav.loading")}</p>
           </main>
         </div>
       </div>
@@ -265,7 +283,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell min-h-screen" dir={dir} lang={locale}>
       <aside id="desktop-navigation" inert={sidebarCollapsed} aria-hidden={sidebarCollapsed} className={`sidebar-glass desktop-sidebar fixed inset-y-0 start-0 z-50 hidden w-[240px] border-e md:block ${sidebarCollapsed ? "is-collapsed" : ""}`}><SidebarContent close={() => undefined} onToggleDesktop={toggleSidebar} /></aside>
-      <button type="button" className={`sidebar-edge sidebar-glass fixed top-1/2 z-[51] hidden h-12 w-8 -translate-y-1/2 items-center justify-center rounded-xl border text-zinc-300 shadow-lg hover:text-white md:flex ${sidebarCollapsed ? "is-collapsed" : ""}`} onClick={toggleSidebar} aria-expanded={!sidebarCollapsed} aria-controls="desktop-navigation" aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
+      <button type="button" className={`sidebar-edge sidebar-glass fixed top-1/2 z-[51] hidden h-10 w-7 -translate-y-1/2 items-center justify-center rounded-[10px] border text-[#71717a] transition-colors duration-150 hover:text-[#f4f4f5] md:flex ${sidebarCollapsed ? "is-collapsed" : ""}`} onClick={toggleSidebar} aria-expanded={!sidebarCollapsed} aria-controls="desktop-navigation" aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
         {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
       </button>
       {open && (
@@ -275,7 +293,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </>
       )}
       <div inert={open} className={`dashboard-content ${sidebarCollapsed ? "md:ps-10" : "md:ps-[240px]"}`}>
-        <header className="sticky top-0 z-30 flex h-[68px] items-center gap-3 border-b border-[#ff7896]/10 bg-[#070609]/90 px-4 backdrop-blur-xl sm:px-6 md:hidden"><button type="button" onClick={() => setOpen(true)} className="rounded-[11px] border border-[#f00646]/30 bg-[#f00646]/10 p-2 text-[#ffb2c0] hover:bg-[#f00646]/20" aria-label={t("nav.open")}><Menu size={19} /></button><div className="flex items-center gap-2 text-sm font-semibold"><Image src="/dashboard/apple-touch-icon.png" alt="" width={30} height={30} className="h-7 w-7 rounded-lg object-cover" />Misa<span className="text-[#ff5c7d]">.lol</span></div>{user?.username && <a href={publicProfileUrl(user.username)} target="_blank" rel="noreferrer" className="ms-auto inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#ff7896]/15 bg-[#f00646]/10 px-3 text-xs font-medium text-[#ffb2c0]">{t("common.viewLive")}<ExternalLink size={13} /></a>}</header>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-white/[.06] bg-[#08080a]/85 px-4 backdrop-blur-xl sm:px-6 md:hidden"><button type="button" onClick={() => setOpen(true)} className="rounded-[10px] border border-white/[.08] bg-white/[.03] p-2 text-[#a1a1aa] transition-colors duration-150 hover:bg-white/[.06] hover:text-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f00646]/45" aria-label={t("nav.open")}><Menu size={18} strokeWidth={1.9} /></button><div className="flex items-center gap-2 text-sm font-semibold tracking-[-.02em] text-[#f4f4f5]"><Image src="/dashboard/apple-touch-icon.png" alt="" width={26} height={26} className="h-[26px] w-[26px] rounded-[7px] object-cover" />Misa<span className="text-[#ff6b8a]">.lol</span></div>{user?.username && <a href={publicProfileUrl(user.username)} target="_blank" rel="noreferrer" className="ms-auto inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-white/[.08] bg-white/[.03] px-2.5 text-xs font-medium text-[#a1a1aa] transition-colors duration-150 hover:bg-white/[.06] hover:text-[#f4f4f5]">{t("common.viewLive")}<ExternalLink size={12} /></a>}</header>
         <RuntimeErrorBoundary resetKey={pathname}>{children}</RuntimeErrorBoundary>
       </div>
     </div>

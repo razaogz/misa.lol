@@ -11,6 +11,7 @@ import type { LayoutElement, LayoutViewport } from "@/lib/element-layout";
 import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatar, ProfileBanner, ProfileBio, ProfileIdentity, ProfileAudioModule, ProfileMeta, ProfileModules } from "@/components/profile/ProfileCardModules";
 import { playClickSound, prefersReducedMotion } from "@/lib/enter";
+import { createTilt, tiltOffset } from "@/lib/tilt";
 import { resolvedAudioSource, usesBackgroundVideoAudio } from "@/lib/audio";
 import { useDefaultFonts } from "@/lib/default-fonts";
 import { contentAlign, profileFont, profileLayout } from "@/lib/profile-layout";
@@ -41,6 +42,7 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
   const viewport = layoutViewport ?? measuredViewport;
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const cardTilt = useRef(createTilt({ maxX: 9, maxY: 7 })).current;
   const s = config.settings;
   const defaultFonts = useDefaultFonts(!!s.profileFont && s.profileFont !== "Inter");
   const selectedDefaultFont = defaultFonts.find((font) => font.id === s.profileFont);
@@ -57,6 +59,11 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
   const [entered, setEntered] = useState(manualPositioning || embedded || !s.entryScreen);
   const entryLock = useRef(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  useEffect(() => {
+    cardTilt.attach(cardRef.current);
+    if (!s.cardTilt && cardRef.current) cardRef.current.style.transform = "";
+    return () => cardTilt.stop();
+  }, [cardTilt, entered, s.cardTilt]);
   const [quiet, setQuiet] = useState(false);
   useEffect(() => { setQuiet(prefersReducedMotion()); }, []);
   useEffect(() => { entryLock.current = false; setEntered(manualPositioning || embedded || !s.entryScreen); }, [manualPositioning, embedded, s.entryScreen]);
@@ -109,12 +116,10 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
   };
   const tilt = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!s.cardTilt || quiet || event.pointerType !== "mouse" || !cardRef.current) return;
-    const box = cardRef.current.getBoundingClientRect();
-    const x = (event.clientX - box.left) / box.width - 0.5;
-    const y = (event.clientY - box.top) / box.height - 0.5;
-    cardRef.current.style.transform = `rotateX(${(-y * 7).toFixed(2)}deg) rotateY(${(x * 9).toFixed(2)}deg)`;
+    const { x, y } = tiltOffset(cardRef.current, event.clientX, event.clientY);
+    cardTilt.aim(x, y);
   };
-  const untilt = () => { if (cardRef.current) cardRef.current.style.transform = ""; };
+  const untilt = () => cardTilt.release();
   return (
     <ProfileLayoutProvider value={{ settings: s, editing: manualPositioning, viewport, selected, select: setSelected, change: onLayoutChange }}>
     <div onClickCapture={portfolio && entered ? event => { if ((event.target as HTMLElement).closest("a,button") && !(event.target as HTMLElement).closest(".profile-entry")) tap(); } : undefined} data-profile-layout data-profile-kind={layout} data-premium-hero={s.premium?.hero} data-premium-border={s.premium?.borderEnabled ? s.premium.borderType : undefined} data-profile-preview={preview || screenshot || undefined} data-profile-embedded={embedded || undefined} data-layout-viewport={layoutViewport} ref={rootRef} className={`relative isolate ${embedded ? "h-full min-h-0 overflow-visible bg-transparent" : (fitViewport || screenshot ? "h-full min-h-0 overflow-y-auto bg-[#07070a]" : "min-h-[100svh] bg-[#07070a]")} ${preview ? "rounded-[inherit]" : ""} ${className}`} style={{ ...customCursor, color: s.textColor, fontFamily: pageFamily, fontSize: typeSize(s.fontSize), ["--misa-profile-font" as string]: family, ["--portfolio-border" as string]: frameVisible && s.premium?.borderEnabled !== false ? `${s.borderWidth ?? 1}px ${s.premium?.borderType === "Dashed" ? "dashed" : "solid"} ${colorWithAlpha(s.borderColor, frameOpacity * (s.premium?.borderOpacity ?? 100) / 100)}` : "0 solid transparent", ["--lyrics-height" as string]: `${Math.max(320, Math.min(900, Number(s.premium?.lyricsHeight) || 560))}px`, ["--portfolio-radius" as string]: `${s.profileRadius}px`, ["--profile-text-size" as string]: `${typeSize(s.fontSize)}px`, ["--profile-frame-scale" as string]: (s.profileFrameScale ?? 100) / 100, ["--embedded-width" as string]: `${s.profileFrameWidth ?? 430}px`, ["--embedded-scale" as string]: (s.profileFrameScale ?? 100) / 100 } as CSSProperties}>
@@ -143,7 +148,7 @@ export function ProfileRenderer({ config: rawConfig, preview = false, screenshot
                   ref={cardRef}
                   onPointerMove={manualPositioning ? undefined : tilt}
                   onPointerLeave={manualPositioning ? undefined : untilt}
-                  className={"profile-glass relative shadow-2xl transition-transform duration-150 " + (layout === "Sleek" ? "p-0" : layout === "Simplistic" ? "p-6 sm:p-7" : "p-7 sm:p-9")}
+                  className={"profile-glass relative shadow-2xl " + (layout === "Sleek" ? "p-0" : layout === "Simplistic" ? "p-6 sm:p-7" : "p-7 sm:p-9")}
                   style={frameStyle}
                 >
                   {layout === "Modern" && frameVisible && <div className="absolute inset-x-8 top-0 h-px" style={{ background: "linear-gradient(90deg, transparent, " + s.accentColor + "aa, transparent)" }} />}
